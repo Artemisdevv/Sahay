@@ -5,6 +5,8 @@ const config: CapacitorConfig = {
   appName: "Sahay",
   webDir: "dist/client",
   android: { allowMixedContent: false },
+  // Dev only: CAP_START_PATH=/relay-test.html opens the relay test page instead of the app.
+  server: process.env.CAP_START_PATH ? { appStartPath: process.env.CAP_START_PATH } : undefined,
 };
 
 export default config;

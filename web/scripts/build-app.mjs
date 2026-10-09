@@ -15,4 +15,10 @@ if (!existsSync("dist/client/_shell.html")) {
   process.exit(1);
 }
 copyFileSync("dist/client/_shell.html", "dist/client/index.html");
+// Dev builds (CAP_DEV=1) also ship a relay test page and the TEST-ONLY crypto vector. Never in a normal build.
+if (process.env.CAP_DEV === "1") {
+  copyFileSync("dev/relay-test.html", "dist/client/relay-test.html");
+  copyFileSync("../contract/crypto-test-vector.json", "dist/client/crypto-test-vector.json");
+  console.log("dev relay test page included");
+}
 console.log("app build ready in dist/client");
