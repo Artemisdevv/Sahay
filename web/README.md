@@ -8,7 +8,7 @@ Stack: TanStack Start (React, file-based routes), Tailwind, shadcn/ui, Vitest.
 ```
 cd web
 npm ci
-npm run dev          # http://localhost:8080 (or the port Vite prints)
+npm run dev          # http://localhost:3000 (or the port Vite prints)
 npm test             # unit and routing tests
 npm run build        # server build
 npm run build:app    # static SPA in dist/client for the Android WebView (CAPACITOR=1)

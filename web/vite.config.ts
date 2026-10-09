@@ -11,6 +11,8 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 const staticApp = process.env["CAPACITOR"] === "1";
 
 export default defineConfig({
+  // Dev server on 3000 (the Lovable default is 8080). CORS origins in backend/.env.example match.
+  vite: { server: { port: 3000 } },
   ...(staticApp ? { nitro: false as const } : {}),
   tanstackStart: staticApp
     ? { spa: { enabled: true } }
