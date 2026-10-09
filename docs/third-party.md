@@ -16,7 +16,7 @@ The hackathon rules ask us to acknowledge open-source code, third-party resource
 ## External services and APIs
 | Service | Used for | Status |
 |---|---|---|
-| Speech-to-text provider | Server-side transcription | to be chosen after B-05 Malayalam test |
+| Cloudflare Workers AI: Whisper large-v3-turbo (primary), Deepgram Nova-3, gpt-4o-transcribe (fallbacks) | Server-side transcription | chosen; ranking confirmed by B-05 Malayalam test |
 | LLM provider | Intake, PII, triage agents | to be chosen (B-06); mock mode for offline demo |
 | SMS gateway | SMS fallback | to be chosen (B-10) |
 
