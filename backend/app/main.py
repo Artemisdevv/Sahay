@@ -1,8 +1,9 @@
+import asyncio
 import math
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, status
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, status, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -191,16 +192,27 @@ def health():
 
 @app.websocket("/ws/v1")
 async def websocket_endpoint(websocket: WebSocket):
-    token = websocket.query_params.get("token")
+    """The JWT is NOT accepted in the URL (URLs end up in access logs). The client connects, then sends
+    {"type":"auth","token":"<jwt>"} as its first message within SAHAY_WS_AUTH_TIMEOUT_S; the server answers
+    {"type":"auth.ok"} and only then starts delivering events."""
+    await websocket.accept()
     try:
-        if not token:
+        rate_limiter.check(f"ws-connect:{websocket.client.host if websocket.client else 'unknown'}",
+                           settings.sahay_rate_limit_per_minute)
+        first = await asyncio.wait_for(websocket.receive_json(), timeout=settings.sahay_ws_auth_timeout_s)
+        token = first.get("token") if isinstance(first, dict) and first.get("type") == "auth" else None
+        if not isinstance(token, str) or not token:
             raise HTTPException(status_code=401, detail="Unauthenticated")
         claims = decode_access_token(token)
         rate_subject = claims.get("device_id") or claims["sub"]
         rate_limiter.check(f"ws:{rate_subject}", settings.sahay_rate_limit_per_minute)
-    except HTTPException:
-        await websocket.close(code=1008, reason="Unauthenticated or rate limited")
+    except (HTTPException, asyncio.TimeoutError, ValueError, WebSocketDisconnect, RuntimeError):
+        try:
+            await websocket.close(code=1008, reason="Unauthenticated or rate limited")
+        except RuntimeError:
+            pass
         return
+    await websocket.send_json({"type": "auth.ok"})
     await websocket_loop(websocket, claims)
 
 

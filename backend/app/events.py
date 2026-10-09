@@ -44,7 +44,7 @@ class ConnectionManager:
         self._lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket, claims: dict) -> None:
-        await websocket.accept()
+        # The endpoint has already accepted the socket and verified the first-message token.
         async with self._lock:
             self._clients[websocket] = claims
 

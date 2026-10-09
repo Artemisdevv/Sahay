@@ -68,24 +68,32 @@ export function useDispatchWS(onEvent: (event: WSEvent) => void) {
     if (!session?.token) return;
     let active = true;
 
+    // The token is sent as the first message, never in the URL (URLs are written to access logs).
+    let failures = 0;
     const connect = () => {
       if (!active) return;
-      const ws = new WebSocket(
-        `${WS_BASE}?token=${encodeURIComponent(session.token)}`,
-      );
+      const ws = new WebSocket(WS_BASE);
       wsRef.current = ws;
+      let authenticated = false;
 
       ws.onopen = () => {
         if (!active) return;
-        setConnected(true);
-        console.log("[WS] Connected");
+        ws.send(JSON.stringify({ type: "auth", token: session.token }));
       };
 
       ws.onmessage = (event) => {
         if (!active) return;
         try {
-          const data = JSON.parse(event.data) as WSEvent;
-          onEvent(data);
+          const data = JSON.parse(event.data) as
+            WSEvent | { type: "auth.ok" | "pong" };
+          if (data.type === "auth.ok") {
+            authenticated = true;
+            failures = 0;
+            setConnected(true);
+            return;
+          }
+          if (data.type === "pong") return;
+          onEvent(data as WSEvent);
         } catch (e) {
           console.warn("[WS] Failed to parse message", e);
         }
@@ -94,12 +102,14 @@ export function useDispatchWS(onEvent: (event: WSEvent) => void) {
       ws.onclose = () => {
         if (!active) return;
         setConnected(false);
-        console.log("[WS] Disconnected, reconnecting in 3s...");
-        reconnectTimeoutRef.current = window.setTimeout(connect, 3000);
+        // Never got in (expired token or server down): back off instead of hammering the server every 3 s.
+        if (!authenticated) failures += 1;
+        const delay = Math.min(30_000, 3_000 * 2 ** Math.min(failures, 4));
+        reconnectTimeoutRef.current = window.setTimeout(connect, delay);
       };
 
-      ws.onerror = (err) => {
-        console.error("[WS] Error", err);
+      ws.onerror = () => {
+        /* onclose follows and handles the retry */
       };
     };
 
