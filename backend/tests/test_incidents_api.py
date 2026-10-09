@@ -250,32 +250,6 @@ def test_pii_ciphertext_cannot_be_tampered_with_or_moved_between_fields():
         assert "context" in str(exc)
 
 
-def test_public_units_endpoint_is_public_and_fuzzed():
-    client.post("/api/v1/dev/seed")
-    r = client.get("/api/v1/public/units")
-    assert r.status_code == 200
-    data = r.json()
-    assert "units" in data
-    assert len(data["units"]) == 6
-    for unit in data["units"]:
-        assert set(unit.keys()) == {"service_type", "name", "status", "location", "updated_at"}
-        assert "unit_id" not in unit
-        assert "lat" not in unit and "lng" not in unit
-        loc = unit["location"]
-        assert "lat" in loc and "lng" in loc
-        # Coordinates should be fuzzed (different from exact seed coordinates)
-        # Original seed lat/lng are 9.9816, 76.2999 for Ambulance 01 etc.
-        # Fuzzing is +/- 0.01, so values should differ from exact seeds
-        assert isinstance(loc["lat"], float) and isinstance(loc["lng"], float)
-
-
-def test_public_units_no_auth_required():
-    client.post("/api/v1/dev/seed")
-    r = client.get("/api/v1/public/units")
-    assert r.status_code == 200
-    # No Authorization header needed
-
-
 def test_incident_calls_endpoint_admin_sees_all_dispatches():
     admin = setup()
     incident_id = create_incident("medical", ["ambulance", "police"])

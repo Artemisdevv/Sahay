@@ -477,7 +477,7 @@ New `dispatch.called`, sent every time the candidate list changes (admin, and th
 |---|---|---|
 | `PATCH /units/{id}/location` | service (own unit), admin | Already in 2.4, **not implemented yet**. Real GPS from a service phone. Broadcasts `unit.moved`. |
 | `GET /public/units` | public (no login) | Units currently assigned to a confirmed incident, coarse. See 9.4. |
-| `GET /incidents/{id}/calls` | admin | Current `dispatch.called` candidate lists, for first paint after a reload. |
+| `GET /incidents/{id}/calls` | admin, service (own dispatches) | `{ "incident_id", "calls": [dispatch rows], "lists": [dispatch.called payloads] }`. `lists` is what `dispatch.called` pushes, for first paint after a reload. |
 
 ### 9.4 Public units feed
 
