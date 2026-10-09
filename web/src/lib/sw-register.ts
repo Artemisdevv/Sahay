@@ -1,5 +1,8 @@
-// Service Worker registration for PWA
+// Service Worker registration for PWA. Skipped inside the Android app: the APK already ships the assets.
+import { Capacitor } from "@capacitor/core";
+
 export function registerSW() {
+  if (Capacitor.isNativePlatform()) return;
   if ("serviceWorker" in navigator) {
     const register = () => {
       navigator.serviceWorker

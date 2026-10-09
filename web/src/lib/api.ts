@@ -1,4 +1,4 @@
-import type { Session } from "./session";
+import { expireSession, type Session } from "./session";
 
 const API_BASE = (
   import.meta.env["VITE_API_BASE"] || "http://localhost:8000/api/v1"
@@ -17,6 +17,7 @@ async function request<T>(
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!response.ok) {
+    if (response.status === 401 && token) expireSession();
     let message = `Request failed (${response.status})`;
     try {
       const body = (await response.json()) as ApiError;
