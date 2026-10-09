@@ -21,6 +21,7 @@ from app.audit_routes import install as install_audit_routes
 from app.incident_routes import install as install_incident_routes
 from app.ingest.routes import install as install_ingest
 from app.keyring import server_public_key_response
+from app.live import install as install_live
 from app.public_routes import install as install_public_routes
 from app.models import AgentTrace, AuditChainHead, AuditEntry, DemoUser, Device, Dispatch, Incident, IncidentPII, Report, Unit
 from app.pii_crypto import ensure_pii_encryption_key
@@ -154,6 +155,7 @@ def incident_json(incident: Incident) -> dict:
 
 
 install_dispatch(app, current_user, require_admin, incident_json)
+install_live(app, current_user, incident_json)
 
 
 def trace_json(trace: AgentTrace) -> dict:

@@ -339,26 +339,39 @@ def accept(db: Session, dispatch_id: str, unit_id: str, actor: dict) -> Outcome:
     return _finish(db, inc, out)
 
 
-def decline(db: Session, dispatch_id: str, unit_id: str, actor: dict, reason: str = "") -> Outcome:
-    """Unit declines: mark declined, free the unit, re-propose the next nearest (auto-approved because
-    an admin already approved this dispatch)."""
-    d = _own_dispatch(db, dispatch_id, unit_id)
+def _decline(db: Session, d: Dispatch, actor: dict, reason: str, action: str) -> Outcome:
     inc = _incident(db, d.incident_id)
     out = Outcome(incident=inc)
     _set_status(db, d, "declined", out)
-    audit(db, actor, "dispatch.decline", {"type": "incident", "id": inc.incident_id},
+    audit(db, actor, action, {"type": "incident", "id": inc.incident_id},
           {"dispatch_id": d.dispatch_id, "reason": reason})
     tried = _used_unit_ids(db, inc.incident_id, d.service_type)
     cand = find_nearest_available(db, d.service_type, inc.lat, inc.lng, tried)
     if cand is None:
         out.unfilled.append(d.service_type)
-        inc.reason = f"No available {d.service_type} unit after decline"[:250]
+        inc.reason = f"No available {d.service_type} unit after {'no answer' if action == 'dispatch.no_answer' else 'decline'}"[:250]
     else:
         nd = _new_dispatch(db, inc, cand, "approved", PROPOSED_BY, out)
         audit(db, {"type": "agent", "id": PROPOSED_BY}, "dispatch.propose",
               {"type": "incident", "id": inc.incident_id},
               {"dispatch_id": nd.dispatch_id, "unit_id": nd.unit_id, "after_decline_of": d.dispatch_id})
     return _finish(db, inc, out)
+
+
+def decline(db: Session, dispatch_id: str, unit_id: str, actor: dict, reason: str = "") -> Outcome:
+    """Unit declines: mark declined, free the unit, re-propose the next nearest (auto-approved because
+    an admin already approved this dispatch)."""
+    d = _own_dispatch(db, dispatch_id, unit_id)
+    return _decline(db, d, actor, reason, "dispatch.decline")
+
+
+def no_answer(db: Session, dispatch_id: str, actor: dict) -> Outcome:
+    """A called unit did not respond in time (X-04): same as a decline, recorded as 'no answer' so the
+    admin timeline can tell the two apart, then the next nearest unit is called."""
+    d = db.get(Dispatch, dispatch_id)
+    if d is None:
+        raise DispatchError(404, "Dispatch not found")
+    return _decline(db, d, actor, "no answer", "dispatch.no_answer")
 
 
 def set_progress(db: Session, dispatch_id: str, unit_id: str, actor: dict, new_status: str) -> Outcome:

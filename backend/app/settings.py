@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     sahay_server_signing_key_file: str = ".sahay-server-ed25519-key"
     sahay_pii_encryption_key: str = ""
     sahay_pii_key_file: str = ".sahay-pii-key"
+    # Live response (X-04, contract section 9). All off by default: no background loop runs unless one is set.
+    sahay_demo_mover: bool = False  # glide en_route units to their incident, then mark them on scene
+    sahay_demo_arrival_seconds: float = 60.0  # how long a unit takes to arrive in the demo
+    sahay_demo_auto_accept_seconds: float = 0.0  # >0: a called unit accepts (then departs) after this long
+    sahay_demo_auto_complete_seconds: float = 0.0  # >0: units on scene complete after this long
+    sahay_call_timeout_s: float = 0.0  # >0: a called unit that does not answer in this time is skipped
     sahay_pipeline_autorun: bool = True  # run the agent pipeline after each accepted report
     sahay_llm_mode: str = "mock"  # mock = deterministic rules, no network
     sahay_stt_mode: str = "mock"  # mock = no audio model; text payloads still work; live = providers below
