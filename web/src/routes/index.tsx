@@ -16,7 +16,10 @@ export const Route = createFileRoute("/")({
       throw redirect({ to: "/admin/dashboard" });
     }
     if (session.role === "service" && session.unit_id) {
-      throw redirect({ to: "/service/$serviceId", params: { serviceId: session.unit_id } });
+      throw redirect({
+        to: "/service/$serviceId",
+        params: { serviceId: session.unit_id },
+      });
     }
     // For civilian role or fallback
     throw redirect({ to: "/user/$username", params: { username: "civilian" } });
