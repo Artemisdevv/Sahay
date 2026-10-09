@@ -42,15 +42,25 @@ import {
   declineDispatch,
   updateDispatchStatus,
   getIncidents,
+  getIncidentDetails,
+  getIncidentTrace,
+  getUnits,
+  approveIncident,
+  rejectIncident,
+  reassignIncident,
   getAuditEntries,
   revealIncidentPii,
   verifyAuditChain,
   getPublicUnits,
   type AuditEntry,
+  type AgentTraceStep,
   type Dispatch,
+  type IncidentActionResult,
   type IncidentPii,
   type IncidentSummary,
   type PublicUnit,
+  type ServiceType,
+  type Unit,
 } from "@/lib/api";
 import { useDispatchWS, type WSEvent } from "@/hooks/use-dispatch-ws";
 
@@ -86,6 +96,27 @@ function getAuditCategory(action: string) {
   return "Other";
 }
 
+type IncidentPanelData = {
+  dispatches: Dispatch[];
+  trace: AgentTraceStep[];
+};
+
+const SERVICE_TYPES: ServiceType[] = [
+  "ambulance",
+  "police",
+  "fire",
+  "municipal",
+];
+
+function formatTraceTime(value: string | null) {
+  if (!value) return "In progress";
+  return new Date(value).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 export function OperationsConsole({ serviceId }: { serviceId: string }) {
   const fire = serviceId.includes("fire");
   const ambulance = serviceId.includes("ambulance");
@@ -99,8 +130,25 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
-  const [updatingDispatchIds, setUpdatingDispatchIds] = useState<Set<string>>(new Set());
-  const [callCountdown, setCallCountdown] = useState<Record<string, { serviceType: string; candidates: Array<{ rank: number; unitId: string; name: string; distanceKm: number; etaMinutes: number; state: string }> }>>({});
+  const [updatingDispatchIds, setUpdatingDispatchIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [callCountdown, setCallCountdown] = useState<
+    Record<
+      string,
+      {
+        serviceType: string;
+        candidates: Array<{
+          rank: number;
+          unitId: string;
+          name: string;
+          distanceKm: number;
+          etaMinutes: number;
+          state: string;
+        }>;
+      }
+    >
+  >({});
   const [publicUnits, setPublicUnits] = useState<PublicUnit[]>([]);
 
   const loadDispatches = useCallback(async () => {
@@ -142,7 +190,14 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
         const { incident_id, service_type, candidates } = event.data as {
           incident_id: string;
           service_type: string;
-          candidates: Array<{ rank: number; unit_id: string; name: string; distance_km: number; eta_minutes: number; state: string }>;
+          candidates: Array<{
+            rank: number;
+            unit_id: string;
+            name: string;
+            distance_km: number;
+            eta_minutes: number;
+            state: string;
+          }>;
         };
         setCallCountdown((prev) => ({
           ...prev,
@@ -238,8 +293,20 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
     : police
     ? "Police"
     : "Hospital";
-  const serviceIcon = fire ? Flame : ambulance ? HeartPulse : police ? ShieldCheck : BedDouble;
-  const serviceColor = fire ? "amber" : ambulance ? "hospital" : police ? "blue" : "hospital";
+  const serviceIcon = fire
+    ? Flame
+    : ambulance
+      ? HeartPulse
+      : police
+        ? ShieldCheck
+        : BedDouble;
+  const serviceColor = fire
+    ? "amber"
+    : ambulance
+      ? "hospital"
+      : police
+        ? "blue"
+        : "hospital";
   const stationName = fire
     ? "Metro Fire Station 4"
     : ambulance
@@ -257,7 +324,9 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
 
   return (
     <Shell
-      role={fire ? "fire" : ambulance ? "ambulance" : police ? "police" : "hospital"}
+      role={
+        fire ? "fire" : ambulance ? "ambulance" : police ? "police" : "hospital"
+      }
       title={serviceLabel}
     >
       <div className="page-heading">
@@ -276,7 +345,17 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
               : "Emergency intake, patient context, and critical care coordination."}
           </p>
         </div>
-        <Badge tone={wsConnected ? "green" : serviceColor === "amber" ? "amber" : serviceColor === "blue" ? "blue" : "sky"}>
+        <Badge
+          tone={
+            wsConnected
+              ? "green"
+              : serviceColor === "amber"
+                ? "amber"
+                : serviceColor === "blue"
+                  ? "blue"
+                  : "sky"
+          }
+        >
           <span className="dot" />
           {wsConnected ? "Live" : "Receiving dispatches"}
         </Badge>
@@ -284,13 +363,25 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
       <div className="metrics">
         {[
           {
-            label: fire ? "Active incidents" : ambulance ? "Active patients" : police ? "Active calls" : "Active patients",
+            label: fire
+              ? "Active incidents"
+              : ambulance
+                ? "Active patients"
+                : police
+                  ? "Active calls"
+                  : "Active patients",
             value: String(activeDispatches.length).padStart(2, "0"),
             note: loading ? "Loading..." : "From backend",
             icon: Activity,
           },
           {
-            label: fire ? "Available units" : ambulance ? "Available ambulances" : police ? "Available units" : "Available critical beds",
+            label: fire
+              ? "Available units"
+              : ambulance
+                ? "Available ambulances"
+                : police
+                  ? "Available units"
+                  : "Available critical beds",
             value: String(capacity).padStart(2, "0"),
             note: fire
               ? "Across Central District"
@@ -299,7 +390,13 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
               : police
               ? "Across precinct"
               : "24 total critical care beds",
-            icon: fire ? Flame : ambulance ? HeartPulse : police ? ShieldCheck : BedDouble,
+            icon: fire
+              ? Flame
+              : ambulance
+                ? HeartPulse
+                : police
+                  ? ShieldCheck
+                  : BedDouble,
           },
           {
             label: "Pending dispatches",
@@ -471,14 +568,17 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                         </Badge>
                       </div>
                       <p>
-                        Unit: {d.unit_id.slice(0, 8)} · Distance: {d.distance_km}{" "}
-                        km
+                        Unit: {d.unit_id.slice(0, 8)} · Distance:{" "}
+                        {d.distance_km} km
                       </p>
                       {callInfo && callInfo.serviceType === d.service_type && (
                         <div className="call-countdown mb-2 p-2 bg-muted rounded text-sm">
                           <strong>Calling {callInfo.serviceType} units:</strong>
                           {callInfo.candidates.map((c) => (
-                            <div key={c.unitId} className="flex items-center gap-2 text-[11px]">
+                            <div
+                              key={c.unitId}
+                              className="flex items-center gap-2 text-[11px]"
+                            >
                               <span className="mono">#{c.rank}</span>
                               <span>{c.name}</span>
                               <span className="text-muted-foreground">
@@ -502,7 +602,9 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                         </div>
                       )}
                       <div className="patient-meta">
-                        <span className="mono">{d.dispatch_id.slice(0, 12)}</span>
+                        <span className="mono">
+                          {d.dispatch_id.slice(0, 12)}
+                        </span>
                         <span>
                           Updated: {new Date(d.updated_at).toLocaleTimeString()}
                         </span>
@@ -596,7 +698,15 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
           <section className="panel">
             <div className="panel-head compact-head">
               <h2>
-                {fire ? <Flame /> : ambulance ? <HeartPulse /> : police ? <ShieldCheck /> : <BedDouble />}
+                {fire ? (
+                  <Flame />
+                ) : ambulance ? (
+                  <HeartPulse />
+                ) : police ? (
+                  <ShieldCheck />
+                ) : (
+                  <BedDouble />
+                )}
                 {fire
                   ? "Unit availability"
                   : ambulance
@@ -615,13 +725,20 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                       ? u.service_type === "fire"
                       : ambulance
                       ? u.service_type === "ambulance"
-                      : u.service_type === "police"
+                        : u.service_type === "police",
                   );
-                  const serviceLabel = fire ? "Fire unit" : ambulance ? "Ambulance unit" : "Police unit";
+                  const serviceLabel = fire
+                    ? "Fire unit"
+                    : ambulance
+                      ? "Ambulance unit"
+                      : "Police unit";
                   return (
                     <>
                       {filteredPublicUnits.map((u, idx) => (
-                        <div className="unit-row" key={`${u.service_type}-${idx}`}>
+                        <div
+                          className="unit-row"
+                          key={`${u.service_type}-${idx}`}
+                        >
                           <div>
                             <strong>{serviceLabel}</strong>
                             <small>{u.status.replace("_", " ")}</small>
@@ -644,7 +761,9 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                         </div>
                       ))}
                       {filteredPublicUnits.length === 0 && (
-                        <p className="text-muted-foreground text-center py-4">No units available</p>
+                        <p className="text-muted-foreground text-center py-4">
+                          No units available
+                        </p>
                       )}
                     </>
                   );
@@ -765,7 +884,9 @@ export function AdminDashboard() {
   const [auditFilter, setAuditFilter] = useState("All");
   const [selected, setSelected] = useState<string | null>(null);
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
-  const [incidentLoadError, setIncidentLoadError] = useState<string | null>(null);
+  const [incidentLoadError, setIncidentLoadError] = useState<string | null>(
+    null,
+  );
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [adminDataLoading, setAdminDataLoading] = useState(true);
   const [piiModalOpen, setPiiModalOpen] = useState(false);
@@ -776,6 +897,67 @@ export function AdminDashboard() {
   const [piiLoading, setPiiLoading] = useState(false);
   const [auditVerified, setAuditVerified] = useState<boolean | null>(null);
   const [auditVerifying, setAuditVerifying] = useState(false);
+  const [adminUnits, setAdminUnits] = useState<Unit[]>([]);
+  const [expandedIncidentId, setExpandedIncidentId] = useState<string | null>(
+    null,
+  );
+  const [incidentPanelData, setIncidentPanelData] = useState<
+    Record<string, IncidentPanelData>
+  >({});
+  const [incidentPanelLoading, setIncidentPanelLoading] = useState<
+    string | null
+  >(null);
+  const [incidentActionLoading, setIncidentActionLoading] = useState<
+    string | null
+  >(null);
+  const [rejectReasons, setRejectReasons] = useState<Record<string, string>>(
+    {},
+  );
+  const [reassignUnits, setReassignUnits] = useState<Record<string, string>>(
+    {},
+  );
+
+  const refreshIncidentPanelData = useCallback(async (incidentId: string) => {
+    const session = getSession();
+    if (!session?.token) return;
+    setIncidentPanelLoading(incidentId);
+    try {
+      const [details, trace] = await Promise.all([
+        getIncidentDetails(incidentId, session.token),
+        getIncidentTrace(incidentId, session.token),
+      ]);
+      setIncidentPanelData((current) => ({
+        ...current,
+        [incidentId]: { dispatches: details.dispatches, trace: trace.trace },
+      }));
+      setIncidents((current) =>
+        current.map((incident) =>
+          incident.incident_id === incidentId ? details : incident,
+        ),
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Incident details could not be loaded.",
+      );
+    } finally {
+      setIncidentPanelLoading((current) =>
+        current === incidentId ? null : current,
+      );
+    }
+  }, []);
+
+  const refreshIncidentList = useCallback(async () => {
+    const session = getSession();
+    if (!session?.token) return;
+    try {
+      const result = await getIncidents(session.token);
+      setIncidents(result.incidents);
+    } catch {
+      setIncidentLoadError("Incident data could not be refreshed.");
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -789,7 +971,9 @@ export function AdminDashboard() {
       getIncidents(session.token),
       getAuditEntries(session.token),
       verifyAuditChain(session.token),
-    ]).then(([incidentResult, auditResult, verificationResult]) => {
+      getUnits(session.token),
+    ]).then(
+      ([incidentResult, auditResult, verificationResult, unitsResult]) => {
       if (cancelled) return;
       if (incidentResult.status === "fulfilled") {
         setIncidents(incidentResult.value.incidents);
@@ -805,13 +989,151 @@ export function AdminDashboard() {
       if (verificationResult.status === "fulfilled") {
         setAuditVerified(verificationResult.value.valid);
       }
+        if (unitsResult.status === "fulfilled") {
+          setAdminUnits(unitsResult.value.units);
+        }
       setAdminDataLoading(false);
-    });
+      },
+    );
 
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const handleAdminEvent = useCallback(
+    (event: WSEvent) => {
+      if (event.type === "incident.created") void refreshIncidentList();
+      if (event.type === "incident.updated") void refreshIncidentList();
+
+      let changedIncidentId: string | undefined;
+      if (
+        event.type === "incident.updated" ||
+        event.type === "dispatch.updated" ||
+        event.type === "dispatch.proposed" ||
+        event.type === "dispatch.called" ||
+        event.type === "agent.trace"
+      ) {
+        changedIncidentId = event.data.incident_id;
+      } else if (event.type === "incident.created") {
+        const id = event.data["incident_id"];
+        if (typeof id === "string") changedIncidentId = id;
+      }
+      if (changedIncidentId && changedIncidentId === expandedIncidentId)
+        void refreshIncidentPanelData(changedIncidentId);
+    },
+    [expandedIncidentId, refreshIncidentList, refreshIncidentPanelData],
+  );
+  useDispatchWS(handleAdminEvent);
+
+  const toggleIncidentDetails = (incidentId: string) => {
+    if (expandedIncidentId === incidentId) {
+      setExpandedIncidentId(null);
+      return;
+    }
+    setExpandedIncidentId(incidentId);
+    void refreshIncidentPanelData(incidentId);
+  };
+
+  const applyIncidentAction = (result: IncidentActionResult) => {
+    setIncidents((current) =>
+      current.map((incident) =>
+        incident.incident_id === result.incident.incident_id
+          ? result.incident
+          : incident,
+      ),
+    );
+  };
+
+  const handleApproveIncident = async (incidentId: string) => {
+    const token = getSession()?.token;
+    if (!token) {
+      toast.error("Sign in again to approve dispatches.");
+      return;
+    }
+    setIncidentActionLoading(incidentId);
+    try {
+      const result = await approveIncident(incidentId, token);
+      applyIncidentAction(result);
+      await refreshIncidentPanelData(incidentId);
+      toast.success("Proposed dispatches approved.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not approve dispatches.",
+      );
+    } finally {
+      setIncidentActionLoading(null);
+    }
+  };
+
+  const handleRejectIncident = async (incidentId: string) => {
+    const token = getSession()?.token;
+    const reason = rejectReasons[incidentId]?.trim();
+    if (!token) {
+      toast.error("Sign in again to reject this incident.");
+      return;
+    }
+    if (!reason) {
+      toast.error("Enter a reason before rejecting.");
+      return;
+    }
+    setIncidentActionLoading(incidentId);
+    try {
+      const result = await rejectIncident(incidentId, reason, token);
+      applyIncidentAction(result);
+      setRejectReasons((current) => ({ ...current, [incidentId]: "" }));
+      await refreshIncidentPanelData(incidentId);
+      toast.success("Incident rejected.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not reject this incident.",
+      );
+    } finally {
+      setIncidentActionLoading(null);
+    }
+  };
+
+  const handleReassignIncident = async (
+    incidentId: string,
+    serviceType: ServiceType,
+  ) => {
+    const token = getSession()?.token;
+    const key = `${incidentId}:${serviceType}`;
+    const unitId = reassignUnits[key];
+    if (!token) {
+      toast.error("Sign in again to reassign this incident.");
+      return;
+    }
+    if (!unitId) {
+      toast.error("Choose an available unit first.");
+      return;
+    }
+    setIncidentActionLoading(incidentId);
+    try {
+      const result = await reassignIncident(
+        incidentId,
+        serviceType,
+        unitId,
+        token,
+      );
+      applyIncidentAction(result);
+      setReassignUnits((current) => ({ ...current, [key]: "" }));
+      await refreshIncidentPanelData(incidentId);
+      toast.success(`${serviceType} response unit reassigned.`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not reassign this unit.",
+      );
+    } finally {
+      setIncidentActionLoading(null);
+    }
+  };
 
   const agents = [
     {
@@ -1126,11 +1448,11 @@ export function AdminDashboard() {
               <div>
                 <h2>
                   <ShieldCheck className="text-primary" />
-                  PII Reveal & Audit Verification
+                  Incident response
                 </h2>
                 <p>
-                  Decrypt incident PII (admin only) and verify hash-chained
-                  audit log integrity
+                  Review agent traces and proposed dispatches. Revealing report
+                  details remains an audited admin action.
                 </p>
               </div>
               <Badge tone="amber">Admin only</Badge>
@@ -1141,7 +1463,19 @@ export function AdminDashboard() {
               ) : incidents.length === 0 ? (
                 <p className="text-muted-foreground">No incidents available.</p>
               ) : (
-                incidents.map((inc) => (
+                incidents.map((inc) => {
+                  const panel = incidentPanelData[inc.incident_id];
+                  const dispatches = panel?.dispatches ?? [];
+                  const activeServices = Array.from(
+                    new Set([
+                      ...inc.needed_services,
+                      ...dispatches.map((dispatch) => dispatch.service_type),
+                    ]),
+                  ).filter((service): service is ServiceType =>
+                    SERVICE_TYPES.includes(service as ServiceType),
+                  );
+                  const isExpanded = expandedIncidentId === inc.incident_id;
+                  return (
                   <div key={inc.incident_id} className="patient">
                     <div className="patient-top">
                       <h3>{inc.summary_redacted || inc.incident_type}</h3>
@@ -1160,12 +1494,22 @@ export function AdminDashboard() {
                     </div>
                     <p className="mono text-xs">{inc.incident_id}</p>
                     <div className="patient-meta">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() =>
+                            void toggleIncidentDetails(inc.incident_id)
+                          }
+                        >
+                          {isExpanded ? "Hide response" : "Review response"}
+                        </Button>
                       <Button
                         size="sm"
                         onClick={() => handleRevealPii(inc.incident_id)}
                         disabled={piiLoading}
                       >
-                        {piiLoading && selectedIncident === inc.incident_id ? (
+                          {piiLoading &&
+                          selectedIncident === inc.incident_id ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
                           <ShieldCheck className="h-3 w-3" />
@@ -1173,8 +1517,214 @@ export function AdminDashboard() {
                         Reveal PII
                       </Button>
                     </div>
+                      {isExpanded && (
+                        <div className="incident-workflow">
+                          {incidentPanelLoading === inc.incident_id ? (
+                            <p className="text-muted-foreground">
+                              Loading trace and dispatches…
+                            </p>
+                          ) : (
+                            <>
+                              <div>
+                                <h4>Proposed dispatches and ETAs</h4>
+                                {dispatches.length === 0 ? (
+                                  <p className="text-muted-foreground">
+                                    No dispatches proposed.
+                                  </p>
+                                ) : (
+                                  <div className="incident-dispatch-list">
+                                    {dispatches.map((dispatch) => {
+                                      const unit = adminUnits.find(
+                                        (item) =>
+                                          item.unit_id === dispatch.unit_id,
+                                      );
+                                      return (
+                                        <div
+                                          className="incident-dispatch"
+                                          key={dispatch.dispatch_id}
+                                        >
+                                          <strong>
+                                            {unit?.name ?? dispatch.unit_id}
+                                          </strong>
+                                          <span>{dispatch.service_type}</span>
+                                          <Badge
+                                            tone={getStatusBadgeTone(
+                                              dispatch.status,
+                                            )}
+                                          >
+                                            {dispatch.status}
+                                          </Badge>
+                                          <span>
+                                            ETA {dispatch.eta_minutes} min ·{" "}
+                                            {dispatch.distance_km.toFixed(1)} km
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
                   </div>
-                ))
+                                )}
+                                <div className="incident-response-controls">
+                                  <Button
+                                    size="sm"
+                                    onClick={() =>
+                                      void handleApproveIncident(
+                                        inc.incident_id,
+                                      )
+                                    }
+                                    disabled={
+                                      incidentActionLoading ===
+                                        inc.incident_id ||
+                                      !dispatches.some(
+                                        (item) => item.status === "proposed",
+                                      )
+                                    }
+                                  >
+                                    Approve proposed
+                                  </Button>
+                                  <Input
+                                    aria-label={`Rejection reason for ${inc.incident_id}`}
+                                    placeholder="Reason for rejection"
+                                    value={rejectReasons[inc.incident_id] ?? ""}
+                                    onChange={(event) =>
+                                      setRejectReasons((current) => ({
+                                        ...current,
+                                        [inc.incident_id]: event.target.value,
+                                      }))
+                                    }
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() =>
+                                      void handleRejectIncident(inc.incident_id)
+                                    }
+                                    disabled={
+                                      incidentActionLoading ===
+                                        inc.incident_id ||
+                                      !(
+                                        rejectReasons[inc.incident_id] ?? ""
+                                      ).trim() ||
+                                      [
+                                        "resolved",
+                                        "rejected",
+                                        "completed",
+                                      ].includes(inc.status)
+                                    }
+                                  >
+                                    Reject
+                                  </Button>
+                                </div>
+                                {activeServices.length > 0 && (
+                                  <div className="incident-reassign-list">
+                                    {activeServices.map((service) => {
+                                      const candidates = adminUnits.filter(
+                                        (unit) =>
+                                          unit.service_type === service &&
+                                          unit.status === "available",
+                                      );
+                                      const selectionKey = `${inc.incident_id}:${service}`;
+                                      return (
+                                        <div
+                                          className="incident-response-controls"
+                                          key={service}
+                                        >
+                                          <span>Reassign {service}</span>
+                                          <select
+                                            aria-label={`Available ${service} unit`}
+                                            value={
+                                              reassignUnits[selectionKey] ?? ""
+                                            }
+                                            onChange={(event) =>
+                                              setReassignUnits((current) => ({
+                                                ...current,
+                                                [selectionKey]:
+                                                  event.target.value,
+                                              }))
+                                            }
+                                          >
+                                            <option value="">
+                                              Choose available unit
+                                            </option>
+                                            {candidates.map((unit) => (
+                                              <option
+                                                key={unit.unit_id}
+                                                value={unit.unit_id}
+                                              >
+                                                {unit.name}
+                                              </option>
+                                            ))}
+                                          </select>
+                                          <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={() =>
+                                              void handleReassignIncident(
+                                                inc.incident_id,
+                                                service,
+                                              )
+                                            }
+                                            disabled={
+                                              incidentActionLoading ===
+                                                inc.incident_id ||
+                                              !reassignUnits[selectionKey] ||
+                                              candidates.length === 0
+                                            }
+                                          >
+                                            Reassign
+                                          </Button>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <h4>Agent trace</h4>
+                                {!panel?.trace.length ? (
+                                  <p className="text-muted-foreground">
+                                    No trace steps available.
+                                  </p>
+                                ) : (
+                                  <ol className="incident-trace">
+                                    {panel.trace.map((step, index) => (
+                                      <li
+                                        className="incident-trace-item"
+                                        key={`${step.step}-${step.started_at}-${index}`}
+                                      >
+                                        <div className="incident-trace-heading">
+                                          <strong>{step.step}</strong>
+                                          <Badge
+                                            tone={
+                                              step.status === "done"
+                                                ? "green"
+                                                : step.status === "failed"
+                                                  ? "rose"
+                                                  : "amber"
+                                            }
+                                          >
+                                            {step.status}
+                                          </Badge>
+                                        </div>
+                                        <span>
+                                          {step.agent} ·{" "}
+                                          {formatTraceTime(step.started_at)}
+                                          {step.finished_at
+                                            ? ` – ${formatTraceTime(step.finished_at)}`
+                                            : ""}
+                                        </span>
+                                        {step.summary && <p>{step.summary}</p>}
+                                      </li>
+                                    ))}
+                                  </ol>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </section>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getSession } from "@/lib/session";
+import type { AgentTraceStep, Dispatch } from "@/lib/api";
 
 // VITE_WS_URL may be a full ws(s):// URL or a path like "/ws/v1" (same origin as the page, used by the Docker image).
 function resolveWsBase(raw: string): string {
@@ -25,6 +26,18 @@ export type DispatchUpdatedEvent = {
     service_type: string;
     status: string;
   };
+};
+
+export type DispatchProposedEvent = {
+  type: "dispatch.proposed";
+  ts: string;
+  data: Dispatch;
+};
+
+export type AgentTraceEvent = {
+  type: "agent.trace";
+  ts: string;
+  data: AgentTraceStep;
 };
 
 export type IncidentUpdatedEvent = {
@@ -77,6 +90,8 @@ export type DispatchCalledEvent = {
 
 export type WSEvent =
   | DispatchUpdatedEvent
+  | DispatchProposedEvent
+  | AgentTraceEvent
   | IncidentUpdatedEvent
   | IncidentCreatedEvent
   | UnitMovedEvent

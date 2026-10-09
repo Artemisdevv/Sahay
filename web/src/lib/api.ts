@@ -48,7 +48,7 @@ export interface Dispatch {
   dispatch_id: string;
   incident_id: string;
   unit_id: string;
-  service_type: string;
+  service_type: ServiceType;
   status:
     | "proposed"
     | "approved"
@@ -64,6 +64,8 @@ export interface Dispatch {
   created_at: string;
   updated_at: string;
 }
+
+export type ServiceType = "ambulance" | "police" | "fire" | "municipal";
 
 export interface DispatchesResponse {
   dispatches: Dispatch[];
@@ -127,6 +129,27 @@ export interface IncidentSummary {
   updated_at: string;
 }
 
+export interface IncidentDetails extends IncidentSummary {
+  dispatches: Dispatch[];
+}
+
+export interface AgentTraceStep {
+  incident_id: string;
+  step: string;
+  agent: string;
+  status: "running" | "done" | "skipped" | "failed";
+  started_at: string;
+  finished_at: string | null;
+  summary: string;
+  output: Record<string, unknown>;
+}
+
+export interface IncidentActionResult {
+  incident: IncidentSummary;
+  dispatches: Dispatch[];
+  unfilled_services: string[];
+}
+
 export async function getIncidents(
   token: string,
 ): Promise<{ incidents: IncidentSummary[]; next_cursor: string | null }> {
@@ -137,9 +160,62 @@ export async function getIncidents(
   );
 }
 
+export async function getIncidentDetails(
+  incidentId: string,
+  token: string,
+): Promise<IncidentDetails> {
+  return request<IncidentDetails>(`/incidents/${incidentId}`, {}, token);
+}
+
+export async function getIncidentTrace(
+  incidentId: string,
+  token: string,
+): Promise<{ incident_id: string; trace: AgentTraceStep[] }> {
+  return request(`/incidents/${incidentId}/trace`, {}, token);
+}
+
+export async function approveIncident(
+  incidentId: string,
+  token: string,
+): Promise<IncidentActionResult> {
+  return request<IncidentActionResult>(
+    `/incidents/${incidentId}/approve`,
+    { method: "POST" },
+    token,
+  );
+}
+
+export async function rejectIncident(
+  incidentId: string,
+  reason: string,
+  token: string,
+): Promise<IncidentActionResult> {
+  return request<IncidentActionResult>(
+    `/incidents/${incidentId}/reject`,
+    { method: "POST", body: JSON.stringify({ reason }) },
+    token,
+  );
+}
+
+export async function reassignIncident(
+  incidentId: string,
+  neededService: ServiceType,
+  unitId: string,
+  token: string,
+): Promise<IncidentActionResult> {
+  return request<IncidentActionResult>(
+    `/incidents/${incidentId}/reassign`,
+    {
+      method: "POST",
+      body: JSON.stringify({ needed_service: neededService, unit_id: unitId }),
+    },
+    token,
+  );
+}
+
 export interface Unit {
   unit_id: string;
-  service_type: "ambulance" | "police" | "fire" | "municipal";
+  service_type: ServiceType;
   name: string;
   status: "available" | "assigned" | "en_route" | "on_scene" | "offline";
   location: { lat: number; lng: number };
@@ -215,7 +291,7 @@ export interface PublicIncident {
 
 export interface PublicUnit {
   id: string;
-  service_type: "ambulance" | "police" | "fire" | "municipal";
+  service_type: ServiceType;
   status: string;
   location: { lat: number; lng: number };
   incident: string;
