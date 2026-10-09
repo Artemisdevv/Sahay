@@ -38,13 +38,17 @@ proposed nearest seeded units, and mock trace steps.
 ## Auth, server key, and live updates
 
 `GET /api/v1/config/server-key` returns the X25519 public key. In development,
-the matching private key is generated once and saved in the ignored
-`backend/.sahay-server-key` file. Keep that file with the local database so
-previously queued reports remain decryptable. In a deployed environment, set
-`SAHAY_SERVER_X25519_SECRET_KEY` to the base64-encoded 32-byte private key and
+the matching X25519 private key and Ed25519 signing seed are generated once and
+saved in ignored files `backend/.sahay-server-key` and
+`backend/.sahay-server-ed25519-key`. Keep both files with the local database so
+previously queued reports and receipt signatures remain verifiable. In a
+deployed environment, set `SAHAY_SERVER_X25519_SECRET_KEY` and
+`SAHAY_SERVER_ED25519_SECRET_KEY` to base64-encoded 32-byte keys and
 `SAHAY_JWT_SECRET` to a unique secret. The server refuses to start without the
-JWT secret when `SAHAY_DEV` is disabled. Generate a new server key with
+JWT secret when `SAHAY_DEV` is disabled. Generate an X25519 server key with
 `python -c "import base64; from nacl.public import PrivateKey; print(base64.b64encode(bytes(PrivateKey.generate())).decode())"`.
+Generate an Ed25519 receipt-signing seed with
+`python -c "import base64; from nacl.signing import SigningKey; print(base64.b64encode(bytes(SigningKey.generate())).decode())"`.
 
 Device registration stores the Ed25519 public key and issues a civilian JWT.
 Demo service/admin passwords are stored as PBKDF2 hashes. Auth endpoints and
@@ -55,6 +59,8 @@ running multiple Cloud Run instances.
 Register civilian devices with `POST /api/v1/auth/register-device`, supplying
 the UUID and standard-base64 Ed25519 public key. Re-registering the same device
 and key is idempotent; reusing a device ID with another key returns `409`.
+Receipt creation should use `app.keyring.server_signing_key()` so signatures
+match the public key returned by `/api/v1/config/server-key`.
 
 Connect dashboards to `ws://localhost:8000/ws/v1?token=<jwt>` (or `wss://` in a
 deployed environment). Send `{"type":"ping"}` to keep the connection active;
