@@ -32,6 +32,8 @@ from app.settings import settings
 
 AUTO_APPROVE_MAX_SEVERITY = 3
 AUTO_APPROVE_MIN_CONFIDENCE = 0.7
+IGNORE_MIN_CONFIDENCE = 0.85
+IGNORED = "not a civic report"
 
 
 @dataclass
@@ -42,7 +44,7 @@ class Agents:
 
 
 def default_agents() -> Agents:
-    return Agents(build_llm(settings.sahay_llm_mode), build_transcriber(settings.sahay_stt_mode), build_search("mock"))
+    return Agents(build_llm(settings.sahay_llm_mode), build_transcriber(settings.sahay_stt_mode), build_search(settings.sahay_search_mode))
 
 
 @dataclass
@@ -71,6 +73,21 @@ class _Steps:
     def add(self, step: str, agent: str, status: str, summary: str, started: datetime, output: dict | None = None) -> None:
         self.rows.append(dict(step=step, agent=agent, status=status, summary=summary[:250],
                               started_at=started, finished_at=_now(), output=output or {}))
+
+
+def should_ignore(intake: IntakeResult, kind: str, category: str, transcript: str | None) -> bool:
+    """Drop gibberish and irrelevant reports ("I want ice cream"), but never risk a real emergency.
+
+    Only a plain report with the "other" quick-tap category and actual text qualifies, and only when the model is
+    confident. SOS, a chosen category, audio we could not transcribe, or a model failure always keep the report.
+    """
+    return (
+        kind == "report"
+        and category == "other"
+        and bool(transcript and transcript.strip())
+        and not intake.is_civic_report
+        and intake.civic_confidence >= IGNORE_MIN_CONFIDENCE
+    )
 
 
 def needs_approval(intake: IntakeResult, kind: str) -> tuple[bool, str]:
@@ -123,11 +140,39 @@ def run_pipeline(db: Session, report_id: str, agents: Agents | None = None) -> R
     else:
         steps.add("transcribe", "stt", "skipped", "No audio or text", t0)
 
-    # 2. intake -----------------------------------------------------------------
+    # 2. pii (fail closed). Runs BEFORE intake so an external model never sees raw identifiers. -----------
+    reporter = payload.get("reporter") or {}
+    contact = payload.get("emergency_contact") or {}
+    known = [("name", reporter.get("name")), ("phone", reporter.get("phone")),
+             ("name", contact.get("name")), ("phone", contact.get("phone"))]
+    known = [(t, v) for t, v in known if v]
+    external = getattr(agents.llm, "external", False)
+    tags: list[PiiTag] = []
+    pii_ok = True
+    pii_by_model = True  # False when the model failed and rules did the tagging
+    try:
+        try:
+            tags = pii_agent.detect(transcript or "", agents.llm, known)
+        except Exception:  # noqa: BLE001
+            pii_by_model = False
+            tags = pii_agent.detect(transcript or "", MockLLM(), known)
+    except Exception:  # noqa: BLE001
+        pii_ok = False
+        pii_by_model = False
+
+    # 3. intake -----------------------------------------------------------------
     t0 = _now()
     fallback = False
+    llm: LLM = agents.llm
+    model_text = transcript
+    if external:
+        if pii_ok and pii_by_model:
+            model_text = pii_agent.redact(transcript or "", tags)
+        else:
+            llm = MockLLM()  # could not mask names reliably: keep the text off the external provider
+            fallback = True
     try:
-        intake = agents.llm.intake(transcript, payload["category"], payload.get("language", "en"), payload["kind"])
+        intake = llm.intake(model_text, payload["category"], payload.get("language", "en"), payload["kind"])
     except Exception:  # noqa: BLE001 - any model/validation error falls back to rules
         intake = MockLLM().intake(transcript, payload["category"], payload.get("language", "en"), payload["kind"])
         fallback = True
@@ -136,27 +181,23 @@ def run_pipeline(db: Session, report_id: str, agents: Agents | None = None) -> R
               {"incident_type": intake.incident_type, "severity": intake.severity, "people_count": intake.people_count,
                "hazards": intake.hazards, "confidence": intake.confidence, "fallback": fallback})
 
-    # 3. pii (fail closed) ------------------------------------------------------
-    t0 = _now()
-    reporter = payload.get("reporter") or {}
-    contact = payload.get("emergency_contact") or {}
-    known = [("name", reporter.get("name")), ("phone", reporter.get("phone")),
-             ("name", contact.get("name")), ("phone", contact.get("phone"))]
-    known = [(t, v) for t, v in known if v]
-    tags: list[PiiTag] = []
-    pii_ok = True
+    if should_ignore(intake, payload["kind"], payload["category"], transcript):
+        report.status = "rejected"
+        report.updated_at = _now()
+        engine.audit(db, _agent_actor("intake_agent"), "report.ignored", {"type": "report", "id": report.report_id},
+                     {"reason": (intake.ignore_reason or "not a civic report")[:120], "confidence": intake.civic_confidence})
+        db.commit()
+        return Result(report=report, skipped=IGNORED)
+
+    generic = f"{intake.incident_type.title()} incident reported."
     try:
-        try:
-            tags = pii_agent.detect(transcript or "", agents.llm, known)
-        except Exception:  # noqa: BLE001
-            tags = pii_agent.detect(transcript or "", MockLLM(), known)
-        summary_redacted = pii_agent.redact(intake.summary, [], extra_literals=tags)
+        summary_redacted = pii_agent.redact(intake.summary, [], extra_literals=tags) if pii_ok else generic
     except Exception:  # noqa: BLE001
         pii_ok = False
-        summary_redacted = f"{intake.incident_type.title()} incident reported."
+        summary_redacted = generic
     counts = dict(Counter(t.type for t in tags))
     steps.add("pii", "pii_agent", "done" if pii_ok else "failed",
-              f"Tagged {len(tags)} PII span(s)" if pii_ok else "PII tagging failed, generic summary used", t0,
+              f"Tagged {len(tags)} PII span(s)" if pii_ok else "PII tagging failed, generic summary used", _now(),
               {"counts": counts})
 
     # 4. triage -----------------------------------------------------------------

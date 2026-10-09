@@ -41,8 +41,14 @@ def detect(text: str, llm: LLM, known: list[tuple[str, str]] | None = None) -> l
             continue
         for m in re.finditer(re.escape(literal), text, re.I):
             add(PiiTag(type=ptype, text=m.group(0), start=m.start(), end=m.end()))
-    for tag in llm.tag_pii(text):
-        if text[tag.start:tag.end] == tag.text:  # drop hallucinated offsets
+    external = getattr(llm, "external", False)
+    # An external model only ever sees text with the structured identifiers already masked. Its offsets refer to
+    # that masked text, so for external models we ignore them and locate each returned string in the original.
+    for tag in llm.tag_pii(redact(text, tags) if external else text):
+        if external:
+            for m in re.finditer(re.escape(tag.text), text):
+                add(PiiTag(type=tag.type, text=m.group(0), start=m.start(), end=m.end()))
+        elif text[tag.start:tag.end] == tag.text:  # drop hallucinated offsets
             add(tag)
     return sorted(tags, key=lambda t: t.start)
 

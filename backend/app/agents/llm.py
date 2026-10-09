@@ -109,7 +109,41 @@ class MockLLM:
         return TriageResult(needed_services=services, urgency_score=urgency, reason=reason[:250])
 
 
+PROVIDER_URLS = {
+    "groq": "https://api.groq.com/openai/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
+}
+
+
+def _live_provider(name: str, primary: bool):
+    """One OpenAI-compatible provider. The primary honours LLM_BASE_URL; extra providers use their own defaults."""
+    from app.agents.llm_live import LiveLLM  # lazy: keeps httpx/network code out of mock-only runs
+    from app.settings import settings
+
+    name = name.lower()
+    base_url = (settings.llm_base_url if primary else "") or PROVIDER_URLS.get(name, "")
+    if not base_url:
+        raise RuntimeError(f"Unknown LLM provider {name!r}: use groq or gemini (or set LLM_BASE_URL for the primary)")
+    key, model = {
+        "gemini": (settings.llm_api_key_gemini, settings.llm_gemini_model),
+    }.get(name, (settings.llm_api_key, settings.llm_model))
+    if not key:
+        raise RuntimeError(f"{'LLM_API_KEY_GEMINI' if name == 'gemini' else 'LLM_API_KEY'} is required for provider {name!r}")
+    return LiveLLM(key, model, base_url, settings.llm_timeout_s, reasoning_effort=settings.llm_reasoning_effort)
+
+
 def build_llm(mode: str) -> LLM:
     if mode == "mock":
         return MockLLM()
-    raise RuntimeError(f"SAHAY_LLM_MODE={mode!r} has no adapter yet; use 'mock'")
+    if mode == "live":
+        from app.agents.llm_live import FailoverLLM
+        from app.settings import settings
+
+        if not settings.llm_provider and not settings.llm_base_url:
+            raise RuntimeError("Set LLM_PROVIDER=groq or gemini (or LLM_BASE_URL for another OpenAI-compatible provider)")
+        primary = _live_provider(settings.llm_provider or "custom", primary=True)
+        fallback = settings.llm_fallback_provider
+        if fallback and fallback.lower() != settings.llm_provider.lower():
+            return FailoverLLM([primary, _live_provider(fallback, primary=False)])
+        return primary
+    raise RuntimeError(f"SAHAY_LLM_MODE={mode!r} is not 'mock' or 'live'")
