@@ -124,6 +124,21 @@ def test_sos_always_needs_approval(db):
     assert res.incident.status == "pending_approval" and res.incident.severity >= 4
 
 
+def test_sos_without_details_calls_medical_and_police(db):
+    r = make_report(db, kind="sos", category="other", text="SOS: the sender needs urgent help and could not describe it.")
+    res = run_pipeline(db, r.report_id, agents())
+    assert set(res.incident.needed_services) == {"ambulance", "police"}
+    assert res.incident.status == "pending_approval"
+    proposed = db.scalars(select(Dispatch).where(Dispatch.incident_id == res.incident.incident_id)).all()
+    assert {d.service_type for d in proposed} == {"ambulance", "police"}  # something real to approve, not a stuck incident
+
+
+def test_sos_with_a_clear_type_keeps_its_own_services(db):
+    r = make_report(db, kind="sos", category="fire", text="fire in the kitchen, help")
+    res = run_pipeline(db, r.report_id, agents())
+    assert "fire" in res.incident.needed_services
+
+
 def test_hazard_context_comes_from_search_tool(db):
     r = make_report(db, category="fire", text="smoke from a chemical store")
     res = run_pipeline(db, r.report_id, agents())
