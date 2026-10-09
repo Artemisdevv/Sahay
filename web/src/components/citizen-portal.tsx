@@ -40,10 +40,18 @@ import {
   NotReadyError,
   PayloadError,
   retryFailedNow,
+  setRelayEnabled,
   submitReport,
   type ReportStatus,
 } from "@/lib/report/service";
 import type { Category } from "@/lib/report/envelope";
+import {
+  getRelayState,
+  isRelayEnabled,
+  relaySupported,
+  watchRelay,
+  type RelayState,
+} from "@/lib/report/relay";
 import type { QueueItem } from "@/lib/report/queue";
 
 const tabs: ShellTab[] = [
@@ -137,6 +145,12 @@ export function CitizenPortal() {
   const cameraVideo = useRef<HTMLVideoElement>(null);
   const cameraStream = useRef<MediaStream | null>(null);
   const photoUrls = useRef<string[]>([]);
+  const [relay, setRelay] = useState<RelayState>(getRelayState());
+  const [relayOn, setRelayOn] = useState(true);
+  useEffect(() => {
+    setRelayOn(isRelayEnabled());
+    return watchRelay(setRelay);
+  }, []);
   const voice = useVoiceCapture();
   const [canUseCamera, setCanUseCamera] = useState(false);
 
@@ -390,6 +404,15 @@ export function CitizenPortal() {
           <p className="cz-lead">Hold the button and say what happened.</p>
 
           <MicButton voice={voice} />
+          {relaySupported() && relayOn && (
+            <p className="cz-hint cz-nearby" role="status">
+              {relay.nearby > 0
+                ? `${relay.nearby} nearby ${relay.nearby === 1 ? "phone" : "phones"} can pass your message on.`
+                : relay.running
+                  ? "Looking for nearby phones."
+                  : "Nearby sharing is starting."}
+            </p>
+          )}
 
           <div className="cz-photo-actions">
             <Button
@@ -521,6 +544,7 @@ export function CitizenPortal() {
           item={current}
           status={status}
           approximate={approx}
+          nearby={relay.nearby}
           onDone={startOver}
           onRetry={() => void retryFailedNow(current.report_id)}
         />
@@ -625,6 +649,26 @@ export function CitizenPortal() {
               aria-label="Share my health details"
             />
           </label>
+          {relaySupported() && (
+            <label className="cz-consent">
+              <span>
+                Help nearby phones pass on messages
+                <small>
+                  {relayOn
+                    ? "On. Your phone can carry sealed messages for others when they have no signal. You cannot read them."
+                    : "Off. Your own message can only be sent when you have signal."}
+                </small>
+              </span>
+              <Switch
+                checked={relayOn}
+                onCheckedChange={(on) => {
+                  setRelayOn(on);
+                  void setRelayEnabled(on);
+                }}
+                aria-label="Help nearby phones pass on messages"
+              />
+            </label>
+          )}
         </section>
       )}
 
@@ -794,12 +838,14 @@ function Progress({
   item,
   status,
   approximate,
+  nearby,
   onDone,
   onRetry,
 }: {
   item: QueueItem;
   status: ReportStatus | null;
   approximate: boolean;
+  nearby: number;
   onDone: () => void;
   onRetry: () => void;
 }) {
@@ -807,7 +853,8 @@ function Progress({
   // k = number of finished steps: 1 saved, 2 sent, 3 a team is arranged
   const k =
     item.state === "sent"
-      ? status && HELP_ARRANGED.has(status.status)
+      ? (status ?? item.relay_status) &&
+        HELP_ARRANGED.has((status ?? item.relay_status)?.status ?? "")
         ? 3
         : 2
       : 1;
@@ -818,16 +865,24 @@ function Progress({
       : item.state === "sent"
         ? "Your request was sent"
         : "Saved on your phone";
+  const serverStatus = status ?? item.relay_status ?? null;
+  const viaRelay = item.via === "relay";
   const lead = failed
     ? "The response centre did not accept this report. Call 112 now."
-    : status?.message
-      ? status.message
+    : serverStatus?.message
+      ? serverStatus.message
       : item.state === "sent"
-        ? "The response centre has it. A team is being arranged."
-        : "It will be sent as soon as there is a connection. You do not need to do anything.";
+        ? viaRelay
+          ? "A nearby phone passed it on and the response centre has it. A team is being arranged."
+          : "The response centre has it. A team is being arranged."
+        : nearby > 0
+          ? "A nearby phone can pass it on. You do not need to do anything."
+          : "It will be sent as soon as there is a connection or a nearby phone. You do not need to do anything.";
   const labels = [
     "Saved on your phone",
-    "Sent to the response centre",
+    viaRelay
+      ? "Delivered through a nearby phone"
+      : "Sent to the response centre",
     "A team is on the way",
   ];
   return (

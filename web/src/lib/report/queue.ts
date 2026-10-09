@@ -19,6 +19,10 @@ export interface QueueItem {
   last_error?: string | undefined;
   receipt?: { server_time: string; signature: string } | undefined;
   receipt_verified?: boolean;
+  /** how the receipt reached us: straight from the server, or back through nearby phones */
+  via?: "internet" | "relay";
+  /** latest signed status that came back over the relay while we were offline */
+  relay_status?: { status: string; message: string } | undefined;
 }
 
 const DB_NAME = "sahay-reports";

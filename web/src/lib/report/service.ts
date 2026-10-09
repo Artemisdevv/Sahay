@@ -2,6 +2,14 @@ import { API_BASE } from "@/lib/api";
 import { ensureDeviceToken, getOrCreateIdentity } from "@/lib/device-identity";
 import { secureStorage } from "@/native/secure-storage";
 import { SahayNearby } from "@/native/sahay-nearby";
+import {
+  attachRelayListeners,
+  isRelayEnabled,
+  relayStartedFor,
+  setRelayEnabledFlag,
+  startRelay,
+  stopRelay,
+} from "./relay";
 import { Capacitor } from "@capacitor/core";
 import {
   audioBytesToBase64,
@@ -89,11 +97,7 @@ export async function submitReport(input: SubmitInput): Promise<SubmitResult> {
     next_attempt_at: 0,
   };
   await getQueue().put(item);
-  void handOffToRelay(
-    envelope,
-    identity.deviceId,
-    serverKey.ed25519_public_key,
-  );
+  void handOffToRelay(envelope);
   void syncNow();
   return { item, approximateLocation: location.approximate };
 }
@@ -129,22 +133,44 @@ export async function retryFailedNow(reportId: string): Promise<void> {
   void syncNow();
 }
 
-/** Nearby relay (Android only): start once, then give the sealed envelope to the native queue. Best effort. */
-let relayStartedFor: string | null = null;
-async function handOffToRelay(
-  envelope: QueueItem["envelope"],
-  deviceId: string,
-  serverVerifyKey: string,
-): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return;
-  try {
-    if (relayStartedFor !== deviceId) {
-      await SahayNearby.start({ deviceId, mode: "both", serverVerifyKey });
-      relayStartedFor = deviceId;
+/**
+ * Nearby relay (Android only). Runs on every phone from app start (not only when it sends), so a phone with no
+ * reports of its own can still carry other people's sealed reports. Best effort: without permissions or a cached
+ * server key the internet path still works.
+ */
+let relayStarting: Promise<boolean> | null = null;
+export function ensureRelay(): Promise<boolean> {
+  if (!Capacitor.isNativePlatform() || !isRelayEnabled())
+    return Promise.resolve(false);
+  relayStarting ??= (async () => {
+    try {
+      const key = await ensureServerKey();
+      if (!key) return false; // receipts cannot be verified without the server key: wait until the app is online once
+      const { deviceId } = await getOrCreateIdentity(secureStorage);
+      if (relayStartedFor() === deviceId) return true;
+      return await startRelay(deviceId, key.ed25519_public_key);
+    } finally {
+      relayStarting = null;
     }
-    await SahayNearby.enqueue({ envelope });
+  })();
+  return relayStarting;
+}
+
+/** Settings switch: turn the relay on or off now and remember the choice. */
+export async function setRelayEnabled(on: boolean): Promise<boolean> {
+  setRelayEnabledFlag(on);
+  if (!on) {
+    await stopRelay();
+    return false;
+  }
+  return ensureRelay();
+}
+
+async function handOffToRelay(envelope: QueueItem["envelope"]): Promise<void> {
+  try {
+    if (await ensureRelay()) await SahayNearby.enqueue({ envelope });
   } catch {
-    /* permission denied or radio off: the internet path still works */
+    /* radio off or permission denied: the internet path still works */
   }
 }
 
@@ -174,7 +200,9 @@ export function syncNow(): Promise<FlushResult> {
  */
 export function startReportSync(onChange?: () => void): () => void {
   const run = () => {
-    void refreshServerKey().catch(() => {});
+    void refreshServerKey()
+      .catch(() => {}) // offline is fine: the cached key is used
+      .then(() => ensureRelay());
     void syncNow()
       .then(() => onChange?.())
       .catch(() => {});
@@ -183,6 +211,13 @@ export function startReportSync(onChange?: () => void): () => void {
     if (document.visibilityState === "visible") run();
   };
   run();
+  void ensureRelay();
+  let removeListeners: () => void = () => {};
+  void attachRelayListeners({
+    queue: getQueue(),
+    syncNow,
+    onChange,
+  }).then((remove) => (removeListeners = remove));
   window.addEventListener("online", run);
   document.addEventListener("visibilitychange", onVisible);
   const timer = window.setInterval(() => {
@@ -197,6 +232,7 @@ export function startReportSync(onChange?: () => void): () => void {
     window.removeEventListener("online", run);
     document.removeEventListener("visibilitychange", onVisible);
     window.clearInterval(timer);
+    removeListeners();
   };
 }
 

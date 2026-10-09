@@ -131,6 +131,7 @@ export async function flushReports(deps: FlushDeps): Promise<FlushResult> {
           : false;
       await deps.queue.update(item.report_id, {
         state: "sent",
+        via: "internet",
         attempts: item.attempts + 1,
         receipt: outcome.receipt,
         receipt_verified: verified,

@@ -204,3 +204,30 @@ export async function verifyAuditChain(
 }
 
 export { API_BASE };
+
+/**
+ * ngrok's free tier answers browser-like requests (the Android WebView has a Chrome user agent) with an HTML warning
+ * page. For tunnel URLs, add ngrok's documented bypass header to every call to our API. Called once at app start.
+ */
+export function installTunnelHeader(): void {
+  if (
+    typeof window === "undefined" ||
+    !/\.ngrok[a-z.-]*\//i.test(`${API_BASE}/`)
+  )
+    return;
+  const original = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
+    if (!url.startsWith(API_BASE)) return original(input, init);
+    const headers = new Headers(
+      init?.headers ?? (input instanceof Request ? input.headers : undefined),
+    );
+    headers.set("ngrok-skip-browser-warning", "1");
+    return original(input, { ...init, headers });
+  };
+}

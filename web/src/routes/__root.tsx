@@ -16,6 +16,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { registerSW } from "@/lib/sw-register";
 import { startDeviceBootstrap } from "@/lib/device-bootstrap";
 import { startReportSync } from "@/lib/report/service";
+import { installTunnelHeader } from "@/lib/api";
 import { secureStorage } from "@/native/secure-storage";
 import { SESSION_EXPIRED_EVENT, getSession } from "@/lib/session";
 import { toast } from "sonner";
@@ -158,6 +159,7 @@ function RootComponent() {
   const router = useRouter();
   useEffect(() => {
     registerSW();
+    installTunnelHeader();
     // Civilian device registration/refresh runs in the background; it never blocks or throws.
     // Skipped for staff logins (a browser console is not a civilian device).
     if (getSession()) return;
