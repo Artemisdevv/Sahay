@@ -88,7 +88,7 @@ def test_detail_is_redacted_and_service_scope_is_limited_to_own_dispatch():
 
     detail = client.get(f"/api/v1/incidents/{medical_id}", headers=admin)
     assert detail.status_code == 200
-    assert detail.json()["incident"]["incident_id"] == medical_id
+    assert detail.json()["incident_id"] == medical_id
     assert detail.json()["dispatches"]
     serialized = detail.text
     assert "Asha Nair" not in serialized and "+919800000000" not in serialized

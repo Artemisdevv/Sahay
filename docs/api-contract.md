@@ -163,7 +163,7 @@ Incident `status`: `new | processing | triaged | pending_approval | dispatched |
 | Method + path | Role | Description |
 |---|---|---|
 | `GET /incidents?status=&type=&limit=&cursor=` | admin, service | Admin gets all. Service gets only incidents with a dispatch to its unit. Redacted shape, `limit` 1–100, opaque `next_cursor`. |
-| `GET /incidents/{id}` | admin, service | `{ "incident": Incident, "dispatches": [...] }`. Service sees only its own dispatches. |
+| `GET /incidents/{id}` | admin, service | Single `Incident` plus `dispatches[]`. Service sees only its own dispatches. |
 | `GET /incidents/{id}/trace` | admin | Agent trace (section 4). |
 | `POST /incidents/{id}/reveal` | admin | Body `{ "reason": "string (required)" }`. Returns `IncidentPII`, writes audit entry `pii.reveal`. |
 | `POST /incidents/{id}/approve` | admin | Approves proposed dispatches. |

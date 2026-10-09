@@ -148,10 +148,9 @@ def install(
         if user["role"] == "service":
             dispatch_query = dispatch_query.where(Dispatch.unit_id == user["unit_id"])
         dispatches = db.scalars(dispatch_query.order_by(Dispatch.created_at, Dispatch.dispatch_id)).all()
-        return {
-            "incident": incident_json(incident),
-            "dispatches": [_dispatch_json(dispatch, utc_iso) for dispatch in dispatches],
-        }
+        result = incident_json(incident)
+        result["dispatches"] = [_dispatch_json(dispatch, utc_iso) for dispatch in dispatches]
+        return result
 
     @router.get("/incidents/{incident_id}/trace")
     def get_incident_trace(
