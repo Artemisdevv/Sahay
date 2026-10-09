@@ -10,7 +10,7 @@ export const defaultProfile = {
   allergies: "Penicillin",
   medications: "Albuterol inhaler",
   devices: "None",
-  address: "124 Market Street, San Francisco, CA",
+  address: "Kochi, Kerala",
   access: "Apartment 4B · Gate code 2048",
   mobility: "None",
 };

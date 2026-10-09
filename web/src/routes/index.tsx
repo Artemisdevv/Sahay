@@ -3,7 +3,7 @@ import { pageHead } from "@/lib/dispatch";
 export const Route = createFileRoute("/")({
   head: () =>
     pageHead(
-      "Sahay emergency reporting",
+      "Sahay emergency response",
       "A coordinated incident response workspace for citizens and emergency services.",
     ),
   beforeLoad: () => {

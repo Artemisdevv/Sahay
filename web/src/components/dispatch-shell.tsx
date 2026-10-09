@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Shield,
   Building2,
@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { clearSession } from "@/lib/session";
 import { motion, useReducedMotion } from "framer-motion";
 export function Brand() {
   return (
@@ -51,6 +51,7 @@ export function Shell({
   title: string;
 }) {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const reduced = useReducedMotion();
   return (
     <div className="app-shell">
@@ -72,7 +73,7 @@ export function Shell({
             <Building2 size={15} />
           </div>
           <div>
-            <strong>San Francisco</strong>
+            <strong>Kochi</strong>
             <small>City response network</small>
           </div>
           <ChevronsUpDown size={12} className="ml-auto text-muted-foreground" />
@@ -157,10 +158,11 @@ export function Shell({
               </strong>
               <small>{role === "citizen" ? "Citizen account" : "Demo workspace"}</small>
             </div>
-            <Button variant="ghost" size="icon" className="ml-auto" asChild>
-              <Link to="/login" aria-label="Switch account">
+            <Button variant="ghost" size="icon" className="ml-auto" aria-label="Sign out" onClick={() => {
+              clearSession();
+              void navigate({ to: "/login" });
+            }}>
                 <LogOut size={14} />
-              </Link>
             </Button>
           </div>
         </div>
@@ -185,7 +187,7 @@ export function Shell({
           <div className="topbar-right">
             <span className="flex items-center gap-2 text-muted-foreground">
               <MapPin size={12} />
-              San Francisco, CA
+              Kochi, Kerala
             </span>
             <Badge tone="amber">Demo environment</Badge>
             <Button
@@ -247,14 +249,14 @@ function MapInner({
     <div className="network-map">
       {authorized && key ? (
         <iframe
-          title="San Francisco response zone map"
+          title="Kochi response zone map"
           loading="lazy"
-          src={`https://www.google.com/maps/embed/v1/view?key=${key}&center=37.7749,-122.4194&zoom=13&maptype=roadmap`}
+          src={`https://www.google.com/maps/embed/v1/view?key=${key}&center=9.9312,76.2673&zoom=13&maptype=roadmap`}
         />
       ) : (
         <div className="map-placeholder">
           <MapPin size={23} />
-          <span className="mono">SAN FRANCISCO · CENTRAL ZONE</span>
+          <span className="mono">KOCHI · CENTRAL ZONE</span>
           <small>Map available on authorized deployment</small>
         </div>
       )}
