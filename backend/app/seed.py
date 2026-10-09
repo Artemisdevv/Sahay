@@ -2,6 +2,7 @@ from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.models import DemoUser, Unit, now_utc
+from app.security import hash_password
 
 SEED_UNITS = [
     ("Ambulance 01", "ambulance", 9.9816, 76.2999, "amb-01"),
@@ -23,7 +24,7 @@ def seed_demo(db: Session) -> None:
         db.flush()
         if username:
             units_by_username[username] = (unit.unit_id, name)
-    db.add(DemoUser(username="admin", password="admin123", role="admin", display_name="Sahay Admin"))
+    db.add(DemoUser(username="admin", password_hash=hash_password("admin123"), role="admin", display_name="Sahay Admin"))
     for username, (unit_id, display_name) in units_by_username.items():
-        db.add(DemoUser(username=username, password="demo123", role="service", unit_id=unit_id, display_name=display_name))
+        db.add(DemoUser(username=username, password_hash=hash_password("demo123"), role="service", unit_id=unit_id, display_name=display_name))
     db.commit()

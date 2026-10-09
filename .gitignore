@@ -21,6 +21,8 @@ venv/
 backend/sahay.db
 backend/*.db-shm
 backend/*.db-wal
+backend/.sahay-server-key
+backend/.sahay-server-ed25519-key
 
 # Node
 node_modules/
@@ -49,3 +51,7 @@ Thumbs.db
 # Docs kept outside the repo on purpose
 solution.md
 vague_idea.txt
+.coverage
+htmlcov/
+.sahay-server-key
+.sahay-server-ed25519-key

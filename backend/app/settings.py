@@ -8,6 +8,13 @@ class Settings(BaseSettings):
     sahay_database_url: str = "sqlite:///./sahay.db"
     sahay_jwt_secret: str = ""
     sahay_cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    sahay_rate_limit_per_minute: int = 120
+    sahay_register_rate_limit_per_minute: int = 10
+    sahay_login_rate_limit_per_minute: int = 10
+    sahay_server_x25519_secret_key: str = ""
+    sahay_server_key_file: str = ".sahay-server-key"
+    sahay_server_ed25519_secret_key: str = ""
+    sahay_server_signing_key_file: str = ".sahay-server-ed25519-key"
 
     @property
     def cors_origins(self) -> list[str]:

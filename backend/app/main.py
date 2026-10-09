@@ -2,25 +2,30 @@ import math
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
-from fastapi.responses import JSONResponse
 
 from app.database import Base, engine, get_db
-from app.models import AgentTrace, AuditEntry, Dispatch, Incident, Unit
-from app.schemas import LoginRequest, MockReportRequest
+from app.events import manager, websocket_loop
+from app.keyring import server_public_key_response
+from app.models import AgentTrace, AuditEntry, DemoUser, Device, Dispatch, Incident, Unit
+from app.rate_limit import rate_limiter
+from app.schemas import DeviceRegistrationRequest, LoginRequest, MockReportRequest
 from app.seed import seed_demo
+from app.security import verify_password
 from app.settings import settings
 
 if not settings.sahay_dev and not settings.sahay_jwt_secret:
     raise RuntimeError("SAHAY_JWT_SECRET must be configured when SAHAY_DEV is disabled")
 
 JWT_SECRET = settings.sahay_jwt_secret or "sahay-insecure-local-dev-only"
+JWT_ISSUER = "sahay"
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Sahay API", version="1.0.0", description="Civic incident reporting and dispatch API")
 app.add_middleware(
@@ -36,7 +41,7 @@ app.add_middleware(
 async def http_error_handler(_: Request, exc: HTTPException):
     codes = {400: "bad_request", 401: "unauthenticated", 403: "forbidden", 404: "not_found", 409: "conflict", 413: "too_large", 422: "invalid_request", 429: "rate_limited"}
     message = exc.detail if isinstance(exc.detail, str) else "Request failed"
-    return JSONResponse(status_code=exc.status_code, content={"error": {"code": codes.get(exc.status_code, "request_failed"), "message": message}})
+    return JSONResponse(status_code=exc.status_code, headers=exc.headers, content={"error": {"code": codes.get(exc.status_code, "request_failed"), "message": message}})
 
 
 @app.exception_handler(RequestValidationError)
@@ -62,15 +67,37 @@ def require_dev() -> None:
         raise HTTPException(status_code=404, detail="Not found")
 
 
+def request_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
 def current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
 ) -> dict:
     if credentials is None:
         raise HTTPException(status_code=401, detail="Unauthenticated")
+    claims = decode_access_token(credentials.credentials)
+    role = claims.get("role")
+    subject = claims.get("sub")
+    rate_key = f"device:{claims.get('device_id')}" if role == "civilian" else f"user:{subject}"
+    rate_limiter.check(rate_key, settings.sahay_rate_limit_per_minute)
+    return claims
+
+
+def decode_access_token(token: str) -> dict:
     try:
-        return jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        claims = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM], issuer=JWT_ISSUER)
     except JWTError as exc:
         raise HTTPException(status_code=401, detail="Unauthenticated") from exc
+    role = claims.get("role")
+    subject = claims.get("sub")
+    if role not in {"civilian", "service", "admin"} or not subject:
+        raise HTTPException(status_code=401, detail="Unauthenticated")
+    if role == "civilian" and claims.get("device_id") != subject:
+        raise HTTPException(status_code=401, detail="Unauthenticated")
+    if role == "service" and not claims.get("unit_id"):
+        raise HTTPException(status_code=401, detail="Unauthenticated")
+    return claims
 
 
 def require_admin(user: dict = Depends(current_user)) -> dict:
@@ -110,6 +137,19 @@ def incident_json(incident: Incident) -> dict:
     }
 
 
+def trace_json(trace: AgentTrace) -> dict:
+    return {
+        "incident_id": trace.incident_id,
+        "step": trace.step,
+        "agent": trace.agent,
+        "status": trace.status,
+        "started_at": utc_iso(trace.started_at),
+        "finished_at": utc_iso(trace.finished_at),
+        "summary": trace.summary,
+        "output": trace.output,
+    }
+
+
 def distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     to_rad = math.radians
     dlat = to_rad(lat2 - lat1)
@@ -123,13 +163,67 @@ def health():
     return {"status": "ok", "dev_mode": settings.sahay_dev}
 
 
-@app.post("/api/v1/auth/login")
-def login(body: LoginRequest, db: Session = Depends(get_db)):
-    require_dev()
-    from app.models import DemoUser
+@app.websocket("/ws/v1")
+async def websocket_endpoint(websocket: WebSocket):
+    token = websocket.query_params.get("token")
+    try:
+        if not token:
+            raise HTTPException(status_code=401, detail="Unauthenticated")
+        claims = decode_access_token(token)
+        rate_subject = claims.get("device_id") or claims["sub"]
+        rate_limiter.check(f"ws:{rate_subject}", settings.sahay_rate_limit_per_minute)
+    except HTTPException:
+        await websocket.close(code=1008, reason="Unauthenticated or rate limited")
+        return
+    await websocket_loop(websocket, claims)
 
+
+@app.get("/api/v1/config/server-key")
+def get_server_key():
+    try:
+        return server_public_key_response()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Server encryption key is not configured") from exc
+
+
+@app.post("/api/v1/auth/register-device", status_code=status.HTTP_201_CREATED)
+def register_device(body: DeviceRegistrationRequest, request: Request, db: Session = Depends(get_db)):
+    ip = request_ip(request)
+    device_id = str(body.device_id)
+    rate_limiter.check(f"register-ip:{ip}", settings.sahay_register_rate_limit_per_minute)
+    rate_limiter.check(f"register-device:{device_id}", settings.sahay_register_rate_limit_per_minute)
+    device = db.get(Device, device_id)
+    if device is not None:
+        if device.disabled or device.ed25519_public_key != body.ed25519_public_key:
+            raise HTTPException(status_code=409, detail="Device ID is already registered")
+        device.last_seen_at = datetime.now(timezone.utc)
+        device.language = body.language
+    else:
+        device = Device(
+            device_id=device_id,
+            ed25519_public_key=body.ed25519_public_key,
+            language=body.language,
+        )
+        db.add(device)
+    db.commit()
+    now = datetime.now(timezone.utc)
+    claims = {
+        "sub": device_id,
+        "role": "civilian",
+        "device_id": device_id,
+        "iat": int(now.timestamp()),
+        "exp": int(now.timestamp()) + JWT_EXPIRY_MINUTES * 60,
+        "iss": JWT_ISSUER,
+    }
+    return {"token": jwt.encode(claims, JWT_SECRET, algorithm=JWT_ALGORITHM), "role": "civilian", "device_id": device_id}
+
+
+@app.post("/api/v1/auth/login")
+def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    rate_limiter.check(f"login-ip:{request_ip(request)}", settings.sahay_login_rate_limit_per_minute)
+    rate_limiter.check(f"login-user:{body.username.lower()}", settings.sahay_login_rate_limit_per_minute)
     demo_user = db.get(DemoUser, body.username)
-    if demo_user is None or demo_user.password != body.password:
+    if demo_user is None or not verify_password(body.password, demo_user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     now = datetime.now(timezone.utc)
     claims = {
@@ -139,6 +233,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         "display_name": demo_user.display_name,
         "iat": int(now.timestamp()),
         "exp": int(now.timestamp()) + JWT_EXPIRY_MINUTES * 60,
+        "iss": JWT_ISSUER,
     }
     return {
         "token": jwt.encode(claims, JWT_SECRET, algorithm=JWT_ALGORITHM),
@@ -172,7 +267,7 @@ def dev_reset(db: Session = Depends(get_db)):
 
 
 @app.post("/api/v1/dev/mock-report", status_code=status.HTTP_201_CREATED)
-def mock_report(body: MockReportRequest, db: Session = Depends(get_db)):
+async def mock_report(body: MockReportRequest, db: Session = Depends(get_db)):
     require_dev()
     report_id = body.report_id or str(uuid4())
     category_map = {"medical": ["ambulance"], "accident": ["ambulance", "police"], "fire": ["fire", "ambulance"], "crime": ["police"], "flood": ["municipal", "ambulance"], "other": ["municipal"]}
@@ -240,11 +335,16 @@ def mock_report(body: MockReportRequest, db: Session = Depends(get_db)):
     db.add(AuditEntry(actor={"type": "system", "id": "dev_mock"}, action="report.received", target={"type": "incident", "id": incident.incident_id}, details={"report_id": report_id, "mock": True}))
     db.commit()
     db.refresh(incident)
+    await manager.publish("incident.created", incident_json(incident))
+    for dispatch_data in dispatches:
+        await manager.publish("dispatch.proposed", dispatch_data)
+    for trace in db.scalars(select(AgentTrace).where(AgentTrace.incident_id == incident.incident_id)).all():
+        await manager.publish("agent.trace", trace_json(trace))
     return {"incident": incident_json(incident), "dispatches": dispatches, "mock": True}
 
 
 @app.post("/api/v1/dev/tick")
-def dev_tick(db: Session = Depends(get_db)):
+async def dev_tick(db: Session = Depends(get_db)):
     require_dev()
     moved = []
     dispatches = db.scalars(select(Dispatch).where(Dispatch.status.in_(["approved", "accepted", "en_route"]))).all()
@@ -260,7 +360,9 @@ def dev_tick(db: Session = Depends(get_db)):
         unit.updated_at = datetime.now(timezone.utc)
         moved.append({"unit_id": unit.unit_id, "location": {"lat": unit.lat, "lng": unit.lng}, "status": unit.status})
     db.commit()
-    return {"moved": moved, "note": "WebSocket unit.moved events are added in B-07."}
+    for unit_data in moved:
+        await manager.publish("unit.moved", unit_data)
+    return {"moved": moved}
 
 
 @app.get("/api/v1/dev/status")
