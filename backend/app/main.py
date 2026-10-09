@@ -309,27 +309,6 @@ def list_units(_: dict = Depends(require_admin), db: Session = Depends(get_db)):
     return {"units": [unit_json(unit) for unit in db.scalars(select(Unit).order_by(Unit.service_type, Unit.name)).all()]}
 
 
-def fuzz_coordinate(coord: float) -> float:
-    return round(coord + ((hash(str(coord)) % 2000 - 1000) / 100000.0), 5)
-
-
-@app.get("/api/v1/public/units")
-def list_public_units(db: Session = Depends(get_db)):
-    units = db.scalars(select(Unit).order_by(Unit.service_type, Unit.name)).all()
-    return {
-        "units": [
-            {
-                "service_type": unit.service_type,
-                "name": unit.name,
-                "status": unit.status,
-                "location": {"lat": fuzz_coordinate(unit.lat), "lng": fuzz_coordinate(unit.lng)},
-                "updated_at": utc_iso(unit.updated_at),
-            }
-            for unit in units
-        ]
-    }
-
-
 @app.post("/api/v1/dev/seed", status_code=status.HTTP_200_OK)
 def dev_seed(db: Session = Depends(get_db)):
     require_dev()
