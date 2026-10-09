@@ -1,9 +1,9 @@
 # STT evaluation (B-05)
 
-Date: 2026-10-09. Provider tested: Groq-hosted Whisper through `backend/scripts/stt_eval.py`. Cloudflare Workers AI was **not** tested (no keys).
+Date: 2026-10-09. Provider tested: Groq-hosted Whisper through `backend/scripts/stt_eval.py`. Cloudflare Workers AI was **not** tested yet (account ID missing).
 
 ## Data
-Three clips from Adarsh (`backend/scripts/voice_recordings/M01..M03.opus`, 27 to 38 KB, Opus in Ogg). **All three are spoken Malayalam** (confirmed by the team). **No ground-truth transcripts exist yet**, so there is no word error rate and the notes below were not checked by a Malayalam speaker. This is a first signal, not the 10-clip evaluation B-05/D-05 ask for (Malayalam, Hindi, English, with and without noise).
+Three clips from Adarsh (`backend/scripts/voice_recordings/M01..M03.opus`, 27 to 38 KB, Opus in Ogg). **All three are spoken Malayalam**, clean speech, with ground-truth transcripts from Adarsh. Three clips are a first signal, not the 10-clip evaluation B-05/D-05 ask for (Malayalam, Hindi, English, with and without noise).
 
 ## Ground truth
 Adarsh's transcripts are in `backend/scripts/voice_recordings/M01..M03.md` (Malayalam script, clean speech): M01 road accident near Edappally junction, bike and car, two injured, one bleeding heavily, send an ambulance. M02 fire in a building in Kalamassery, smoke from the second floor, people inside, send the fire force, near the old bus stop. M03 a person collapsed near Thripunithura market, not responding, send an ambulance, near the old bus stop. `stt_eval.py` reads these files automatically.
