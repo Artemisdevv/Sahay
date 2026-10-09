@@ -584,7 +584,11 @@ export function CitizenPortal() {
       {tab === "map" && (
         <section className="cz-page" aria-labelledby="map-title">
           <h1 id="map-title">Response map</h1>
-          <IncidentMap role="civilian" className="admin-map" />
+          <p className="cz-lead">
+            Confirmed incidents near you, by area. No names or messages are
+            shown.
+          </p>
+          <IncidentMap role="public" className="admin-map" />
         </section>
       )}
 

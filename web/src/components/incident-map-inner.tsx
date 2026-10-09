@@ -55,6 +55,7 @@ export function IncidentMap({
   const map = useRef<L.Map | null>(null);
   const incidentMarkers = useRef<L.LayerGroup | null>(null);
   const unitMarkers = useRef<L.LayerGroup | null>(null);
+  const fitted = useRef(false);
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [selected, setSelected] = useState<IncidentSummary | null>(null);
@@ -196,6 +197,7 @@ export function IncidentMap({
     const group = incidentMarkers.current;
     if (!group) return;
     group.clearLayers();
+    const points: L.LatLngTuple[] = [];
     incidents.forEach((incident) => {
       if (
         !Number.isFinite(incident.location?.lat) ||
@@ -214,8 +216,23 @@ export function IncidentMap({
       });
       marker.on("click", () => setSelected(incident));
       marker.addTo(group);
+      points.push([incident.location.lat, incident.location.lng]);
     });
-  }, [incidents]);
+    // Open map: show wherever the incidents are, not only the default Kochi view.
+    // Only once, so the 10 s refresh does not fight the user panning the map.
+    if (
+      role === "public" &&
+      points.length > 0 &&
+      map.current &&
+      !fitted.current
+    ) {
+      fitted.current = true;
+      map.current.fitBounds(L.latLngBounds(points), {
+        padding: [40, 40],
+        maxZoom: 13,
+      });
+    }
+  }, [incidents, role]);
 
   useEffect(() => {
     const group = unitMarkers.current;
