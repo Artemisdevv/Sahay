@@ -14,6 +14,8 @@ import {
   Pencil,
   LocateFixed,
   MapPin,
+  Camera,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -108,6 +110,7 @@ const whenText = (iso: string) =>
     hour: "numeric",
     minute: "2-digit",
   });
+type ScenePhoto = { file: File; url: string };
 
 const fmt = (s: number) =>
   `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -126,7 +129,15 @@ export function CitizenPortal() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [consent, setConsent] = useState(true);
   const [reports, setReports] = useState<QueueItem[]>([]);
+  const [photoChoiceOpen, setPhotoChoiceOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [photos, setPhotos] = useState<ScenePhoto[]>([]);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const cameraVideo = useRef<HTMLVideoElement>(null);
+  const cameraStream = useRef<MediaStream | null>(null);
+  const photoUrls = useRef<string[]>([]);
   const voice = useVoiceCapture();
+  const [canUseCamera, setCanUseCamera] = useState(false);
 
   // Follow the report we just sent: local queue state every 3 s, server status once it is delivered.
   const currentId = current?.report_id;
@@ -163,6 +174,28 @@ export function CitizenPortal() {
     };
   }, [tab]);
 
+  useEffect(() => {
+    if (cameraOpen && cameraVideo.current && cameraStream.current) {
+      cameraVideo.current.srcObject = cameraStream.current;
+      void cameraVideo.current.play().catch(() => undefined);
+    }
+  }, [cameraOpen]);
+
+  useEffect(() => {
+    setCanUseCamera(
+      typeof navigator !== "undefined" &&
+        typeof navigator.mediaDevices?.getUserMedia === "function",
+    );
+  }, []);
+
+  useEffect(
+    () => () => {
+      photoUrls.current.forEach((url) => URL.revokeObjectURL(url));
+      cameraStream.current?.getTracks().forEach((track) => track.stop());
+    },
+    [],
+  );
+
   function updateLocation() {
     if (!navigator.geolocation) {
       toast.error(
@@ -180,6 +213,103 @@ export function CitizenPortal() {
       () => toast.error("Location is off. Turn it on in phone settings."),
       { timeout: 8000 },
     );
+  }
+
+  function attachPhotos(files: Iterable<File> | null) {
+    if (!files) return;
+    const next: ScenePhoto[] = [];
+    for (const file of files) {
+      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+        toast.error("Choose an image smaller than 10 MB.");
+        continue;
+      }
+      if (photos.length + next.length >= 3) {
+        toast.error("You can attach up to 3 photos.");
+        break;
+      }
+      const url = URL.createObjectURL(file);
+      photoUrls.current.push(url);
+      next.push({ file, url });
+    }
+    setPhotos((current) => [...current, ...next].slice(0, 3));
+    if (photoInput.current) photoInput.current.value = "";
+  }
+
+  async function openCamera() {
+    if (!canUseCamera) {
+      toast.error(
+        "Camera capture isn’t available here. You can still upload an image.",
+      );
+      return;
+    }
+    try {
+      cameraStream.current = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      setPhotoChoiceOpen(false);
+      setCameraOpen(true);
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : "";
+      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        toast.error("Camera access was denied. You can still upload an image.");
+      } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        toast.error(
+          "No camera is available on this device. You can still upload an image.",
+        );
+      } else {
+        toast.error("Couldn’t open the camera. You can still upload an image.");
+      }
+      cameraStream.current?.getTracks().forEach((track) => track.stop());
+      cameraStream.current = null;
+    }
+  }
+
+  function closeCamera() {
+    cameraStream.current?.getTracks().forEach((track) => track.stop());
+    cameraStream.current = null;
+    setCameraOpen(false);
+  }
+
+  function capturePhoto() {
+    const video = cameraVideo.current;
+    if (!video?.videoWidth || !video.videoHeight) {
+      toast.error("Camera is still starting. Try again in a moment.");
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      toast.error(
+        "Couldn’t capture the photo. You can upload an image instead.",
+      );
+      return;
+    }
+    context.drawImage(video, 0, 0);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          toast.error(
+            "Couldn’t capture the photo. Try again or upload an image.",
+          );
+          return;
+        }
+        attachPhotos([
+          new File([blob], `scene-${Date.now()}.jpg`, { type: "image/jpeg" }),
+        ]);
+        closeCamera();
+      },
+      "image/jpeg",
+      0.9,
+    );
+  }
+
+  function removePhoto(photo: ScenePhoto) {
+    URL.revokeObjectURL(photo.url);
+    photoUrls.current = photoUrls.current.filter((url) => url !== photo.url);
+    setPhotos((current) => current.filter((item) => item.url !== photo.url));
   }
 
   // A category alone is not a report: the response team needs a message. The buttons only label it.
@@ -228,6 +358,7 @@ export function CitizenPortal() {
     setPicked(null);
     setNote("");
     voice.reset();
+    photos.forEach(removePhoto);
   }
 
   function saveProfile() {
@@ -259,6 +390,41 @@ export function CitizenPortal() {
 
           <MicButton voice={voice} />
 
+          <div className="cz-photo-actions">
+            <Button
+              variant="outline"
+              className="cz-secondary"
+              onClick={() => setPhotoChoiceOpen(true)}
+            >
+              <Camera /> Add a photo (optional)
+            </Button>
+            <input
+              ref={photoInput}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(event) => attachPhotos(event.target.files)}
+            />
+            {photos.length > 0 && (
+              <div className="cz-photo-preview" aria-label="Photo attachments">
+                {photos.map((photo) => (
+                  <div className="cz-photo-item" key={photo.url}>
+                    <img src={photo.url} alt="Attached scene" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove ${photo.file.name}`}
+                      onClick={() => removePhoto(photo)}
+                    >
+                      <X size={16} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {voice.state === "ready" && voice.clip && (
             <div className="cz-clip">
               <p>Your message ({fmt(voice.clip.seconds)})</p>
@@ -274,13 +440,19 @@ export function CitizenPortal() {
           )}
           {voice.state === "denied" && (
             <p className="cz-warn" role="alert">
-              The microphone is off. Allow it in phone settings, or choose what
-              is happening below.
+              Microphone access was denied. Allow it in browser settings, or
+              choose what is happening below.
             </p>
           )}
           {voice.state === "unsupported" && (
             <p className="cz-warn" role="alert">
               This phone cannot record here. Choose what is happening below.
+            </p>
+          )}
+          {voice.state === "unavailable" && (
+            <p className="cz-warn" role="alert">
+              No microphone is available. Connect or enable a microphone, or
+              choose what is happening below.
             </p>
           )}
 
@@ -472,6 +644,69 @@ export function CitizenPortal() {
           <Button className="cz-send" onClick={saveProfile}>
             Save
           </Button>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={photoChoiceOpen} onOpenChange={setPhotoChoiceOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Add a scene photo</DialogTitle>
+            <DialogDescription>
+              Take a photo now or upload an image from this device.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="outline"
+              onClick={() => void openCamera()}
+              disabled={!canUseCamera}
+            >
+              <Camera /> Take photo
+            </Button>
+            {!canUseCamera && (
+              <p className="cz-hint">
+                Camera capture isn’t available in this browser. Image upload is
+                still available.
+              </p>
+            )}
+            <Button
+              onClick={() => {
+                setPhotoChoiceOpen(false);
+                photoInput.current?.click();
+              }}
+            >
+              Upload image
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={cameraOpen}
+        onOpenChange={(open) => {
+          if (!open) closeCamera();
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Take a scene photo</DialogTitle>
+            <DialogDescription>
+              Position the camera, then capture to add the photo to your report.
+            </DialogDescription>
+          </DialogHeader>
+          <video
+            ref={cameraVideo}
+            autoPlay
+            playsInline
+            muted
+            className="w-full rounded-md bg-black"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeCamera}>
+              Cancel
+            </Button>
+            <Button onClick={capturePhoto}>
+              <Camera /> Capture photo
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </Shell>

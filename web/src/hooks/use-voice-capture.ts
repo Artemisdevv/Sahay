@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type VoiceState =
-  "idle" | "recording" | "ready" | "denied" | "unsupported";
+  "idle" | "recording" | "ready" | "denied" | "unavailable" | "unsupported";
 
 export type VoiceClip = {
   blob: Blob;
@@ -125,9 +125,14 @@ export function useVoiceCapture() {
         setSeconds(s);
         if (s >= MAX_SECONDS) stop();
       }, 250);
-    } catch {
+    } catch (error) {
       cleanup();
-      setState("denied");
+      const name = error instanceof DOMException ? error.name : "";
+      setState(
+        name === "NotFoundError" || name === "DevicesNotFoundError"
+          ? "unavailable"
+          : "denied",
+      );
     }
   }, [cleanup, state, stop]);
 
