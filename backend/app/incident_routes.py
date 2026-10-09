@@ -10,12 +10,13 @@ from typing import Callable
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import AgentTrace, AuditEntry, Dispatch, Incident, IncidentPII
-from app.pii_crypto import decrypt_field
+from app.agents.store import load_pii
+from app.dispatch.engine import audit
+from app.models import AgentTrace, Dispatch, Incident, IncidentPII
 
 
 class RevealRequest(BaseModel):
@@ -67,14 +68,6 @@ def _dispatch_json(dispatch: Dispatch, iso: Callable[[datetime], str]) -> dict:
         "created_at": iso(dispatch.created_at),
         "updated_at": iso(dispatch.updated_at),
     }
-
-
-def _pii_context(row: IncidentPII, field: str) -> str:
-    return f"{row.incident_id}:{row.report_id}:{field}"
-
-
-def _decrypt(row: IncidentPII, field: str):
-    return decrypt_field(getattr(row, f"{field}_ciphertext"), _pii_context(row, field))
 
 
 def install(
@@ -176,55 +169,37 @@ def install(
     ):
         if db.get(Incident, incident_id) is None:
             raise HTTPException(status_code=404, detail="Not found")
-        rows = db.scalars(
-            select(IncidentPII)
-            .where(IncidentPII.incident_id == incident_id)
-            .order_by(IncidentPII.report_id)
-        ).all()
-        reporters = []
-        transcripts = []
-        pii_spans = []
-        audio_url = None
-        for row in rows:
-            name = _decrypt(row, "reporter_name")
-            phone = _decrypt(row, "reporter_phone")
-            contact_name = _decrypt(row, "emergency_contact_name")
-            contact_phone = _decrypt(row, "emergency_contact_phone")
-            transcript = _decrypt(row, "transcript")
-            spans = _decrypt(row, "pii_spans")
-            row_audio_url = _decrypt(row, "audio_url")
-            if name is not None or phone is not None or contact_name is not None or contact_phone is not None:
-                reporters.append(
-                    {
-                        "report_id": row.report_id,
-                        "name": name,
-                        "phone": phone,
-                        "language": row.language,
-                        "emergency_contact": {"name": contact_name, "phone": contact_phone},
-                    }
-                )
-            if transcript:
-                transcripts.append(transcript)
-            if isinstance(spans, list):
-                pii_spans.extend(spans)
-            if audio_url is None and row_audio_url is not None:
-                audio_url = row_audio_url
-
-        db.add(
-            AuditEntry(
-                actor={"type": "admin", "id": user["sub"]},
-                action="pii.reveal",
-                target={"type": "incident", "id": incident_id},
-                details={"reason": body.reason, "pii_record_count": len(rows)},
-            )
+        pii_record_count = db.scalar(
+            select(func.count()).select_from(IncidentPII).where(IncidentPII.incident_id == incident_id)
         )
+        audit(
+            db,
+            {"type": "admin", "id": user["sub"]},
+            "pii.reveal",
+            {"type": "incident", "id": incident_id},
+            {"reason": body.reason, "pii_record_count": pii_record_count},
+        )
+        # Commit the audit record before decrypting or returning any PII. A failed
+        # audit write must never allow a reveal to succeed without an audit trail.
         db.commit()
+        pii = load_pii(db, incident_id)
+        if pii is None:
+            pii = {"transcript": None, "reporters": [], "pii_spans": [], "audio_url": None}
+        reporters = [
+            {
+                **reporter,
+                "emergency_contact": pii["emergency_contact"],
+            }
+            for reporter in pii["reporters"]
+            if reporter["name"] is not None or reporter["phone"] is not None
+            or pii["emergency_contact"] is not None
+        ]
         return {
             "incident_id": incident_id,
-            "transcript": "\n".join(transcripts) if transcripts else None,
+            "transcript": pii["transcript"],
             "reporters": reporters,
-            "pii_spans": pii_spans,
-            "audio_url": audio_url,
+            "pii_spans": pii["pii_spans"],
+            "audio_url": pii["audio_url"],
         }
 
     app.include_router(router)

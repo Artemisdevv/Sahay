@@ -169,6 +169,32 @@ def test_reveal_is_admin_only_and_unknown_incident_is_not_found():
     ).status_code == 404
 
 
+def test_reveal_commits_audit_before_loading_pii(monkeypatch):
+    admin = setup()
+    incident_id = create_incident(text="Private details")
+    from app import incident_routes
+
+    original_load_pii = incident_routes.load_pii
+    observed = {}
+
+    def audited_load(db, requested_incident_id):
+        with SessionLocal() as separate_db:
+            observed["audit_exists"] = any(
+                entry.target.get("id") == requested_incident_id
+                for entry in separate_db.scalars(
+                    select(AuditEntry).where(AuditEntry.action == "pii.reveal")
+                )
+            )
+        return original_load_pii(db, requested_incident_id)
+
+    monkeypatch.setattr(incident_routes, "load_pii", audited_load)
+    response = client.post(
+        f"/api/v1/incidents/{incident_id}/reveal", headers=admin, json={"reason": "verify audit order"}
+    )
+    assert response.status_code == 200, response.text
+    assert observed["audit_exists"] is True
+
+
 def test_pii_ciphertext_cannot_be_tampered_with_or_moved_between_fields():
     encrypted = encrypt_field("private", "incident:report:transcript")
     changed = bytearray(encrypted)
