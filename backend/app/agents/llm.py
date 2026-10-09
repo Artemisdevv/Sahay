@@ -109,7 +109,18 @@ class MockLLM:
         return TriageResult(needed_services=services, urgency_score=urgency, reason=reason[:250])
 
 
+PROVIDER_URLS = {"groq": "https://api.groq.com/openai/v1"}
+
+
 def build_llm(mode: str) -> LLM:
     if mode == "mock":
         return MockLLM()
-    raise RuntimeError(f"SAHAY_LLM_MODE={mode!r} has no adapter yet; use 'mock'")
+    if mode == "live":
+        from app.agents.llm_live import LiveLLM  # lazy: keeps httpx/network code out of mock-only runs
+        from app.settings import settings
+
+        base_url = settings.llm_base_url or PROVIDER_URLS.get(settings.llm_provider.lower(), "")
+        if not base_url:
+            raise RuntimeError("Set LLM_PROVIDER=groq (or LLM_BASE_URL for another OpenAI-compatible provider)")
+        return LiveLLM(settings.llm_api_key, settings.llm_model, base_url, settings.llm_timeout_s)
+    raise RuntimeError(f"SAHAY_LLM_MODE={mode!r} is not 'mock' or 'live'")

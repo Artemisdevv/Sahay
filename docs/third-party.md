@@ -17,7 +17,7 @@ The hackathon rules ask us to acknowledge open-source code, third-party resource
 | Service | Used for | Status |
 |---|---|---|
 | Cloudflare Workers AI: Whisper large-v3-turbo (primary), Deepgram Nova-3, gpt-4o-transcribe (fallbacks) | Server-side transcription | chosen; ranking confirmed by B-05 Malayalam test |
-| LLM provider | Intake, PII, triage agents | to be chosen (B-06); mock mode for offline demo |
+| Groq (OpenAI-compatible API), model `llama-3.3-70b-versatile` | Intake, PII-tagging and triage agents (B-06b). Receives report text with phone, email, ID, plate and the reporter's known name/phone masked; never audio, location or contact details. Mock mode for the offline demo and as the fallback. | chosen; live adapter in `backend/app/agents/llm_live.py` |
 | SMS gateway | SMS fallback | to be chosen (B-10) |
 
 ## Reference only (no code copied)

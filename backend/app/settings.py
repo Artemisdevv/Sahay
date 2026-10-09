@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     sahay_pipeline_autorun: bool = True  # run the agent pipeline after each accepted report
     sahay_llm_mode: str = "mock"  # mock = deterministic rules, no network
     sahay_stt_mode: str = "mock"  # mock = no audio model; text payloads still work
+    llm_provider: str = ""  # "groq" (default endpoint) or any OpenAI-compatible provider with LLM_BASE_URL
+    llm_api_key: str = ""
+    llm_model: str = "llama-3.3-70b-versatile"
+    llm_base_url: str = ""  # empty = provider default
+    llm_timeout_s: float = 15.0
 
     @property
     def cors_origins(self) -> list[str]:

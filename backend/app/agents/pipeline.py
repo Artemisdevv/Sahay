@@ -123,11 +123,39 @@ def run_pipeline(db: Session, report_id: str, agents: Agents | None = None) -> R
     else:
         steps.add("transcribe", "stt", "skipped", "No audio or text", t0)
 
-    # 2. intake -----------------------------------------------------------------
+    # 2. pii (fail closed). Runs BEFORE intake so an external model never sees raw identifiers. -----------
+    reporter = payload.get("reporter") or {}
+    contact = payload.get("emergency_contact") or {}
+    known = [("name", reporter.get("name")), ("phone", reporter.get("phone")),
+             ("name", contact.get("name")), ("phone", contact.get("phone"))]
+    known = [(t, v) for t, v in known if v]
+    external = getattr(agents.llm, "external", False)
+    tags: list[PiiTag] = []
+    pii_ok = True
+    pii_by_model = True  # False when the model failed and rules did the tagging
+    try:
+        try:
+            tags = pii_agent.detect(transcript or "", agents.llm, known)
+        except Exception:  # noqa: BLE001
+            pii_by_model = False
+            tags = pii_agent.detect(transcript or "", MockLLM(), known)
+    except Exception:  # noqa: BLE001
+        pii_ok = False
+        pii_by_model = False
+
+    # 3. intake -----------------------------------------------------------------
     t0 = _now()
     fallback = False
+    llm: LLM = agents.llm
+    model_text = transcript
+    if external:
+        if pii_ok and pii_by_model:
+            model_text = pii_agent.redact(transcript or "", tags)
+        else:
+            llm = MockLLM()  # could not mask names reliably: keep the text off the external provider
+            fallback = True
     try:
-        intake = agents.llm.intake(transcript, payload["category"], payload.get("language", "en"), payload["kind"])
+        intake = llm.intake(model_text, payload["category"], payload.get("language", "en"), payload["kind"])
     except Exception:  # noqa: BLE001 - any model/validation error falls back to rules
         intake = MockLLM().intake(transcript, payload["category"], payload.get("language", "en"), payload["kind"])
         fallback = True
@@ -136,27 +164,15 @@ def run_pipeline(db: Session, report_id: str, agents: Agents | None = None) -> R
               {"incident_type": intake.incident_type, "severity": intake.severity, "people_count": intake.people_count,
                "hazards": intake.hazards, "confidence": intake.confidence, "fallback": fallback})
 
-    # 3. pii (fail closed) ------------------------------------------------------
-    t0 = _now()
-    reporter = payload.get("reporter") or {}
-    contact = payload.get("emergency_contact") or {}
-    known = [("name", reporter.get("name")), ("phone", reporter.get("phone")),
-             ("name", contact.get("name")), ("phone", contact.get("phone"))]
-    known = [(t, v) for t, v in known if v]
-    tags: list[PiiTag] = []
-    pii_ok = True
+    generic = f"{intake.incident_type.title()} incident reported."
     try:
-        try:
-            tags = pii_agent.detect(transcript or "", agents.llm, known)
-        except Exception:  # noqa: BLE001
-            tags = pii_agent.detect(transcript or "", MockLLM(), known)
-        summary_redacted = pii_agent.redact(intake.summary, [], extra_literals=tags)
+        summary_redacted = pii_agent.redact(intake.summary, [], extra_literals=tags) if pii_ok else generic
     except Exception:  # noqa: BLE001
         pii_ok = False
-        summary_redacted = f"{intake.incident_type.title()} incident reported."
+        summary_redacted = generic
     counts = dict(Counter(t.type for t in tags))
     steps.add("pii", "pii_agent", "done" if pii_ok else "failed",
-              f"Tagged {len(tags)} PII span(s)" if pii_ok else "PII tagging failed, generic summary used", t0,
+              f"Tagged {len(tags)} PII span(s)" if pii_ok else "PII tagging failed, generic summary used", _now(),
               {"counts": counts})
 
     # 4. triage -----------------------------------------------------------------
