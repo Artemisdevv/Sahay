@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, LargeBinary, String
+from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, LargeBinary, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -98,6 +98,24 @@ class AgentTrace(Base):
     finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     summary: Mapped[str] = mapped_column(String(250))
     output: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class IncidentPII(Base):
+    """Per-field authenticated ciphertext for sensitive incident details."""
+
+    __tablename__ = "incident_pii"
+    __table_args__ = (UniqueConstraint("incident_id", "report_id", name="uq_incident_pii_report"),)
+    pii_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    incident_id: Mapped[str] = mapped_column(String(36), index=True)
+    report_id: Mapped[str] = mapped_column(String(64), index=True)
+    language: Mapped[str] = mapped_column(String(12), default="en")
+    transcript_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    reporter_name_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    reporter_phone_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    emergency_contact_name_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    emergency_contact_phone_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    pii_spans_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    audio_url_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
 
 
 class Report(Base):

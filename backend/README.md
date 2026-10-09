@@ -44,8 +44,13 @@ saved in ignored files `backend/.sahay-server-key` and
 previously queued reports and receipt signatures remain verifiable. In a
 deployed environment, set `SAHAY_SERVER_X25519_SECRET_KEY` and
 `SAHAY_SERVER_ED25519_SECRET_KEY` to base64-encoded 32-byte keys and
-`SAHAY_JWT_SECRET` to a unique secret. The server refuses to start without the
-JWT secret when `SAHAY_DEV` is disabled. Generate an X25519 server key with
+`SAHAY_JWT_SECRET` to a unique secret. Set `SAHAY_PII_ENCRYPTION_KEY` to a
+base64-encoded 32-byte key in deployed environments; locally the backend saves
+one in the ignored file `backend/.sahay-pii-key`. Keep that key with the local
+database, since encrypted incident PII cannot be recovered without it. Generate
+one with `python -c "import base64, secrets; print(base64.b64encode(secrets.token_bytes(32)).decode())"`.
+When `SAHAY_DEV` is disabled, startup requires the JWT secret and valid PII key.
+Generate an X25519 server key with
 `python -c "import base64; from nacl.public import PrivateKey; print(base64.b64encode(bytes(PrivateKey.generate())).decode())"`.
 Generate an Ed25519 receipt-signing seed with
 `python -c "import base64; from nacl.signing import SigningKey; print(base64.b64encode(bytes(SigningKey.generate())).decode())"`.
@@ -69,3 +74,17 @@ the server responds with `{"type":"pong"}`. Publish backend events through
 incident updates and `civilian_device_id` for a civilian's own status event.
 The connection manager is process-local, so run one backend instance for the
 demo or add a shared pub/sub layer before scaling horizontally.
+
+## Incident access and PII reveal
+
+`GET /api/v1/incidents` supports `status`, `type`, `limit` (1–100), and an
+opaque `cursor`. Admins see all incidents; service users see only incidents
+with a dispatch to their unit. `GET /api/v1/incidents/{id}` returns a redacted
+incident and its dispatches, scoped to the caller's unit for service users.
+Agent trace is admin-only at `/api/v1/incidents/{id}/trace`.
+
+Sensitive transcript, reporter, emergency-contact, PII-span, and audio-reference
+fields are stored separately as authenticated ciphertext per field. Admins can
+request them only with `POST /api/v1/incidents/{id}/reveal` and a nonblank
+`reason`; each reveal appends a `pii.reveal` audit entry containing the reason
+but no revealed values.

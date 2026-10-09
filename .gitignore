@@ -55,3 +55,4 @@ vague_idea.txt
 htmlcov/
 .sahay-server-key
 .sahay-server-ed25519-key
+.sahay-pii-key

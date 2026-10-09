@@ -14,9 +14,11 @@ from sqlalchemy.orm import Session
 from app.database import Base, engine, get_db
 from app.dispatch.routes import install as install_dispatch
 from app.events import manager, websocket_loop
+from app.incident_routes import install as install_incident_routes
 from app.ingest.routes import install as install_ingest
 from app.keyring import server_public_key_response
-from app.models import AgentTrace, AuditEntry, DemoUser, Device, Dispatch, Incident, Report, Unit
+from app.models import AgentTrace, AuditEntry, DemoUser, Device, Dispatch, Incident, IncidentPII, Report, Unit
+from app.pii_crypto import encrypt_field, ensure_pii_encryption_key
 from app.rate_limit import rate_limiter
 from app.schemas import DeviceRegistrationRequest, LoginRequest, MockReportRequest
 from app.seed import seed_demo
@@ -25,6 +27,8 @@ from app.settings import settings
 
 if not settings.sahay_dev and not settings.sahay_jwt_secret:
     raise RuntimeError("SAHAY_JWT_SECRET must be configured when SAHAY_DEV is disabled")
+if not settings.sahay_dev:
+    ensure_pii_encryption_key()
 
 JWT_SECRET = settings.sahay_jwt_secret or "sahay-insecure-local-dev-only"
 JWT_ISSUER = "sahay"
@@ -158,6 +162,9 @@ def trace_json(trace: AgentTrace) -> dict:
     }
 
 
+install_incident_routes(app, current_user, require_admin, incident_json, trace_json, utc_iso)
+
+
 def distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     to_rad = math.radians
     dlat = to_rad(lat2 - lat1)
@@ -259,7 +266,7 @@ def list_units(_: dict = Depends(require_admin), db: Session = Depends(get_db)):
 @app.post("/api/v1/dev/seed", status_code=status.HTTP_200_OK)
 def dev_seed(db: Session = Depends(get_db)):
     require_dev()
-    for model in (AgentTrace, AuditEntry, Dispatch, Incident, Report):
+    for model in (AgentTrace, IncidentPII, AuditEntry, Dispatch, Incident, Report):
         db.execute(delete(model))
     seed_demo(db)
     return {"status": "seeded", "units": db.query(Unit).count()}
@@ -268,7 +275,7 @@ def dev_seed(db: Session = Depends(get_db)):
 @app.post("/api/v1/dev/reset")
 def dev_reset(db: Session = Depends(get_db)):
     require_dev()
-    for model in (AgentTrace, AuditEntry, Dispatch, Incident, Report):
+    for model in (AgentTrace, IncidentPII, AuditEntry, Dispatch, Incident, Report):
         db.execute(delete(model))
     db.commit()
     return {"status": "reset"}
@@ -299,6 +306,27 @@ async def mock_report(body: MockReportRequest, db: Session = Depends(get_db)):
     )
     db.add(incident)
     db.flush()
+    reporter = body.reporter or {}
+    emergency_contact = body.emergency_contact or {}
+
+    def pii_text(values: dict, field: str) -> str | None:
+        value = values.get(field)
+        if value is not None and not isinstance(value, str):
+            raise HTTPException(status_code=422, detail=f"{field} must be a string")
+        return value
+
+    pii_values = {
+        "transcript": body.text,
+        "reporter_name": pii_text(reporter, "name"),
+        "reporter_phone": pii_text(reporter, "phone"),
+        "emergency_contact_name": pii_text(emergency_contact, "name"),
+        "emergency_contact_phone": pii_text(emergency_contact, "phone"),
+    }
+    if any(value is not None for value in pii_values.values()):
+        report_pii = IncidentPII(incident_id=incident.incident_id, report_id=report_id, language=body.language)
+        for field, value in pii_values.items():
+            setattr(report_pii, f"{field}_ciphertext", encrypt_field(value, f"{incident.incident_id}:{report_id}:{field}"))
+        db.add(report_pii)
     traces = [
         ("transcribe", "mock_stt", "Audio transcription skipped" if body.text else "Audio accepted; mock transcription used"),
         ("intake", "mock_intake", "Structured incident created"),
