@@ -109,9 +109,7 @@ export function CitizenPortal() {
   const cameraStream = useRef<MediaStream | null>(null);
   const photoUrls = useRef<string[]>([]);
   const voice = useVoiceCapture();
-  const canUseCamera =
-    typeof navigator !== "undefined" &&
-    typeof navigator.mediaDevices?.getUserMedia === "function";
+  const [canUseCamera, setCanUseCamera] = useState(false);
 
   useEffect(() => {
     if (step < 0 || step >= 3) return;
@@ -125,6 +123,13 @@ export function CitizenPortal() {
       void cameraVideo.current.play().catch(() => undefined);
     }
   }, [cameraOpen]);
+
+  useEffect(() => {
+    setCanUseCamera(
+      typeof navigator !== "undefined" &&
+        typeof navigator.mediaDevices?.getUserMedia === "function",
+    );
+  }, []);
 
   useEffect(
     () => () => {

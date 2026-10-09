@@ -26,9 +26,9 @@ function canRecord(): boolean {
  * This hook only captures audio. Signing, encryption, queueing and sending belong to the report pipeline (F-03).
  */
 export function useVoiceCapture() {
-  const [state, setState] = useState<VoiceState>(() =>
-    canRecord() ? "idle" : "unsupported",
-  );
+  // Keep the server render and the browser's first render identical. Check
+  // browser-only recording support after hydration.
+  const [state, setState] = useState<VoiceState>("idle");
   const [seconds, setSeconds] = useState(0);
   const [clip, setClip] = useState<VoiceClip | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -37,6 +37,10 @@ export function useVoiceCapture() {
   const timer = useRef<number | null>(null);
   const startedAt = useRef(0);
   const wantStop = useRef(false);
+
+  useEffect(() => {
+    if (!canRecord()) setState("unsupported");
+  }, []);
 
   const cleanup = useCallback(() => {
     if (timer.current) window.clearInterval(timer.current);
