@@ -8,10 +8,10 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 // `npm run build:app` (CAPACITOR=1) emits a static SPA in dist/client for the Android WebView: no SSR server,
 // no Cloudflare worker. The default build is unchanged, so the Lovable preview and deploy keep working.
-const staticApp = process.env.CAPACITOR === "1";
+const staticApp = process.env["CAPACITOR"] === "1";
 
 export default defineConfig({
-  nitro: staticApp ? false : undefined,
+  ...(staticApp ? { nitro: false as const } : {}),
   tanstackStart: staticApp
     ? { spa: { enabled: true } }
     : {

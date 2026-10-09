@@ -20,7 +20,7 @@ function server(state: { online: boolean }) {
   const calls: string[] = [];
   const fetchFn = (async (url: string) => {
     if (!state.online) throw new TypeError("Failed to fetch");
-    calls.push(url.split("/auth/")[1]);
+    calls.push(url.split("/auth/")[1] ?? "");
     return new Response(
       JSON.stringify(url.endsWith("device-challenge") ? { challenge: "v1.9999999999.N.M" } : { token: goodToken() }),
       { status: url.endsWith("device-challenge") ? 200 : 201 },
