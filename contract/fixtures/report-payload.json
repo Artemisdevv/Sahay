@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "kind": "report",
+  "category": "accident",
+  "language": "en",
+  "captured_at": "2026-10-09T10:15:00Z",
+  "location": {"lat": 9.9312, "lng": 76.2673, "accuracy_m": 12},
+  "audio": null,
+  "text": "Two people injured in a car accident near the junction.",
+  "reporter": {"name": "Demo Reporter", "phone": "+919876543210"},
+  "emergency_contact": null
+}

@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Local environment and demo database
+.env
+backend/sahay.db
+backend/*.db-shm
+backend/*.db-wal
+
+# Editors
+.vscode/
+.idea/
