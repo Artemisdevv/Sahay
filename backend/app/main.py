@@ -2,7 +2,7 @@ import math
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -12,6 +12,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.database import Base, engine, get_db
+from app.events import manager, websocket_loop
 from app.keyring import server_public_key_response
 from app.models import AgentTrace, AuditEntry, DemoUser, Device, Dispatch, Incident, Unit
 from app.rate_limit import rate_limiter
@@ -136,6 +137,19 @@ def incident_json(incident: Incident) -> dict:
     }
 
 
+def trace_json(trace: AgentTrace) -> dict:
+    return {
+        "incident_id": trace.incident_id,
+        "step": trace.step,
+        "agent": trace.agent,
+        "status": trace.status,
+        "started_at": utc_iso(trace.started_at),
+        "finished_at": utc_iso(trace.finished_at),
+        "summary": trace.summary,
+        "output": trace.output,
+    }
+
+
 def distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     to_rad = math.radians
     dlat = to_rad(lat2 - lat1)
@@ -147,6 +161,21 @@ def distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
 @app.get("/health")
 def health():
     return {"status": "ok", "dev_mode": settings.sahay_dev}
+
+
+@app.websocket("/ws/v1")
+async def websocket_endpoint(websocket: WebSocket):
+    token = websocket.query_params.get("token")
+    try:
+        if not token:
+            raise HTTPException(status_code=401, detail="Unauthenticated")
+        claims = decode_access_token(token)
+        rate_subject = claims.get("device_id") or claims["sub"]
+        rate_limiter.check(f"ws:{rate_subject}", settings.sahay_rate_limit_per_minute)
+    except HTTPException:
+        await websocket.close(code=1008, reason="Unauthenticated or rate limited")
+        return
+    await websocket_loop(websocket, claims)
 
 
 @app.get("/api/v1/config/server-key")
@@ -238,7 +267,7 @@ def dev_reset(db: Session = Depends(get_db)):
 
 
 @app.post("/api/v1/dev/mock-report", status_code=status.HTTP_201_CREATED)
-def mock_report(body: MockReportRequest, db: Session = Depends(get_db)):
+async def mock_report(body: MockReportRequest, db: Session = Depends(get_db)):
     require_dev()
     report_id = body.report_id or str(uuid4())
     category_map = {"medical": ["ambulance"], "accident": ["ambulance", "police"], "fire": ["fire", "ambulance"], "crime": ["police"], "flood": ["municipal", "ambulance"], "other": ["municipal"]}
@@ -306,11 +335,16 @@ def mock_report(body: MockReportRequest, db: Session = Depends(get_db)):
     db.add(AuditEntry(actor={"type": "system", "id": "dev_mock"}, action="report.received", target={"type": "incident", "id": incident.incident_id}, details={"report_id": report_id, "mock": True}))
     db.commit()
     db.refresh(incident)
+    await manager.publish("incident.created", incident_json(incident))
+    for dispatch_data in dispatches:
+        await manager.publish("dispatch.proposed", dispatch_data)
+    for trace in db.scalars(select(AgentTrace).where(AgentTrace.incident_id == incident.incident_id)).all():
+        await manager.publish("agent.trace", trace_json(trace))
     return {"incident": incident_json(incident), "dispatches": dispatches, "mock": True}
 
 
 @app.post("/api/v1/dev/tick")
-def dev_tick(db: Session = Depends(get_db)):
+async def dev_tick(db: Session = Depends(get_db)):
     require_dev()
     moved = []
     dispatches = db.scalars(select(Dispatch).where(Dispatch.status.in_(["approved", "accepted", "en_route"]))).all()
@@ -326,7 +360,9 @@ def dev_tick(db: Session = Depends(get_db)):
         unit.updated_at = datetime.now(timezone.utc)
         moved.append({"unit_id": unit.unit_id, "location": {"lat": unit.lat, "lng": unit.lng}, "status": unit.status})
     db.commit()
-    return {"moved": moved, "note": "WebSocket unit.moved events are added in B-07."}
+    for unit_data in moved:
+        await manager.publish("unit.moved", unit_data)
+    return {"moved": moved}
 
 
 @app.get("/api/v1/dev/status")

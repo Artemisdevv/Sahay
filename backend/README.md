@@ -61,3 +61,5 @@ deployed environment). Send `{"type":"ping"}` to keep the connection active;
 the server responds with `{"type":"pong"}`. Publish backend events through
 `app.events.manager.publish`, supplying `service_unit_ids` for service-specific
 incident updates and `civilian_device_id` for a civilian's own status event.
+The connection manager is process-local, so run one backend instance for the
+demo or add a shared pub/sub layer before scaling horizontally.
