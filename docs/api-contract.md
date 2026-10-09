@@ -425,3 +425,66 @@ Demo logins (dev only): `admin / admin123`, `amb-01 / demo123`, `police-01 / dem
 ## 8. Mock server for frontend and native
 
 Until backend endpoints land, frontend uses fixtures in `contract/fixtures/*.json` (one file per schema above) and a MSW or json-server mock. Backend owns producing fixtures from real responses and committing them (issue B-01).
+
+---
+
+## 9. Live response (units arriving on the map)
+
+Goal for the demo: an admin approves an incident, the nearest units are visibly **called**, one accepts, and **units move across the response map** until they arrive. The same picture, with less detail, is on the public map and in the civilian app.
+
+### 9.1 The flow and what everyone sees
+
+| Step | Trigger | Admin sees | Service unit sees | Public / civilian sees |
+|---|---|---|---|---|
+| 1 Confirmed | admin approves (`POST /incidents/{id}/approve`) | incident turns "dispatched"; candidate list | new assignment pops up | marker appears (existing public feed) |
+| 2 Calling | engine ranks nearest available units per needed service | "Calling Ambulance 01 (0.8 km, ETA 2 min)" then next unit if declined or no answer | assignment card with Accept / Decline | "Help is being arranged" |
+| 3 Accepted | unit accepts (or demo auto-accept) | unit marked accepted | assignment accepted | "Ambulance accepted" |
+| 4 En route | unit starts moving | unit marker glides toward incident, route line, ETA countdown | same, own unit highlighted | unit marker (coarse) moving, "about N min away" |
+| 5 On scene | unit reaches the incident (within 50 m) | marker pulses at incident | status On scene | "Help on scene" |
+| 6 Completed | service taps Complete | incident resolved, unit available again | | marker turns resolved |
+
+Dispatch itself stays deterministic code (nearest available unit, B-04). The LLM never picks units.
+
+### 9.2 WebSocket changes
+
+`unit.moved` gets richer (all new fields optional, old clients keep working):
+```json
+{ "unit_id": "uuid", "name": "Ambulance 01", "service_type": "ambulance",
+  "location": { "lat": 9.97, "lng": 76.29 }, "status": "en_route",
+  "incident_id": "uuid|null", "heading_deg": 42, "speed_kmh": 40, "eta_seconds": 95 }
+```
+Sent about once per second per moving unit. Receivers: admin (all units), service (own unit and the other units on the same incident).
+
+New `dispatch.called`, sent every time the candidate list changes (admin, and the service units that appear in it):
+```json
+{ "incident_id": "uuid", "service_type": "ambulance",
+  "candidates": [
+    { "rank": 1, "unit_id": "uuid", "name": "Ambulance 01", "distance_km": 0.8, "eta_minutes": 2, "state": "declined" },
+    { "rank": 2, "unit_id": "uuid", "name": "Ambulance 02", "distance_km": 3.1, "eta_minutes": 6, "state": "calling" }
+  ] }
+```
+`state`: `calling | accepted | declined | no_answer | standby`. `no_answer` is set when a unit does not respond within `SAHAY_CALL_TIMEOUT_S` (default 30 s, demo 10 s) and the engine calls the next unit.
+
+`dispatch.updated` (existing) gains optional `rank`.
+
+### 9.3 REST
+
+| Method + path | Role | Description |
+|---|---|---|
+| `PATCH /units/{id}/location` | service (own unit), admin | Already in 2.4, **not implemented yet**. Real GPS from a service phone. Broadcasts `unit.moved`. |
+| `GET /public/units` | public (no login) | Units currently assigned to a confirmed incident, coarse. See 9.4. |
+| `GET /incidents/{id}/calls` | admin | Current `dispatch.called` candidate lists, for first paint after a reload. |
+
+### 9.4 Public units feed
+
+`GET /public/units` returns only units that are accepted, en route or on scene for a confirmed incident:
+```json
+{ "units": [ { "id": "opaque12", "service_type": "ambulance", "status": "help on the way",
+               "location": { "lat": 9.971, "lng": 76.291 }, "incident": "opaque12", "eta_minutes": 2 } ],
+  "generated_at": "..." }
+```
+Position rounded to 3 decimals (about 100 m, units are public vehicles, not people), no unit name, no crew, no unit id. Same rate limit and `Cache-Control: public, max-age=2` as `/public/incidents`. The public map polls it every 3 s while at least one unit is moving.
+
+### 9.5 Demo mover (backend, no real vehicles needed)
+
+A background task moves every `en_route` unit in a straight line from its position to the incident so that it arrives after `SAHAY_DEMO_ARRIVAL_SECONDS` (default 60), publishes `unit.moved` every second, and sets `on_scene` on arrival. Optional `SAHAY_DEMO_AUTO_ACCEPT_SECONDS` (default off, demo 5) accepts a called assignment automatically so a demo does not depend on someone tapping Accept. Both are off when a real service phone reports its own location. Road routing (OSRM) is a stretch goal; straight lines are fine for the demo.
