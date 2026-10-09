@@ -98,7 +98,9 @@ export async function registerDevice(store: SecretStore, options: RegisterOption
 /** Seconds since epoch from a JWT `exp` claim, or null if it cannot be read. Not a signature check. */
 export function tokenExpiry(jwt: string): number | null {
   try {
-    const payload = jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const part = jwt.split(".")[1];
+    if (!part) return null;
+    const payload = part.replace(/-/g, "+").replace(/_/g, "/");
     const exp = (JSON.parse(atob(payload)) as { exp?: unknown }).exp;
     return typeof exp === "number" ? exp : null;
   } catch {

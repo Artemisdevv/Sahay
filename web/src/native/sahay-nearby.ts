@@ -52,22 +52,13 @@ export interface SahayNearbyPlugin {
 }
 
 /** Browser and PWA: there is no Nearby. Reads return empty, anything that would need the radio rejects. */
+const notAvailable = () =>
+  Object.assign(new Error("Nearby relay is only available in the Android app"), { code: "UNAVAILABLE" });
+
 class SahayNearbyWeb extends WebPlugin implements Partial<SahayNearbyPlugin> {
-  private unavailable<T>(): Promise<T> {
-    return Promise.reject(this.unavailableError());
-  }
-
-  private unavailableError() {
-    return this.unavailable_("Nearby relay is only available in the Android app");
-  }
-
-  private unavailable_(message: string) {
-    return Object.assign(new Error(message), { code: "UNAVAILABLE" });
-  }
-
-  start = () => this.unavailable<void>();
+  start = () => Promise.reject<void>(notAvailable());
   stop = async () => {};
-  enqueue = () => this.unavailable<void>();
+  enqueue = () => Promise.reject<void>(notAvailable());
   markDelivered = async () => {};
   relayReceipt = async () => {};
   relayStatus = async () => {};

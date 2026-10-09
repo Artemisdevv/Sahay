@@ -35,7 +35,7 @@ function fakeServer(options: { token?: string; registerStatus?: number } = {}) {
   const calls: string[] = [];
   const fetchFn = (async (url: string, init: RequestInit) => {
     const body = JSON.parse(String(init.body));
-    calls.push(url.split("/auth/")[1]);
+    calls.push(url.split("/auth/")[1] ?? "");
     if (url.endsWith("/auth/device-challenge")) {
       return new Response(JSON.stringify({ challenge: "v1.9999999999.NONCE.MAC" }), { status: 200 });
     }
