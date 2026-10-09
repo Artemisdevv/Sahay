@@ -14,7 +14,7 @@ SEED_UNITS = [
 ]
 
 
-def seed_demo(db: Session) -> None:
+def seed_demo(db: Session, admin_password: str = "admin123", service_password: str = "demo123") -> None:
     db.execute(delete(Unit))
     db.execute(delete(DemoUser))
     units_by_username = {}
@@ -24,7 +24,7 @@ def seed_demo(db: Session) -> None:
         db.flush()
         if username:
             units_by_username[username] = (unit.unit_id, name)
-    db.add(DemoUser(username="admin", password_hash=hash_password("admin123"), role="admin", display_name="Sahay Admin"))
+    db.add(DemoUser(username="admin", password_hash=hash_password(admin_password), role="admin", display_name="Sahay Admin"))
     for username, (unit_id, display_name) in units_by_username.items():
-        db.add(DemoUser(username=username, password_hash=hash_password("demo123"), role="service", unit_id=unit_id, display_name=display_name))
+        db.add(DemoUser(username=username, password_hash=hash_password(service_password), role="service", unit_id=unit_id, display_name=display_name))
     db.commit()
