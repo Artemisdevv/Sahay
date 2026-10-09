@@ -6,7 +6,7 @@ import pytest
 
 from app.agents import stt_live
 from app.agents.stt import MockTranscriber, build_transcriber
-from app.agents.stt_live import CloudflareWhisper, FailoverTranscriber, GroqWhisper, STTError, build_live
+from app.agents.stt_live import CloudflareWhisper, FailoverTranscriber, GeminiAudio, GroqWhisper, STTError, build_live
 
 
 def client(handler) -> httpx.Client:
@@ -97,3 +97,38 @@ def test_build_transcriber_modes(monkeypatch):
     monkeypatch.setattr("app.settings.settings.llm_api_key", "from-llm")
     assert build_transcriber("live").providers[0].name == "groq:whisper-large-v3-turbo"
     assert stt_live.FailoverTranscriber  # module import sanity
+
+
+def test_gemini_sends_inline_audio_and_joins_text_parts():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["key"] = request.headers["x-goog-api-key"]
+        seen["url"] = str(request.url)
+        seen["json"] = request.read()
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "  ഹലോ "}, {"text": "ആംബുലൻസ്  "}]}}]})
+
+    stt = GeminiAudio("gemini-2.5-flash", "g-test", client=client(handler))
+    assert stt.transcribe(b"abc", "audio/ogg; codecs=opus", "ml") == "ഹലോ ആംബുലൻസ്"
+    assert seen["key"] == "g-test" and "models/gemini-2.5-flash:generateContent" in seen["url"]
+    assert base64.b64encode(b"abc") in seen["json"] and b'"audio/ogg"' in seen["json"]
+    assert b"language code 'ml'" in seen["json"]
+
+
+def test_gemini_failures_do_not_leak_and_blocked_answers_are_errors():
+    with pytest.raises(STTError) as err:
+        GeminiAudio("m", "k", client=client(lambda r: httpx.Response(400, text="secret echo"))).transcribe(b"x", "audio/webm", "en")
+    assert "secret" not in str(err.value)
+    with pytest.raises(STTError):  # safety block: no candidates
+        GeminiAudio("m", "k", client=client(lambda r: httpx.Response(200, json={"promptFeedback": {}}))).transcribe(b"x", "audio/ogg", "en")
+    assert GeminiAudio("m", "k", client=client(lambda r: httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": " "}]}}]}))).transcribe(b"x", "audio/ogg", "en") is None
+
+
+def test_gemini_first_then_whisper_fallback_when_gemini_rejects_the_format():
+    gem = GeminiAudio("m", "k", client=client(lambda r: httpx.Response(400)))
+    groq = GroqWhisper("whisper-large-v3", "k", client=client(lambda r: httpx.Response(200, json={"text": "fallback text"})))
+    chain = FailoverTranscriber([gem, groq])
+    assert chain.transcribe(b"x", "audio/webm", "ml") == "fallback text"
+    assert chain.last_provider == "groq:whisper-large-v3"
+    built = build_live("gemini:gemini-2.5-flash,groq:whisper-large-v3", "gk", "", "", 5, gemini_key="gem")
+    assert [p.name for p in built.providers] == ["gemini:gemini-2.5-flash", "groq:whisper-large-v3"]

@@ -79,7 +79,7 @@ def main() -> int:
 
     for name in (x.strip() for x in args.providers.split(",") if x.strip()):
         try:
-            provider = build_live(name, groq_key, settings.cloudflare_account_id, cf_token, settings.sahay_stt_timeout_s, args.prompt).providers[0]
+            provider = build_live(name, groq_key, settings.cloudflare_account_id, cf_token, settings.sahay_stt_timeout_s, args.prompt, settings.llm_api_key_gemini).providers[0]
         except RuntimeError as exc:
             print(f"== {name}: skipped ({exc})")
             continue
