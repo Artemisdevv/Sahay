@@ -92,13 +92,27 @@ Relays append `hops` (integer, starts 0, +1 per relay) outside the signed part. 
 `ed25519_public_key` verifies the server signatures on report receipts. It is
 the verify key corresponding to the server signing key used by `POST /reports`.
 
-**`POST /auth/register-device`** (public, rate-limited)
+**`POST /auth/device-challenge`** (public, rate-limited): step 1 of registration and of every token refresh.
 ```json
 // request
-{ "device_id": "uuid", "ed25519_public_key": "<base64>", "language": "ml" }
-// 201
+{ "device_id": "uuid" }
+// 200
+{ "challenge": "v1.<exp>.<nonce>.<mac>", "expires_in": 60 }
+```
+The challenge is bound to that `device_id`, lasts 60 s and works once.
+
+**`POST /auth/register-device`** (public, rate-limited): proof of possession is required, because a device public key is not secret.
+```json
+// request
+{
+  "device_id": "uuid", "ed25519_public_key": "<base64>", "language": "ml",
+  "challenge": "<from /auth/device-challenge>",
+  "challenge_signature": "<base64 Ed25519 over UTF-8 'sahay-register-v1|<device_id>|<challenge>' with the device key>"
+}
+// 201 (new device, or an existing device registering again with the same key = token refresh)
 { "token": "jwt", "role": "civilian", "device_id": "uuid" }
 ```
+Errors: `401` bad or expired challenge, reused challenge, or a signature that does not verify; `409` the `device_id` is already registered with a different key. Tokens last 12 h: refresh by repeating both calls. `contract/crypto-test-vector.json` has a `register` example.
 
 **`POST /auth/login`** (service/admin)
 ```json
