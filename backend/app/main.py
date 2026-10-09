@@ -12,6 +12,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.database import Base, engine, get_db
+from app.dispatch.routes import install as install_dispatch
 from app.events import manager, websocket_loop
 from app.ingest.routes import install as install_ingest
 from app.keyring import server_public_key_response
@@ -139,6 +140,9 @@ def incident_json(incident: Incident) -> dict:
         "created_at": utc_iso(incident.created_at),
         "updated_at": utc_iso(incident.updated_at),
     }
+
+
+install_dispatch(app, current_user, require_admin, incident_json)
 
 
 def trace_json(trace: AgentTrace) -> dict:
