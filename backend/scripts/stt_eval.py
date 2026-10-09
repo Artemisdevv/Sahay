@@ -44,6 +44,7 @@ def wer(ref: str, hyp: str) -> float:
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")  # Malayalam/Hindi output crashes the default Windows console codec
     ap = argparse.ArgumentParser()
     ap.add_argument("--providers", default=settings.sahay_stt_providers)
     ap.add_argument("--dir", default=str(Path(__file__).with_name("voice_recordings")))

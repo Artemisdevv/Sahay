@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     sahay_pipeline_autorun: bool = True  # run the agent pipeline after each accepted report
     sahay_llm_mode: str = "mock"  # mock = deterministic rules, no network
     sahay_stt_mode: str = "mock"  # mock = no audio model; text payloads still work; live = providers below
-    sahay_stt_providers: str = "groq:whisper-large-v3-turbo"  # tried left to right, see app/agents/stt_live.py
+    sahay_stt_providers: str = "groq:whisper-large-v3"  # tried left to right, see app/agents/stt_live.py
     sahay_stt_timeout_s: float = 20.0
     stt_api_key: str = ""  # Groq key for speech; falls back to LLM_API_KEY when LLM_PROVIDER=groq
     cloudflare_account_id: str = ""
