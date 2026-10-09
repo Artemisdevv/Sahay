@@ -120,6 +120,35 @@ def test_status_only_for_owner():
     assert client.get(f"/api/v1/reports/{env['report_id']}/status", headers=other.auth).status_code == 404
 
 
+def test_status_is_server_signed_so_a_relay_cannot_forge_it():
+    import base64
+
+    from nacl.signing import VerifyKey
+
+    author = Dev()
+    env = author.envelope()
+    post(env, author)
+    body = client.get(f"/api/v1/reports/{env['report_id']}/status", headers=author.auth).json()
+    key = VerifyKey(base64.b64decode(client.get("/api/v1/config/server-key").json()["ed25519_public_key"]))
+    signed = f"{body['report_id']}|{body['status']}|{body['message']}|{body['updated_at']}".encode()
+    key.verify(signed, base64.b64decode(body["signature"]))                      # genuine
+    from nacl.exceptions import BadSignatureError
+    with pytest.raises(BadSignatureError):
+        key.verify(signed.replace(b"received", b"resolved"), base64.b64decode(body["signature"]))
+
+
+def test_status_signature_matches_the_frozen_contract_vector():
+    import json
+    from pathlib import Path
+
+    from app.ingest.crypto import sign_status
+    from app.keyring import server_signing_key
+
+    v = json.loads((Path(__file__).resolve().parents[2] / "contract" / "crypto-test-vector.json").read_text(encoding="utf-8"))["status"]
+    fields = {k: v[k] for k in ("report_id", "status", "message", "updated_at")}
+    assert sign_status(**fields, server_signing_key=server_signing_key()) == v["signature"]
+
+
 def test_auth_required_and_civilian_only():
     d = Dev()
     env = d.envelope()

@@ -8,6 +8,7 @@ Frontend/native consumers must:
   2. Ed25519 SIGN `signing_input` with `device.signing_seed`        -> must equal `signature` (Ed25519 is deterministic)
   3. Ed25519 VERIFY `signature` over `signing_input` with `device.public_key`
   4. Server receipt: VERIFY `receipt.signature` over `receipt.signing_input_utf8` with `server.verify_key`
+  4b. Server status (relay): VERIFY `status.signature` over `status.signing_input_utf8` with `server.verify_key`
   5. All `negative` cases must be rejected.
 """
 from __future__ import annotations
@@ -21,7 +22,7 @@ from nacl.public import PrivateKey, SealedBox
 from nacl.signing import SigningKey
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.ingest.crypto import b64e, make_receipt, sign_envelope, signing_input  # noqa: E402
+from app.ingest.crypto import b64e, make_receipt, sign_envelope, sign_status, signing_input, status_signing_input  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[2] / "contract" / "crypto-test-vector.json"
 
@@ -68,6 +69,14 @@ def main() -> None:
     server_time = "2026-10-09T10:15:02Z"
     receipt = make_receipt(env["report_id"], server_time, server_sign)
 
+    status_fields = {"report_id": env["report_id"], "status": "dispatched", "message": "Help dispatched, ETA 6 min",
+                     "updated_at": "2026-10-09T10:20:00Z"}
+    status = {
+        **status_fields,
+        "signing_input_utf8": status_signing_input(**status_fields).decode("utf-8"),
+        "signature": sign_status(**status_fields, server_signing_key=server_sign),
+    }
+
     def tampered(**changes) -> dict:
         return {**env, **changes}
 
@@ -98,6 +107,7 @@ def main() -> None:
             "signing_input_utf8": f"{env['report_id']}|{server_time}",
             **receipt,
         },
+        "status": status,
         "negative": {
             "tampered_ciphertext": {
                 "envelope": tampered(ciphertext=b64e(bytes(flipped))),

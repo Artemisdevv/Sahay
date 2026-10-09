@@ -125,7 +125,7 @@ Seeded demo logins are listed in `backend/README.md` once B-01 lands.
 
 **`GET /reports/{report_id}/status`** (civilian, own only)
 ```json
-{ "report_id": "uuid", "status": "dispatched", "eta_minutes": 6, "message": "Help dispatched, ETA 6 min", "updated_at": "..." }
+{ "report_id": "uuid", "status": "dispatched", "eta_minutes": 6, "message": "Help dispatched, ETA 6 min", "updated_at": "...", "signature": "<base64 Ed25519 over report_id|status|message|updated_at with the server signing key>" }
 ```
 `status` values (`ReportStatus`): `received | processing | triaged | pending_approval | dispatched | en_route | on_scene | resolved | rejected`
 
@@ -318,7 +318,7 @@ interface SahayNearbyPlugin {
   // After uploading someone else's report: send the server receipt / later status back along the path it came in on.
   // Native holds them until that peer is reachable again.
   relayReceipt(opts: { reportId: string; receipt: Receipt }): Promise<void>;
-  relayStatus(opts: { reportId: string; status: ReportStatus; message: string; signature: string }): Promise<void>;
+  relayStatus(opts: { reportId: string; status: ReportStatus; message: string; signature: string; updatedAt: string }): Promise<void>;
   // Everything carried and not yet confirmed delivered (own and others'), so the web layer can upload when it gets online.
   pendingForUpload(): Promise<{ envelopes: ReportEnvelope[] }>;
   // Reports carried for other people (UI shows only this count).
@@ -341,7 +341,7 @@ Wire messages between phones (UTF-8 JSON in a Nearby `BYTES` payload; larger tha
 { "t": "envelope", "envelope": { } }
 { "t": "ack", "report_id": "uuid" }
 { "t": "receipt", "report_id": "uuid", "receipt": { } }
-{ "t": "status", "report_id": "uuid", "status": "dispatched", "message": "...", "signature": "<base64 Ed25519>" }
+{ "t": "status", "report_id": "uuid", "status": "dispatched", "message": "...", "signature": "<base64 Ed25519>", "updated_at": "..." }
 ```
 
 Rules:
@@ -353,7 +353,7 @@ Rules:
 6. Never send a report back to the peer it came from or to a peer whose `hello.carrying` already lists it. A duplicate is acked, not re-emitted or re-forwarded (so loops end).
 7. `hops` is unsigned and starts at 0 on the origin. The origin sends it as created; each relay forwards with `hops + 1` and only while `hops < ttl`. A phone that receives a report at `hops >= ttl` may still upload it, but does not forward it.
 8. Receipts and statuses travel back along the path the envelope came in on, and are held until that peer reconnects. Relayed reports expire after 24 h, own undelivered reports after 7 days; at most 200 carried reports (delivered evicted first, then oldest relayed, own reports never evicted).
-9. Back-channel messages are untrusted until verified. A `receipt` must verify against the server Ed25519 key (`/config/server-key`); a `status` must carry a `signature`, Ed25519 by the server over `report_id|status|message`, that verifies the same way. A message that fails verification is not applied and its sender is disconnected. (Backend must sign statuses it returns for relayed reports: open item.)
+9. Back-channel messages are untrusted until verified. A `receipt` must verify against the server Ed25519 key (`/config/server-key`); a `status` must carry `updated_at` and a `signature`, Ed25519 by the server over `report_id|status|message|updated_at` (returned by `GET /reports/{id}/status`), that verifies the same way. A message that fails verification is not applied and its sender is disconnected. A status whose `updated_at` is not newer than the stored one is ignored (replay).
 10. A failed transport send must not count as sent: receipts, statuses and envelopes are retried on the next connection. `report_id` is at most 128 chars; the native store derives file names from a hash of it.
 11. Relay UI shows only a count ("Carrying N encrypted reports"), never contents.
 

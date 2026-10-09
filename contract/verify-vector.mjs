@@ -27,6 +27,10 @@ ok('verify vector signature', sodium.crypto_sign_verify_detached(b(e.signature),
 const r = v.receipt;
 ok('receipt verifies', sodium.crypto_sign_verify_detached(b(r.signature), enc.encode(r.signing_input_utf8), b(v.server.verify_key)));
 
+const st = v.status;
+ok('status verifies', sodium.crypto_sign_verify_detached(b(st.signature), enc.encode(st.signing_input_utf8), b(v.server.verify_key)));
+ok('status tamper rejected', !sodium.crypto_sign_verify_detached(b(st.signature), enc.encode(st.signing_input_utf8.replace('dispatched', 'resolved')), b(v.server.verify_key)));
+
 for (const [name, c] of Object.entries(v.negative)) {
   const n = c.envelope, nct = b(n.ciphertext), pre = enc.encode(`${n.report_id}|${n.device_id}|${n.created_at}|`);
   const m = new Uint8Array(pre.length + nct.length); m.set(pre); m.set(nct, pre.length);

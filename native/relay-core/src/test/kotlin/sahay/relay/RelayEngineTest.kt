@@ -428,6 +428,18 @@ class RelayEngineTest {
         assertEquals(listOf("r1"), a.receipts.map { it.first }); assertEquals(1, a.statuses.size)
     }
 
+    @Test fun `an older signed status never replaces a newer one`() {
+        val net = Net()
+        val a = net.node("A"); val b = net.node("B")
+        net.link("A", "B"); net.pump()
+        a.engine.enqueueOwn(envelope("r1")); net.pump()
+        b.engine.relayStatus("r1", "en_route", "On the way", "sig", "2026-10-09T10:30:00Z"); net.pump()
+        b.engine.relayStatus("r1", "dispatched", "Help dispatched", "sig", "2026-10-09T10:20:00Z"); net.pump()
+        assertEquals(listOf("en_route"), a.statuses.map { it.second })
+        a.engine.onBytes("to-B", Codec.encode(Msg.Status("r1", "received", "Report received", "sig", "2026-10-09T10:00:00Z")))
+        assertEquals(listOf("en_route"), a.statuses.map { it.second })             // replay of an old status ignored
+    }
+
     @Test fun `failed envelope send is retried on the next connection`() {
         val net = Net()
         val a = net.node("A"); val b = net.node("B")

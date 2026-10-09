@@ -154,6 +154,16 @@ def make_receipt(report_id: str, server_time: str, server_signing_key: SigningKe
     return {"server_time": server_time, "signature": b64e(server_signing_key.sign(msg).signature)}
 
 
+def status_signing_input(report_id: str, status: str, message: str, updated_at: str) -> bytes:
+    """Status signature input: UTF-8 'report_id|status|message|updated_at'. updated_at stops replay of an old status."""
+    return f"{report_id}|{status}|{message}|{updated_at}".encode("utf-8")
+
+
+def sign_status(report_id: str, status: str, message: str, updated_at: str, server_signing_key: SigningKey) -> str:
+    """Server-signed status, so a relay phone can carry it to an offline reporter without being able to forge it."""
+    return b64e(server_signing_key.sign(status_signing_input(report_id, status, message, updated_at)).signature)
+
+
 def verify_receipt(report_id: str, receipt: dict, server_verify_key_b64: str) -> bool:
     msg = f"{report_id}|{receipt['server_time']}".encode("utf-8")
     try:

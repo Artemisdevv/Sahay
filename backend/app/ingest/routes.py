@@ -191,12 +191,15 @@ def install(app: FastAPI, current_user: Callable) -> None:
         message = STATUS_MESSAGES.get(report.status, report.status)
         if report.status == "dispatched" and eta is not None:
             message = f"Help dispatched, ETA {eta} min"
+        updated_at = _iso(report.updated_at)
         return {
             "report_id": report.report_id,
             "status": report.status,
             "eta_minutes": eta,
             "message": message,
-            "updated_at": _iso(report.updated_at),
+            "updated_at": updated_at,
+            # Lets a relay phone hand this status to an offline reporter: Ed25519 over report_id|status|message|updated_at.
+            "signature": crypto.sign_status(report.report_id, report.status, message, updated_at, _sign_key()),
         }
 
     app.include_router(router)
