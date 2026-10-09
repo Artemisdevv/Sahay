@@ -57,7 +57,8 @@ docs/       solution, API contract, issues, runbook
 - Build against [api-contract.md](docs/api-contract.md). Contract changes go through a PR that the affected side reviews.
 - Aswin ships `/dev/*` mock endpoints and fixtures first (B-01), so nobody waits.
 - One branch per issue (`feat/B-04-dispatch`), PR with one review, `main` always runs.
-- No secrets in git. Use `.env` (see `.env.example` once added).
+- No secrets in git. Copy `.env.example` to `.env`.
+- Full rules: [CONTRIBUTING.md](CONTRIBUTING.md).
 - Never place a real call to 112 in testing or the demo. Dialer is opened prefilled with `ACTION_DIAL` only.
 
 ## Quick start (fill in as pieces land)

@@ -1,18 +1,57 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.pem
+serviceAccount*.json
+google-services.json
+
 # Python
 __pycache__/
 *.py[cod]
 .venv/
 venv/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Local environment and demo database
-.env
+# Local demo database
 backend/sahay.db
 backend/*.db-shm
 backend/*.db-wal
 backend/.sahay-server-key
 backend/.sahay-server-ed25519-key
 
-# Editors
-.vscode/
+# Node
+node_modules/
+dist/
+.vite/
+coverage/
+
+# Gradle (any module)
+.gradle/
+build/
+local.properties
+
+# Android / Capacitor
+android/app/src/main/assets/public/
+*.apk
+*.aab
+*.iml
+
+# OS / editor
+.DS_Store
+Thumbs.db
 .idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Docs kept outside the repo on purpose
+solution.md
+vague_idea.txt
+.coverage
+htmlcov/
+.sahay-server-key
+.sahay-server-ed25519-key
