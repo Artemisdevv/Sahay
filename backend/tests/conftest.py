@@ -12,6 +12,7 @@ os.environ["SAHAY_DATABASE_URL"] = f"sqlite:///{_DB.as_posix()}"
 os.environ["SAHAY_SERVER_X25519_SECRET_KEY"] = _VECTOR["server"]["box_secret_key"]
 os.environ["SAHAY_SERVER_ED25519_SECRET_KEY"] = _VECTOR["server"]["sign_seed"]
 os.environ["SAHAY_PII_ENCRYPTION_KEY"] = _VECTOR["server"]["sign_seed"]
+os.environ["SAHAY_PIPELINE_AUTORUN"] = "0"  # pipeline tests opt in explicitly
 os.environ["SAHAY_RATE_LIMIT_PER_MINUTE"] = "100000"
 os.environ["SAHAY_REGISTER_RATE_LIMIT_PER_MINUTE"] = "100000"
 os.environ["SAHAY_LOGIN_RATE_LIMIT_PER_MINUTE"] = "100000"

@@ -14,11 +14,12 @@ from sqlalchemy.orm import Session
 from app.database import Base, engine, get_db
 from app.dispatch.routes import install as install_dispatch
 from app.events import manager, websocket_loop
+from app.agents.store import store_pii
 from app.incident_routes import install as install_incident_routes
 from app.ingest.routes import install as install_ingest
 from app.keyring import server_public_key_response
 from app.models import AgentTrace, AuditEntry, DemoUser, Device, Dispatch, Incident, IncidentPII, Report, Unit
-from app.pii_crypto import encrypt_field, ensure_pii_encryption_key
+from app.pii_crypto import ensure_pii_encryption_key
 from app.rate_limit import rate_limiter
 from app.schemas import DeviceRegistrationRequest, LoginRequest, MockReportRequest
 from app.seed import seed_demo
@@ -315,18 +316,21 @@ async def mock_report(body: MockReportRequest, db: Session = Depends(get_db)):
             raise HTTPException(status_code=422, detail=f"{field} must be a string")
         return value
 
-    pii_values = {
+    store_pii(db, incident.incident_id, {
         "transcript": body.text,
-        "reporter_name": pii_text(reporter, "name"),
-        "reporter_phone": pii_text(reporter, "phone"),
-        "emergency_contact_name": pii_text(emergency_contact, "name"),
-        "emergency_contact_phone": pii_text(emergency_contact, "phone"),
-    }
-    if any(value is not None for value in pii_values.values()):
-        report_pii = IncidentPII(incident_id=incident.incident_id, report_id=report_id, language=body.language)
-        for field, value in pii_values.items():
-            setattr(report_pii, f"{field}_ciphertext", encrypt_field(value, f"{incident.incident_id}:{report_id}:{field}"))
-        db.add(report_pii)
+        "language": body.language,
+        "reporters": [{
+            "report_id": report_id,
+            "name": pii_text(reporter, "name"),
+            "phone": pii_text(reporter, "phone"),
+            "language": body.language,
+        }],
+        "emergency_contact": {
+            "name": pii_text(emergency_contact, "name"),
+            "phone": pii_text(emergency_contact, "phone"),
+        },
+        "pii_spans": [],
+    })
     traces = [
         ("transcribe", "mock_stt", "Audio transcription skipped" if body.text else "Audio accepted; mock transcription used"),
         ("intake", "mock_intake", "Structured incident created"),
