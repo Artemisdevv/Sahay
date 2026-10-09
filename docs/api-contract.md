@@ -315,6 +315,14 @@ interface SahayNearbyPlugin {
   enqueue(opts: { envelope: ReportEnvelope }): Promise<void>;
   // Tell native a stored report is now delivered (stop re-advertising it)
   markDelivered(opts: { reportId: string }): Promise<void>;
+  // After uploading someone else's report: send the server receipt / later status back along the path it came in on.
+  // Native holds them until that peer is reachable again.
+  relayReceipt(opts: { reportId: string; receipt: Receipt }): Promise<void>;
+  relayStatus(opts: { reportId: string; status: ReportStatus; message: string }): Promise<void>;
+  // Everything carried and not yet confirmed delivered (own and others'), so the web layer can upload when it gets online.
+  pendingForUpload(): Promise<{ envelopes: ReportEnvelope[] }>;
+  // Reports carried for other people (UI shows only this count).
+  carryingCount(): Promise<{ count: number }>;
   addListener(event: 'peerConnected', cb: (e: { peerId: string }) => void): Promise<void>;
   addListener(event: 'peerLost', cb: (e: { peerId: string }) => void): Promise<void>;
   // Relay phone got an envelope from someone else. Web layer uploads it if online.
@@ -341,7 +349,11 @@ Rules:
 2. Relay verifies the **signature** shape (non-empty, length 64) cheaply. Full verification needs the device public key and happens at the server, so relays accept and forward.
 3. Dedupe by `report_id`. Drop at `hops >= ttl`. Increment `hops` before forwarding.
 4. Phone with internet uploads via `POST /reports`, then sends `receipt` back to the source peer(s).
-5. Relay UI shows only a count ("Carrying N encrypted reports"), never contents.
+5. Peers must send `hello` first; garbage, a non-`sahay` app, or an unsupported `v` disconnects. A structurally invalid envelope (missing field, non-numeric `ttl`/`hops`, `ttl` > 10, bad base64, signature not 64 bytes) disconnects the sender.
+6. Never send a report back to the peer it came from or to a peer whose `hello.carrying` already lists it. A duplicate is acked, not re-emitted or re-forwarded (so loops end).
+7. `hops` is unsigned and starts at 0 on the origin. The origin sends it as created; each relay forwards with `hops + 1` and only while `hops < ttl`. A phone that receives a report at `hops >= ttl` may still upload it, but does not forward it.
+8. Receipts and statuses travel back along the path the envelope came in on, and are held until that peer reconnects. Relayed reports expire after 24 h, own undelivered reports after 7 days; at most 200 carried reports (delivered evicted first, then oldest relayed, own reports never evicted).
+9. Relay UI shows only a count ("Carrying N encrypted reports"), never contents.
 
 ---
 
