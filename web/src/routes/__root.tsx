@@ -14,6 +14,11 @@ import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { registerSW } from "@/lib/sw-register";
+import { startDeviceBootstrap } from "@/lib/device-bootstrap";
+import { startReportSync } from "@/lib/report/service";
+import { secureStorage } from "@/native/secure-storage";
+import { SESSION_EXPIRED_EVENT, getSession } from "@/lib/session";
+import { toast } from "sonner";
 
 function NotFoundComponent() {
   return (
@@ -118,7 +123,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         },
         {
           rel: "stylesheet",
-          href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700;750&family=IBM+Plex+Mono:wght@400;500&display=swap",
+          href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap",
         },
         {
           rel: "stylesheet",
@@ -150,9 +155,27 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
   useEffect(() => {
     registerSW();
+    // Civilian device registration/refresh runs in the background; it never blocks or throws.
+    // Skipped for staff logins (a browser console is not a civilian device).
+    if (getSession()) return;
+    const stopDevice = startDeviceBootstrap(secureStorage);
+    const stopReports = startReportSync();
+    return () => {
+      stopDevice();
+      stopReports();
+    };
   }, []);
+  useEffect(() => {
+    const onExpired = () => {
+      toast.error("Session expired. Sign in again.");
+      void router.navigate({ to: "/login" });
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [router]);
 
   return (
     <QueryClientProvider client={queryClient}>

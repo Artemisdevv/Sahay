@@ -4,32 +4,18 @@ import {
   Flame,
   LifeBuoy,
   MessageSquare,
-  MapPin,
-  LocateFixed,
-  ShieldCheck,
-  ArrowUpRight,
-  ChevronRight,
-  ChevronDown,
-  Paperclip,
   Mic,
-  Plus,
-  Code2,
-  LockKeyhole,
+  Square,
+  ClipboardList,
+  UserRound,
   Phone,
-  Clock3,
-  Activity,
-  Network,
-  Database,
-  Bot,
   Check,
-  AlertTriangle,
-  Send,
-  X,
-  Pencil,
-  Users,
-  Radio,
   LoaderCircle,
-  FileAudio,
+  Pencil,
+  LocateFixed,
+  MapPin,
+  Camera,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -41,807 +27,839 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Shell, Badge, ZoneMap } from "./dispatch-shell";
+import { Shell, type ShellTab } from "./dispatch-shell";
 import {
-  buildPayload,
   defaultProfile,
-  detectPriority,
-  recipients,
   type EmergencyProfile,
   type IncidentType,
 } from "@/lib/dispatch";
-const incidentTypes = [
-  { id: "medical", label: "Medical emergency", icon: HeartPulse },
-  { id: "fire", label: "Fire / hazard", icon: Flame },
-  { id: "rescue", label: "Rescue / trapped", icon: LifeBuoy },
-  { id: "other", label: "General assistance", icon: MessageSquare },
-] as const;
+import { useVoiceCapture } from "@/hooks/use-voice-capture";
+import {
+  fetchStatus,
+  listReports,
+  NotReadyError,
+  PayloadError,
+  retryFailedNow,
+  submitReport,
+  type ReportStatus,
+} from "@/lib/report/service";
+import type { Category } from "@/lib/report/envelope";
+import type { QueueItem } from "@/lib/report/queue";
+
+const tabs: ShellTab[] = [
+  { id: "help", label: "Get help", icon: Mic },
+  { id: "reports", label: "My reports", icon: ClipboardList },
+  { id: "details", label: "My details", icon: UserRound },
+];
+
+const choices: { id: IncidentType; label: string; icon: typeof HeartPulse }[] =
+  [
+    { id: "medical", label: "Medical", icon: HeartPulse },
+    { id: "fire", label: "Fire or smoke", icon: Flame },
+    { id: "rescue", label: "Someone is trapped", icon: LifeBuoy },
+    { id: "other", label: "Something else", icon: MessageSquare },
+  ];
+const choiceLabel = (id: IncidentType) =>
+  choices.find((c) => c.id === id)?.label ?? "Help";
+
 const profileFields = [
   ["fullName", "Full name"],
-  ["bloodGroup", "Blood group"],
   ["age", "Age"],
-  ["language", "Primary language"],
+  ["bloodGroup", "Blood group"],
+  ["language", "Language you speak"],
   ["contactName", "Emergency contact name"],
-  ["relation", "Relationship"],
   ["phone", "Emergency contact phone"],
-  ["conditions", "Chronic conditions"],
-  ["allergies", "Known allergies"],
-  ["medications", "Current medications"],
-  ["devices", "Implanted devices"],
+  ["conditions", "Health conditions"],
+  ["allergies", "Allergies"],
+  ["medications", "Medicines you take"],
   ["address", "Home address"],
-  ["access", "Entry instructions / gate code"],
-  ["mobility", "Mobility issues"],
+  ["access", "How to get in (gate, floor)"],
+  ["mobility", "Trouble walking or moving"],
 ] as const;
-type Media = { name: string; url: string; type: string };
+
+const CATEGORY_FOR: Record<IncidentType, Category> = {
+  medical: "medical",
+  fire: "fire",
+  rescue: "accident",
+  other: "other",
+};
+const LANGUAGE_CODES: Record<string, string> = {
+  english: "en",
+  malayalam: "ml",
+  hindi: "hi",
+  tamil: "ta",
+};
+const HELP_ARRANGED = new Set([
+  "dispatched",
+  "en_route",
+  "on_scene",
+  "resolved",
+]);
+const NICE_CATEGORY: Record<string, string> = {
+  medical: "Medical",
+  fire: "Fire or smoke",
+  accident: "Accident or trapped",
+  crime: "Crime",
+  flood: "Flood",
+  other: "Something else",
+};
+const whenText = (iso: string) =>
+  new Date(iso).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+type ScenePhoto = { file: File; url: string };
+
+const fmt = (s: number) =>
+  `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
 export function CitizenPortal() {
-  const [type, setType] = useState<IncidentType>("medical");
-  const [description, setDescription] = useState("");
+  const [tab, setTab] = useState("help");
+  const [current, setCurrent] = useState<QueueItem | null>(null);
+  const [status, setStatus] = useState<ReportStatus | null>(null);
+  const [sending, setSending] = useState(false);
+  const [approx, setApprox] = useState(false);
+  const [picked, setPicked] = useState<IncidentType | null>(null);
+  const [note, setNote] = useState("");
   const [location, setLocation] = useState("Kochi, Kerala");
-  const [landmark, setLandmark] = useState("");
-  const [hazards, setHazards] = useState("");
-  const [people, setPeople] = useState(1);
   const [profile, setProfile] = useState<EmergencyProfile>(defaultProfile);
   const [draft, setDraft] = useState<EmergencyProfile>(defaultProfile);
-  const [consent, setConsent] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [media, setMedia] = useState<Media[]>([]);
-  const [step, setStep] = useState(-1);
-  const [error, setError] = useState("");
-  const [dispatchedPayload, setDispatchedPayload] = useState<ReturnType<
-    typeof buildPayload
-  > | null>(null);
-  const [history, setHistory] = useState([
-    {
-      id: "REQ-1048",
-      name: "Medical assistance",
-      detail: "Triage & EMS coordination",
-      date: "Oct 07, 2026",
-      time: "14:32",
-      status: "Resolved",
-    },
-    {
-      id: "REQ-1036",
-      name: "General assistance",
-      detail: "Community response team",
-      date: "Sep 28, 2026",
-      time: "09:18",
-      status: "Resolved",
-    },
-  ]);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const audioRef = useRef<HTMLInputElement>(null);
-  const urls = useRef<string[]>([]);
+  const [consent, setConsent] = useState(true);
+  const [reports, setReports] = useState<QueueItem[]>([]);
+  const [photoChoiceOpen, setPhotoChoiceOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [photos, setPhotos] = useState<ScenePhoto[]>([]);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const cameraVideo = useRef<HTMLVideoElement>(null);
+  const cameraStream = useRef<MediaStream | null>(null);
+  const photoUrls = useRef<string[]>([]);
+  const voice = useVoiceCapture();
+  const [canUseCamera, setCanUseCamera] = useState(false);
+
+  // Follow the report we just sent: local queue state every 3 s, server status once it is delivered.
+  const currentId = current?.report_id;
   useEffect(() => {
-    return () => {
-      urls.current.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, []);
-  useEffect(() => {
-    if (step < 0 || step >= 3) return;
-    const timer = setTimeout(() => setStep((s) => s + 1), 1500);
-    return () => clearTimeout(timer);
-  }, [step]);
-  const priority = detectPriority(description, type);
-  const payload = buildPayload(profile, consent, {
-    type,
-    description,
-    location,
-    landmark,
-    hazards,
-    people,
-    media: media.map((m) => m.name),
-  });
-  async function saveProfile() {
-    if (!draft.fullName.trim() || !draft.age || Number(draft.age) < 1 || Number(draft.age) > 120) {
-      toast.error("Enter a name and a valid age (1–120).");
-      return;
-    }
-    setSaving(true);
-    // Keep sensitive profile data local until it can be included in the encrypted report.
-    setSaving(false);
-    setProfile(draft);
-    setProfileOpen(false);
-    toast.success("Emergency profile saved on this device");
-  }
-  async function changeConsent(value: boolean) {
-    setConsent(value);
-    toast(value ? "Consent enabled for this report" : "Consent disabled");
-  }
-  function attach(files: FileList | null) {
-    if (!files) return;
-    const next: Media[] = [];
-    for (const file of Array.from(files)) {
-      if (!/^(image|audio)\//.test(file.type) || file.size > 10 * 1024 * 1024) {
-        toast.error("Use an image or audio file smaller than 10 MB.");
-        continue;
+    if (!currentId) return;
+    let alive = true;
+    const tick = async () => {
+      const row = (await listReports()).find((r) => r.report_id === currentId);
+      if (!alive || !row) return;
+      setCurrent(row);
+      if (row.state === "sent") {
+        const st = await fetchStatus(currentId);
+        if (alive && st) setStatus(st);
       }
-      const url = URL.createObjectURL(file);
-      urls.current.push(url);
-      next.push({ name: file.name, url, type: file.type });
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), 3000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [currentId]);
+
+  useEffect(() => {
+    if (tab !== "reports") return;
+    let alive = true;
+    const load = () =>
+      void listReports().then((rows) => alive && setReports(rows));
+    load();
+    const timer = setInterval(load, 5000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [tab]);
+
+  useEffect(() => {
+    if (cameraOpen && cameraVideo.current && cameraStream.current) {
+      cameraVideo.current.srcObject = cameraStream.current;
+      void cameraVideo.current.play().catch(() => undefined);
     }
-    setMedia((previous) => [...previous, ...next].slice(0, 3));
-  }
-  function submit() {
-    if (description.trim().length < 10) {
-      setError("Describe what happened in at least 10 characters.");
-      return;
-    }
-    if (!location.trim()) {
-      setError("Add the incident location before dispatch.");
-      return;
-    }
-    setError("");
-    setDispatchedPayload(payload);
-    setStep(0);
-    setHistory((h) => [
-      {
-        id: `REQ-${1050 + h.length}`,
-        name: incidentTypes.find((t) => t.id === type)?.label ?? "Assistance",
-        detail: "Autonomous response simulation",
-        date: "Just now",
-        time: "",
-        status: "In progress",
-      },
-      ...h,
-    ]);
-    toast("Dispatch simulation started", {
-      description: "No real emergency services will be contacted.",
-    });
-  }
-  function gps() {
+  }, [cameraOpen]);
+
+  useEffect(() => {
+    setCanUseCamera(
+      typeof navigator !== "undefined" &&
+        typeof navigator.mediaDevices?.getUserMedia === "function",
+    );
+  }, []);
+
+  useEffect(
+    () => () => {
+      photoUrls.current.forEach((url) => URL.revokeObjectURL(url));
+      cameraStream.current?.getTracks().forEach((track) => track.stop());
+    },
+    [],
+  );
+
+  function updateLocation() {
     if (!navigator.geolocation) {
-      toast.error("Location is unavailable. Enter your address manually.");
+      toast.error(
+        "This phone cannot share its location. Type your address in My details.",
+      );
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        setLocation(`${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}`);
-        toast.success("Current GPS location applied");
+        setLocation(
+          `${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`,
+        );
+        toast.success("Location updated");
       },
-      () => toast.error("Location access denied. Enter your address manually."),
+      () => toast.error("Location is off. Turn it on in phone settings."),
       { timeout: 8000 },
     );
   }
+
+  function attachPhotos(files: Iterable<File> | null) {
+    if (!files) return;
+    const next: ScenePhoto[] = [];
+    for (const file of files) {
+      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+        toast.error("Choose an image smaller than 10 MB.");
+        continue;
+      }
+      if (photos.length + next.length >= 3) {
+        toast.error("You can attach up to 3 photos.");
+        break;
+      }
+      const url = URL.createObjectURL(file);
+      photoUrls.current.push(url);
+      next.push({ file, url });
+    }
+    setPhotos((current) => [...current, ...next].slice(0, 3));
+    if (photoInput.current) photoInput.current.value = "";
+  }
+
+  async function openCamera() {
+    if (!canUseCamera) {
+      toast.error(
+        "Camera capture isn’t available here. You can still upload an image.",
+      );
+      return;
+    }
+    try {
+      cameraStream.current = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      setPhotoChoiceOpen(false);
+      setCameraOpen(true);
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : "";
+      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        toast.error("Camera access was denied. You can still upload an image.");
+      } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        toast.error(
+          "No camera is available on this device. You can still upload an image.",
+        );
+      } else {
+        toast.error("Couldn’t open the camera. You can still upload an image.");
+      }
+      cameraStream.current?.getTracks().forEach((track) => track.stop());
+      cameraStream.current = null;
+    }
+  }
+
+  function closeCamera() {
+    cameraStream.current?.getTracks().forEach((track) => track.stop());
+    cameraStream.current = null;
+    setCameraOpen(false);
+  }
+
+  function capturePhoto() {
+    const video = cameraVideo.current;
+    if (!video?.videoWidth || !video.videoHeight) {
+      toast.error("Camera is still starting. Try again in a moment.");
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      toast.error(
+        "Couldn’t capture the photo. You can upload an image instead.",
+      );
+      return;
+    }
+    context.drawImage(video, 0, 0);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          toast.error(
+            "Couldn’t capture the photo. Try again or upload an image.",
+          );
+          return;
+        }
+        attachPhotos([
+          new File([blob], `scene-${Date.now()}.jpg`, { type: "image/jpeg" }),
+        ]);
+        closeCamera();
+      },
+      "image/jpeg",
+      0.9,
+    );
+  }
+
+  function removePhoto(photo: ScenePhoto) {
+    URL.revokeObjectURL(photo.url);
+    photoUrls.current = photoUrls.current.filter((url) => url !== photo.url);
+    setPhotos((current) => current.filter((item) => item.url !== photo.url));
+  }
+
+  // A category alone is not a report: the response team needs a message. The buttons only label it.
+  const hasReport = !!voice.clip || note.trim().length >= 5;
+
+  async function send() {
+    if (!hasReport || sending) return;
+    setSending(true);
+    try {
+      const language =
+        LANGUAGE_CODES[profile.language.trim().toLowerCase()] ?? "en";
+      const { item, approximateLocation } = await submitReport({
+        category: CATEGORY_FOR[picked ?? "other"],
+        language,
+        ...(voice.clip
+          ? { audio: { blob: voice.clip.blob, seconds: voice.clip.seconds } }
+          : {}),
+        ...(note.trim() ? { text: note } : {}),
+        ...(consent
+          ? {
+              reporter: { name: profile.fullName },
+              emergency_contact: {
+                name: profile.contactName,
+                phone: profile.phone,
+              },
+            }
+          : {}),
+      });
+      setApprox(approximateLocation);
+      setStatus(null);
+      setCurrent(item);
+    } catch (e) {
+      if (e instanceof NotReadyError || e instanceof PayloadError) {
+        toast.error(e.message);
+      } else {
+        toast.error("Could not save the report. Try again, or call 112.");
+      }
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function startOver() {
+    setCurrent(null);
+    setStatus(null);
+    setPicked(null);
+    setNote("");
+    voice.reset();
+    photos.forEach(removePhoto);
+  }
+
+  function saveProfile() {
+    if (
+      !draft.fullName.trim() ||
+      !draft.age ||
+      Number(draft.age) < 1 ||
+      Number(draft.age) > 120
+    ) {
+      toast.error("Enter your name and your age (1 to 120).");
+      return;
+    }
+    setProfile(draft);
+    setProfileOpen(false);
+    toast.success("Details saved on this phone");
+  }
+
   return (
-    <Shell title="Citizen portal">
-      <div className="page-heading">
-        <div>
-          <div className="eyebrow">Citizen response workspace</div>
-          <h1>
-            Good morning, Alex<span className="text-primary">.</span>
-          </h1>
-          <p className="subtitle">
-            Your safety, connected. Get the right response, when it matters.
-          </p>
-        </div>
-        <div className="page-heading-actions">
-          <Badge tone="green">
-            <span className="dot" />
-            Network connected
-          </Badge>
-          <Button variant="outline" size="sm" asChild>
-            <a href="tel:112">
-              <Phone />
-              Emergency: 112
-            </a>
-          </Button>
-        </div>
-      </div>
-      <div className="status-strip">
-        <div className="status-cell">
-          <div className="status-label">
-            <MapPin />
-            Current location
-          </div>
-          <div className="status-value">
-            Kochi, Kerala<Badge tone="green">GPS ready</Badge>
-          </div>
-        </div>
-        <div className="status-cell">
-          <div className="status-label">
-            <Network />
-            Coordinator agents
-          </div>
-          <div className="status-value">
-            <span className="dot" />4 agents online<small>All operational</small>
-          </div>
-        </div>
-        <div className="status-cell">
-          <div className="status-label">
-            <ShieldCheck />
-            Emergency profile
-          </div>
-          <div className="status-value">
-            {consent ? "Context ready" : "Sharing disabled"}
-            <Check size={13} className="text-primary" />
-          </div>
-        </div>
-        <div className="status-cell">
-          <div className="status-label">
-            <Clock3 />
-            Avg. response time
-          </div>
-          <div className="status-value">
-            &lt; 2 minutes<small>In your area</small>
-          </div>
-        </div>
-      </div>
-      <div className="content-grid">
-        <div>
-          <section className="panel">
-            <div className="panel-head">
-              <div>
-                <h2>
-                  <Radio className="text-primary" />
-                  {step < 0 ? "Report an incident" : "Agent action telemetry"}
-                </h2>
-                <p>
-                  {step < 0
-                    ? "Share what’s happening. Our agents will coordinate the response."
-                    : "Your request is being coordinated across the response network."}
-                </p>
-              </div>
-              <Badge tone={step < 0 ? "green" : "amber"}>
-                {step < 0 ? (
-                  <>
-                    <LockKeyhole size={10} />
-                    Secure channel
-                  </>
-                ) : (
-                  "Simulation in progress"
-                )}
-              </Badge>
-            </div>
-            {step < 0 ? (
-              <>
-                <div className="panel-body">
-                  <div className="section-label">
-                    <span>
-                      What type of help do you need? <span className="required">*</span>
-                    </span>
-                  </div>
-                  <div className="incident-types">
-                    {incidentTypes.map((t) => (
-                      <Button
-                        key={t.id}
-                        variant="outline"
-                        className={`incident-choice ${type === t.id ? "selected" : ""}`}
-                        onClick={() => setType(t.id)}
-                        aria-pressed={type === t.id}
-                      >
-                        <t.icon />
-                        {t.label}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="section-label">
-                    <span>
-                      Incident location <span className="required">*</span>
-                    </span>
+    <Shell
+      title={tabs.find((t) => t.id === tab)?.label ?? "Sahay"}
+      tabs={tabs}
+      activeTab={tab}
+      onTab={setTab}
+    >
+      {tab === "help" && !current && (
+        <section className="cz-help" aria-labelledby="help-title">
+          <h1 id="help-title">Do you need help?</h1>
+          <p className="cz-lead">Hold the button and say what happened.</p>
+
+          <MicButton voice={voice} />
+
+          <div className="cz-photo-actions">
+            <Button
+              variant="outline"
+              className="cz-secondary"
+              onClick={() => setPhotoChoiceOpen(true)}
+            >
+              <Camera /> Add a photo (optional)
+            </Button>
+            <input
+              ref={photoInput}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(event) => attachPhotos(event.target.files)}
+            />
+            {photos.length > 0 && (
+              <div className="cz-photo-preview" aria-label="Photo attachments">
+                {photos.map((photo) => (
+                  <div className="cz-photo-item" key={photo.url}>
+                    <img src={photo.url} alt="Attached scene" />
                     <Button
-                      variant="link"
-                      size="sm"
-                      className="h-auto p-0 text-[10px]"
-                      onClick={gps}
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove ${photo.file.name}`}
+                      onClick={() => removePhoto(photo)}
                     >
-                      <LocateFixed size={11} />
-                      Use current location
+                      <X size={16} />
                     </Button>
                   </div>
-                  <label className="field">
-                    <span className="location-input">
-                      <MapPin />
-                      <input
-                        aria-label="Incident location"
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        maxLength={300}
-                      />
-                      <Badge tone="green">
-                        {location.startsWith("124") ? "Demo address" : "Location set"}
-                      </Badge>
-                    </span>
-                  </label>
-                  <label className="field">
-                    <input
-                      aria-label="Landmark, floor or apartment"
-                      placeholder="Landmark, floor, apartment, or entry instructions (optional)"
-                      value={landmark}
-                      onChange={(e) => setLandmark(e.target.value)}
-                      maxLength={300}
-                    />
-                  </label>
-                  <label className="field">
-                    <span className="section-label mb-0">
-                      <span>
-                        Tell us what’s happening <span className="required">*</span>
-                      </span>
-                      {priority !== "Pending assessment" ? (
-                        <Badge
-                          tone={
-                            priority === "Critical"
-                              ? "rose"
-                              : priority === "High"
-                                ? "amber"
-                                : "green"
-                          }
-                        >
-                          {priority} priority
-                        </Badge>
-                      ) : (
-                        <small>Agent-assisted triage</small>
-                      )}
-                    </span>
-                    <textarea
-                      placeholder="Describe the incident, symptoms, or situation. Include any details that can help our response teams."
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      maxLength={3000}
-                    />
-                  </label>
-                  <div className="quick-chips">
-                    {["Unconscious", "Severe Bleeding", "Smoke Visible", "Trapped Inside"].map(
-                      (chip) => (
-                        <Button
-                          key={chip}
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setDescription((d) =>
-                              d ? `${d}. ${chip}` : `${chip} at the incident location.`,
-                            )
-                          }
-                        >
-                          <Plus size={10} />
-                          {chip}
-                        </Button>
-                      ),
-                    )}
-                  </div>
-                  <div className="field-row wide">
-                    <label className="field">
-                      Hazards & building notes
-                      <input
-                        placeholder="Gas, oxygen tanks, pets, flammable materials…"
-                        value={hazards}
-                        onChange={(e) => setHazards(e.target.value)}
-                        maxLength={500}
-                      />
-                    </label>
-                    <label className="field">
-                      People affected
-                      <input
-                        type="number"
-                        min={1}
-                        max={999}
-                        value={people}
-                        onChange={(e) =>
-                          setPeople(Math.min(999, Math.max(1, Number(e.target.value))))
-                        }
-                      />
-                    </label>
-                  </div>
-                  <div className="section-label">
-                    <span>Scene attachments</span>
-                    <small>Optional · Images or audio up to 10 MB</small>
-                  </div>
-                  <div className="attachment-zone">
-                    <div className="flex items-center gap-2">
-                      <Paperclip size={15} className="text-muted-foreground" />
-                      <p>Add context for the response team</p>
-                    </div>
-                    <div className="attachment-actions">
-                      <Button variant="outline" onClick={() => fileRef.current?.click()}>
-                        <Plus size={12} />
-                        Add photo
-                      </Button>
-                      <Button variant="outline" onClick={() => audioRef.current?.click()}>
-                        <Mic size={12} />
-                        Audio note
-                      </Button>
-                    </div>
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => attach(e.target.files)}
-                    />
-                    <input
-                      ref={audioRef}
-                      type="file"
-                      accept="audio/*"
-                      className="hidden"
-                      onChange={(e) => attach(e.target.files)}
-                    />
-                  </div>
-                  {media.map((m, i) => (
-                    <div className="attachment-preview" key={m.url}>
-                      {m.type.startsWith("image") ? (
-                        <img src={m.url} alt="Attached scene" />
-                      ) : (
-                        <FileAudio size={20} />
-                      )}
-                      <span className="text-[10px] truncate flex-1">{m.name}</span>
-                      {m.type.startsWith("audio") && (
-                        <audio controls src={m.url} className="w-40 h-8" />
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Remove ${m.name}`}
-                        onClick={() => setMedia((ms) => ms.filter((_, index) => index !== i))}
-                      >
-                        <X size={12} />
-                      </Button>
-                    </div>
-                  ))}
-                  <details className="payload">
-                    <summary>
-                      <span>
-                        <Code2 size={13} />
-                        Agent Context Payload Preview
-                      </span>
-                      <span>
-                        Structured JSON
-                        <ChevronDown size={12} />
-                      </span>
-                    </summary>
-                    <pre>{JSON.stringify(payload, null, 2)}</pre>
-                  </details>
-                  {error && (
-                    <p className="error-text" role="alert">
-                      {error}
-                    </p>
-                  )}
-                </div>
-                <div className="form-bottom">
-                  <small>
-                    <LockKeyhole size={11} />
-                    Encrypted context · Consent-controlled sharing
-                  </small>
-                  <Button onClick={submit}>
-                    <Send size={13} />
-                    Dispatch Autonomous Agents
-                    <ChevronRight size={13} />
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <div className="telemetry">
-                <div className="telemetry-intro">
-                  <ShieldCheck />
-                  <div>
-                    <h3>{step === 3 ? "Response team assigned" : "Coordinating your response"}</h3>
-                    <p>
-                      Request received · {dispatchedPayload?.incident.priority} priority · Demo
-                      dispatch
-                    </p>
-                  </div>
-                </div>
-                {[
-                  {
-                    title: "Context Ingestion",
-                    desc: consent
-                      ? "Static emergency profile combined with incident context for vector memory lookup."
-                      : "Incident context ingested. Medical profile excluded by your consent preference.",
-                  },
-                  {
-                    title: "Multi-Agent Review",
-                    desc: "TriageAgent-01 → DispatchRouter-v2 → Response alert. Resource availability reviewed.",
-                  },
-                  {
-                    title: "Dispatch Confirmation",
-                    desc: `Simulated payload transmitted to ${recipients(type)}.`,
-                  },
-                ].map((s, i) => (
-                  <div className="telemetry-step" key={s.title}>
-                    <div className={`step-index ${step > i ? "done" : ""}`}>
-                      {step > i ? (
-                        <Check />
-                      ) : step === i ? (
-                        <LoaderCircle className="animate-spin" />
-                      ) : (
-                        i + 1
-                      )}
-                    </div>
-                    <div>
-                      <strong>{s.title}</strong>
-                      <p>{step >= i ? s.desc : "Waiting for upstream agent"}</p>
-                    </div>
-                  </div>
                 ))}
-                {step === 3 && (
-                  <div className="eta-banner">
-                    <div>
-                      <strong>6 min</strong>
-                      <small>Simulated estimated arrival</small>
-                    </div>
-                    <div className="text-right text-[11px]">
-                      <strong className="text-[12px]">
-                        {type === "medical"
-                          ? "Ambulance #12"
-                          : type === "fire"
-                            ? "Engine 3"
-                            : "Response Unit #04"}
-                      </strong>
-                      <small>Assigned · En route</small>
-                    </div>
-                  </div>
-                )}
-                <div className="flex gap-2 flex-wrap">
-                  <Button variant="destructive" asChild>
-                    <a href="tel:112">
-                      <Phone />
-                      Call 112 / 911 Direct
-                    </a>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setStep(-1);
-                      setDescription("");
-                    }}
-                  >
-                    New incident
-                  </Button>
-                </div>
-                <details className="payload">
-                  <summary>
-                    <span>
-                      <Code2 size={13} />
-                      Submitted context
-                    </span>
-                    <ChevronDown size={12} />
-                  </summary>
-                  <pre>{JSON.stringify(dispatchedPayload, null, 2)}</pre>
-                </details>
               </div>
             )}
-          </section>
-          <div className="disclaimer">
-            <AlertTriangle />
-            Immediate danger? Don’t wait for a digital response.{" "}
-            <a href="tel:112">
-              Call 112 / 911 directly
-              <ArrowUpRight size={10} className="inline" />
-            </a>
           </div>
-          <section className="panel history">
-            <div className="panel-head compact-head">
-              <h2>
-                Recent requests <Badge>{history.length}</Badge>
-              </h2>
-              <Badge>Past 30 days</Badge>
-            </div>
-            <table className="history-table">
-              <thead>
-                <tr>
-                  <th>REQUEST</th>
-                  <th>DATE & TIME</th>
-                  <th>REQUEST ID</th>
-                  <th>STATUS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((h) => (
-                  <tr key={h.id}>
-                    <td>
-                      <div className="table-icon">
-                        {h.name.toLowerCase().includes("medical") ? (
-                          <HeartPulse />
-                        ) : (
-                          <MessageSquare />
-                        )}
-                        <div>
-                          <strong>{h.name}</strong>
-                          <small>{h.detail}</small>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      {h.date}
-                      <small>{h.time}</small>
-                    </td>
-                    <td className="mono">{h.id}</td>
-                    <td>
-                      <Badge tone={h.status === "Resolved" ? "green" : "amber"}>
-                        {h.status === "Resolved" && <Check size={9} />}
-                        {h.status}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        </div>
-        <aside className="right-stack">
-          <section className="panel">
-            <div className="panel-head compact-head">
-              <h2>
-                <ShieldCheck className="text-primary" />
-                Emergency profile
-              </h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Edit emergency profile"
-                onClick={() => {
-                  setDraft(profile);
-                  setProfileOpen(true);
-                }}
-              >
-                <Pencil size={13} />
-              </Button>
-            </div>
-            <div className="compact-body">
-              <div className="profile-top">
-                <div className="avatar">AM</div>
-                <div>
-                  <strong>{profile.fullName}</strong>
-                  <small>Personal emergency context</small>
-                </div>
-              </div>
-              <div className="profile-summary">
-                <div>
-                  <small>BLOOD GROUP</small>
-                  <strong>{profile.bloodGroup}</strong>
-                </div>
-                <div>
-                  <small>AGE / LANGUAGE</small>
-                  <strong>
-                    {profile.age} yrs · {profile.language}
-                  </strong>
-                </div>
-                <div>
-                  <small>CONDITIONS</small>
-                  <strong>{profile.conditions}</strong>
-                </div>
-                <div>
-                  <small>EMERGENCY CONTACT</small>
-                  <strong>{profile.contactName}</strong>
-                </div>
-              </div>
-              <div className="medical-note">
-                <AlertTriangle />
-                Known allergy: {profile.allergies}
-              </div>
+
+          {voice.state === "ready" && voice.clip && (
+            <div className="cz-clip">
+              <p>Your message ({fmt(voice.clip.seconds)})</p>
+              <audio controls src={voice.clip.url} />
               <Button
                 variant="outline"
-                size="sm"
-                className="w-full text-[10px]"
-                onClick={() => {
-                  setDraft(profile);
-                  setProfileOpen(true);
-                }}
+                className="cz-secondary"
+                onClick={voice.reset}
               >
-                Medical & Emergency Profile
-                <ArrowUpRight size={11} />
+                Record again
               </Button>
-              <div className="consent-row">
-                <span>Share with response agents</span>
-                <Switch
-                  checked={consent}
-                  onCheckedChange={changeConsent}
-                  aria-label="Share medical profile with agents"
-                />
-              </div>
-              <div className="profile-ready">
-                {consent ? (
-                  <>
-                    <ShieldCheck size={12} />
-                    Profile Ready for Agent Context Injection
-                  </>
-                ) : (
-                  <>
-                    <LockKeyhole size={12} />
-                    Medical context sharing disabled
-                  </>
-                )}
-              </div>
             </div>
-          </section>
-          <section className="panel">
-            <div className="panel-head compact-head">
-              <h2>
-                <Network />
-                Your coordinator agents
-              </h2>
-              <Badge tone="green">4 online</Badge>
-            </div>
-            <div className="compact-body">
-              {[
-                {
-                  name: "TriageAgent-01",
-                  detail: "Incident assessment & prioritization",
-                  icon: HeartPulse,
-                },
-                {
-                  name: "DispatchRouter-v2",
-                  detail: "Optimal unit & resource routing",
-                  icon: Network,
-                },
-                {
-                  name: "ResourceMemory-RAG",
-                  detail: "Context retrieval & medical memory",
-                  icon: Database,
-                },
-                { name: "NotificationBot", detail: "Real-time updates & coordination", icon: Bot },
-              ].map((a) => (
-                <div className="agent-row" key={a.name}>
-                  <div className="agent-icon">
-                    <a.icon />
+          )}
+          {voice.state === "denied" && (
+            <p className="cz-warn" role="alert">
+              Microphone access was denied. Allow it in browser settings, or
+              choose what is happening below.
+            </p>
+          )}
+          {voice.state === "unsupported" && (
+            <p className="cz-warn" role="alert">
+              This phone cannot record here. Choose what is happening below.
+            </p>
+          )}
+          {voice.state === "unavailable" && (
+            <p className="cz-warn" role="alert">
+              No microphone is available. Connect or enable a microphone, or
+              choose what is happening below.
+            </p>
+          )}
+
+          <h2 className="cz-sub">What is happening? (optional)</h2>
+          <div className="cz-choices">
+            {choices.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={`cz-choice ${picked === c.id ? "selected" : ""}`}
+                aria-pressed={picked === c.id}
+                onClick={() => setPicked(picked === c.id ? null : c.id)}
+              >
+                <c.icon />
+                {c.label}
+              </button>
+            ))}
+          </div>
+
+          <details className="cz-type">
+            <summary>Type a message instead</summary>
+            <textarea
+              aria-label="Your message"
+              placeholder="Say what happened and where you are"
+              value={note}
+              maxLength={1000}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </details>
+
+          <div className="cz-where">
+            <MapPin />
+            <span>
+              Your location: <strong>{location}</strong>
+            </span>
+            <button type="button" onClick={updateLocation}>
+              <LocateFixed />
+              Update
+            </button>
+          </div>
+
+          <Button
+            className="cz-send"
+            disabled={!hasReport || sending}
+            onClick={() => void send()}
+          >
+            {sending ? "Saving..." : "Send help request"}
+          </Button>
+          {!hasReport && (
+            <p className="cz-hint">Record a message or type one to send.</p>
+          )}
+
+          <a href="tel:112" className="cz-call">
+            <Phone />
+            Call 112 now
+          </a>
+          <p className="cz-hint">
+            In danger? Call first. This demo does not contact real services.
+          </p>
+        </section>
+      )}
+
+      {tab === "help" && current && (
+        <Progress
+          item={current}
+          status={status}
+          approximate={approx}
+          onDone={startOver}
+          onRetry={() => void retryFailedNow(current.report_id)}
+        />
+      )}
+
+      {tab === "reports" && (
+        <section className="cz-page" aria-labelledby="reports-title">
+          <h1 id="reports-title">My reports</h1>
+          {reports.length === 0 ? (
+            <p className="cz-lead">
+              Nothing yet. When you ask for help, it will show here.
+            </p>
+          ) : (
+            <ul className="cz-list">
+              {reports.map((r) => (
+                <li key={r.report_id}>
+                  <div>
+                    <strong>{NICE_CATEGORY[r.category] ?? "Report"}</strong>
+                    <small>{whenText(r.created_at)}</small>
                   </div>
-                  <div className="agent-info">
-                    <strong>{a.name}</strong>
-                    <small>{a.detail}</small>
-                  </div>
-                  <span className="dot" />
-                </div>
+                  <span
+                    className={`cz-status ${r.state === "sent" ? "ok" : r.state === "failed" ? "bad" : "wait"}`}
+                  >
+                    {r.state === "sent"
+                      ? "Sent"
+                      : r.state === "failed"
+                        ? "Not accepted"
+                        : "Waiting to send"}
+                  </span>
+                </li>
               ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {tab === "details" && (
+        <section className="cz-page" aria-labelledby="details-title">
+          <h1 id="details-title">My details</h1>
+          <p className="cz-lead">
+            Kept on this phone. Shared with the response team only if you allow
+            it.
+          </p>
+          <dl className="cz-facts">
+            <div>
+              <dt>Name</dt>
+              <dd>{profile.fullName}</dd>
             </div>
-            <div className="agent-footer">
-              <span>Autonomous mesh connected</span>
-              <span className="mono">24 ms</span>
+            <div>
+              <dt>Age</dt>
+              <dd>{profile.age}</dd>
             </div>
-          </section>
-          <section className="panel">
-            <div className="panel-head compact-head">
-              <h2>
-                <MapPin />
-                Your response zone
-              </h2>
-              <ArrowUpRight size={13} className="text-muted-foreground" />
+            <div>
+              <dt>Blood group</dt>
+              <dd>{profile.bloodGroup}</dd>
             </div>
-            <ZoneMap />
-            <div className="zone-meta">
-              <div>
-                <strong>Central District · Zone 04</strong>
-                <small>2 hospitals · 3 rescue units nearby</small>
-              </div>
-              <Badge tone="green">Covered</Badge>
+            <div>
+              <dt>Health conditions</dt>
+              <dd>{profile.conditions}</dd>
             </div>
-          </section>
-        </aside>
-      </div>
+            <div>
+              <dt>Allergies</dt>
+              <dd>{profile.allergies}</dd>
+            </div>
+            <div>
+              <dt>Emergency contact</dt>
+              <dd>
+                {profile.contactName} {profile.phone}
+              </dd>
+            </div>
+          </dl>
+          <Button
+            variant="outline"
+            className="cz-secondary"
+            onClick={() => {
+              setDraft(profile);
+              setProfileOpen(true);
+            }}
+          >
+            <Pencil />
+            Change my details
+          </Button>
+          <label className="cz-consent">
+            <span>
+              Share my health details with the response team
+              <small>
+                {consent
+                  ? "On. They can see them when you ask for help."
+                  : "Off. They will not see them."}
+              </small>
+            </span>
+            <Switch
+              checked={consent}
+              onCheckedChange={setConsent}
+              aria-label="Share my health details"
+            />
+          </label>
+        </section>
+      )}
+
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Medical & Emergency Profile</DialogTitle>
+            <DialogTitle>My details</DialogTitle>
+            <DialogDescription>Saved on this phone only.</DialogDescription>
+          </DialogHeader>
+          <div className="cz-form">
+            {profileFields.map(([key, label]) => (
+              <label key={key}>
+                {label}
+                <input
+                  value={draft[key]}
+                  maxLength={300}
+                  inputMode={key === "age" ? "numeric" : undefined}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, [key]: e.target.value }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+          <Button className="cz-send" onClick={saveProfile}>
+            Save
+          </Button>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={photoChoiceOpen} onOpenChange={setPhotoChoiceOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Add a scene photo</DialogTitle>
             <DialogDescription>
-              Private medical and access information. Shared with agents only with your consent.
+              Take a photo now or upload an image from this device.
             </DialogDescription>
           </DialogHeader>
-          <div className="dialog-form">
-            <div className="field-row">
-              {profileFields.map(([key, label]) => (
-                <label className="field" key={key}>
-                  {label}
-                  <input
-                    aria-label={label}
-                    value={draft[key]}
-                    maxLength={500}
-                    type={key === "age" ? "number" : "text"}
-                    min={key === "age" ? 1 : undefined}
-                    max={key === "age" ? 120 : undefined}
-                    onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-                  />
-                </label>
-              ))}
-            </div>
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="outline"
+              onClick={() => void openCamera()}
+              disabled={!canUseCamera}
+            >
+              <Camera /> Take photo
+            </Button>
+            {!canUseCamera && (
+              <p className="cz-hint">
+                Camera capture isn’t available in this browser. Image upload is
+                still available.
+              </p>
+            )}
+            <Button
+              onClick={() => {
+                setPhotoChoiceOpen(false);
+                photoInput.current?.click();
+              }}
+            >
+              Upload image
+            </Button>
           </div>
-          <div className="flex justify-between items-center gap-3">
-            <span className="text-[10px] text-muted-foreground">
-              Demo changes last this visit; accounts save privately.
-            </span>
-            <Button onClick={saveProfile} disabled={saving}>
-              {saving ? <LoaderCircle className="animate-spin" /> : <Check />}Save profile
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={cameraOpen}
+        onOpenChange={(open) => {
+          if (!open) closeCamera();
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Take a scene photo</DialogTitle>
+            <DialogDescription>
+              Position the camera, then capture to add the photo to your report.
+            </DialogDescription>
+          </DialogHeader>
+          <video
+            ref={cameraVideo}
+            autoPlay
+            playsInline
+            muted
+            className="w-full rounded-md bg-black"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeCamera}>
+              Cancel
+            </Button>
+            <Button onClick={capturePhoto}>
+              <Camera /> Capture photo
             </Button>
           </div>
         </DialogContent>
       </Dialog>
     </Shell>
+  );
+}
+
+/**
+ * The one big control of the app. Hold to record, or tap once to start and tap again to stop
+ * (some people cannot hold a button steady). Keyboard: Space or Enter toggles.
+ */
+function MicButton({ voice }: { voice: ReturnType<typeof useVoiceCapture> }) {
+  const downAt = useRef(0);
+  const sticky = useRef(false);
+  const recording = voice.state === "recording";
+  const disabled = voice.state === "unsupported";
+
+  function onDown(e: React.PointerEvent) {
+    if (disabled) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    if (recording && sticky.current) return; // second tap will stop on release
+    downAt.current = Date.now();
+    sticky.current = false;
+    void voice.start();
+  }
+  function onUp() {
+    if (disabled) return;
+    if (recording && sticky.current) {
+      sticky.current = false;
+      voice.stop();
+      return;
+    }
+    if (Date.now() - downAt.current < 450) {
+      sticky.current = true; // quick tap: keep recording until the next tap
+      return;
+    }
+    voice.stop();
+  }
+  function onKey(e: React.KeyboardEvent) {
+    if (e.key !== " " && e.key !== "Enter") return;
+    e.preventDefault();
+    if (e.repeat) return;
+    if (recording) voice.stop();
+    else void voice.start();
+  }
+
+  return (
+    <div className="cz-mic-wrap">
+      <button
+        type="button"
+        className={`cz-mic ${recording ? "recording" : ""}`}
+        aria-label={
+          recording
+            ? "Stop recording"
+            : "Record a message. Hold, or tap to start and tap to stop"
+        }
+        disabled={disabled}
+        onPointerDown={onDown}
+        onPointerUp={onUp}
+        onPointerCancel={() => recording && !sticky.current && voice.stop()}
+        onKeyDown={onKey}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {recording ? <Square /> : <Mic />}
+      </button>
+      <p className="cz-mic-label" aria-live="polite">
+        {recording
+          ? `Recording ${fmt(voice.seconds)}. Let go, or tap, to stop.`
+          : voice.state === "ready"
+            ? "Message saved. Check it below."
+            : "Hold to talk"}
+      </p>
+    </div>
+  );
+}
+
+function Progress({
+  item,
+  status,
+  approximate,
+  onDone,
+  onRetry,
+}: {
+  item: QueueItem;
+  status: ReportStatus | null;
+  approximate: boolean;
+  onDone: () => void;
+  onRetry: () => void;
+}) {
+  const failed = item.state === "failed";
+  // k = number of finished steps: 1 saved, 2 sent, 3 a team is arranged
+  const k =
+    item.state === "sent"
+      ? status && HELP_ARRANGED.has(status.status)
+        ? 3
+        : 2
+      : 1;
+  const title = failed
+    ? "We could not send this"
+    : k === 3
+      ? "Help is on the way"
+      : item.state === "sent"
+        ? "Your request was sent"
+        : "Saved on your phone";
+  const lead = failed
+    ? "The response centre did not accept this report. Call 112 now."
+    : status?.message
+      ? status.message
+      : item.state === "sent"
+        ? "The response centre has it. A team is being arranged."
+        : "It will be sent as soon as there is a connection. You do not need to do anything.";
+  const labels = [
+    "Saved on your phone",
+    "Sent to the response centre",
+    "A team is on the way",
+  ];
+  return (
+    <section className="cz-help" aria-live="polite">
+      <h1>{title}</h1>
+      <p className="cz-lead">{lead}</p>
+      {approximate && !failed && (
+        <p className="cz-warn" role="status">
+          We could not find your exact position. Tell the team where you are if
+          they call.
+        </p>
+      )}
+      {!failed && (
+        <ol className="cz-steps">
+          {labels.map((label, i) => (
+            <li key={label} className={k > i ? "done" : k === i ? "now" : ""}>
+              <span className="cz-step-mark" aria-hidden>
+                {k > i ? (
+                  <Check />
+                ) : k === i ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : null}
+              </span>
+              {label}
+            </li>
+          ))}
+        </ol>
+      )}
+      {failed && (
+        <Button variant="outline" className="cz-secondary" onClick={onRetry}>
+          Try sending again
+        </Button>
+      )}
+      <a href="tel:112" className="cz-call">
+        <Phone />
+        Call 112 now
+      </a>
+      <Button variant="outline" className="cz-secondary" onClick={onDone}>
+        Done
+      </Button>
+    </section>
   );
 }

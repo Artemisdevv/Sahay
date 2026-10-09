@@ -25,6 +25,7 @@ from app.models import AgentTrace, AuditChainHead, AuditEntry, DemoUser, Device,
 from app.pii_crypto import ensure_pii_encryption_key
 from app.rate_limit import rate_limiter
 from app.schemas import DeviceChallengeRequest, DeviceRegistrationRequest, LoginRequest, MockReportRequest
+from app.deploy import install as install_deploy
 from app.seed import seed_demo
 from app.security import verify_password
 from app.settings import settings
@@ -451,3 +452,6 @@ async def dev_tick(db: Session = Depends(get_db)):
 def dev_status(db: Session = Depends(get_db)):
     require_dev()
     return {"units": db.query(Unit).count(), "incidents": db.query(Incident).count(), "dispatches": db.query(Dispatch).count()}
+
+
+install_deploy(app)  # keep last: its SPA catch-all must not shadow any route above

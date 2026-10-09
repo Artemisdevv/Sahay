@@ -55,7 +55,10 @@ export interface SecretStore {
   remove(key: string): Promise<void>;
 }
 
-export const secureStorage: SecretStore & { info(): Promise<SecureStorageInfo>; isNative: boolean } = {
+export const secureStorage: SecretStore & {
+  info(): Promise<SecureStorageInfo>;
+  isNative: boolean;
+} = {
   get: async (key) => (await plugin.get({ key })).value ?? null, // native omits the key when nothing is stored
   set: (key, value) => plugin.set({ key, value }),
   remove: (key) => plugin.remove({ key }),

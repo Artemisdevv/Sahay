@@ -1,0 +1,13 @@
+# docker compose up --build   (after: python deploy/gen_secrets.py)
+services:
+  sahay:
+    build: .
+    ports:
+      - "8080:8000"
+    env_file:
+      - deploy/.env.demo
+    volumes:
+      - sahay-data:/data
+    restart: unless-stopped
+volumes:
+  sahay-data:

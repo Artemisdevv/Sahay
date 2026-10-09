@@ -15,6 +15,8 @@ describe("SahayNearby in a browser", () => {
 
   it("lets the app call stop and the delivery hooks without crashing", async () => {
     await expect(SahayNearby.stop()).resolves.toBeUndefined();
-    await expect(SahayNearby.markDelivered({ reportId: "r" })).resolves.toBeUndefined();
+    await expect(
+      SahayNearby.markDelivered({ reportId: "r" }),
+    ).resolves.toBeUndefined();
   });
 });

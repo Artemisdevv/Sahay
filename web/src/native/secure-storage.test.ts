@@ -13,6 +13,9 @@ describe("secureStorage in a browser (development fallback)", () => {
   });
 
   it("says plainly that it is not hardware backed", async () => {
-    expect(await secureStorage.info()).toEqual({ native: false, hardwareBacked: false });
+    expect(await secureStorage.info()).toEqual({
+      native: false,
+      hardwareBacked: false,
+    });
   });
 });

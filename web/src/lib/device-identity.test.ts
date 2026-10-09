@@ -14,10 +14,18 @@ import {
 import type { SecretStore } from "@/native/secure-storage";
 
 const vector = JSON.parse(
-  readFileSync(resolve(__dirname, "../../../contract/crypto-test-vector.json"), "utf-8"),
+  readFileSync(
+    resolve(__dirname, "../../../contract/crypto-test-vector.json"),
+    "utf-8",
+  ),
 ) as {
   device: { signing_seed: string; public_key: string };
-  register: { device_id: string; challenge: string; signing_input_utf8: string; signature: string };
+  register: {
+    device_id: string;
+    challenge: string;
+    signing_input_utf8: string;
+    signature: string;
+  };
 };
 
 class MemoryStore implements SecretStore {
@@ -27,8 +35,13 @@ class MemoryStore implements SecretStore {
   remove = async (k: string) => void this.data.delete(k);
 }
 
-const b64u = (o: object) => btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const jwt = (exp: number) => `${b64u({ alg: "HS256" })}.${b64u({ exp, role: "civilian" })}.sig`;
+const b64u = (o: object) =>
+  btoa(JSON.stringify(o))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+const jwt = (exp: number) =>
+  `${b64u({ alg: "HS256" })}.${b64u({ exp, role: "civilian" })}.sig`;
 
 /** Fake server: issues a challenge, then checks the proof the same way the backend does. */
 function fakeServer(options: { token?: string; registerStatus?: number } = {}) {
@@ -37,21 +50,43 @@ function fakeServer(options: { token?: string; registerStatus?: number } = {}) {
     const body = JSON.parse(String(init.body));
     calls.push(url.split("/auth/")[1] ?? "");
     if (url.endsWith("/auth/device-challenge")) {
-      return new Response(JSON.stringify({ challenge: "v1.9999999999.NONCE.MAC" }), { status: 200 });
+      return new Response(
+        JSON.stringify({ challenge: "v1.9999999999.NONCE.MAC" }),
+        { status: 200 },
+      );
     }
     expect(body.challenge).toBe("v1.9999999999.NONCE.MAC");
     const ok = sodium.crypto_sign_verify_detached(
-      sodium.from_base64(body.challenge_signature, sodium.base64_variants.ORIGINAL),
-      new TextEncoder().encode(`sahay-register-v1|${body.device_id}|${body.challenge}`),
-      sodium.from_base64(body.ed25519_public_key, sodium.base64_variants.ORIGINAL),
+      sodium.from_base64(
+        body.challenge_signature,
+        sodium.base64_variants.ORIGINAL,
+      ),
+      new TextEncoder().encode(
+        `sahay-register-v1|${body.device_id}|${body.challenge}`,
+      ),
+      sodium.from_base64(
+        body.ed25519_public_key,
+        sodium.base64_variants.ORIGINAL,
+      ),
     );
-    if (!ok) return new Response(JSON.stringify({ error: { message: "proof failed" } }), { status: 401 });
+    if (!ok)
+      return new Response(
+        JSON.stringify({ error: { message: "proof failed" } }),
+        { status: 401 },
+      );
     if (options.registerStatus) {
-      return new Response(JSON.stringify({ error: { message: "taken" } }), { status: options.registerStatus });
+      return new Response(JSON.stringify({ error: { message: "taken" } }), {
+        status: options.registerStatus,
+      });
     }
-    return new Response(JSON.stringify({ token: options.token ?? jwt(Math.floor(Date.now() / 1000) + 43200) }), {
-      status: 201,
-    });
+    return new Response(
+      JSON.stringify({
+        token: options.token ?? jwt(Math.floor(Date.now() / 1000) + 43200),
+      }),
+      {
+        status: 201,
+      },
+    );
   }) as unknown as typeof fetch;
   return { fetchFn, calls };
 }
@@ -62,11 +97,20 @@ beforeAll(async () => {
 
 describe("registration proof", () => {
   it("signs exactly what the backend and the frozen contract vector expect", () => {
-    const seed = sodium.from_base64(vector.device.signing_seed, sodium.base64_variants.ORIGINAL);
+    const seed = sodium.from_base64(
+      vector.device.signing_seed,
+      sodium.base64_variants.ORIGINAL,
+    );
     expect(vector.register.signing_input_utf8).toBe(
       `sahay-register-v1|${vector.register.device_id}|${vector.register.challenge}`,
     );
-    expect(signRegistration(seed, vector.register.device_id, vector.register.challenge)).toBe(vector.register.signature);
+    expect(
+      signRegistration(
+        seed,
+        vector.register.device_id,
+        vector.register.challenge,
+      ),
+    ).toBe(vector.register.signature);
   });
 });
 
@@ -92,7 +136,10 @@ describe("registerDevice and ensureDeviceToken", () => {
   it("fetches a challenge, signs it with the device key, and stores the token", async () => {
     const store = new MemoryStore();
     const server = fakeServer();
-    const token = await registerDevice(store, { fetchFn: server.fetchFn, apiBase: "http://x/api/v1" });
+    const token = await registerDevice(store, {
+      fetchFn: server.fetchFn,
+      apiBase: "http://x/api/v1",
+    });
     expect(server.calls).toEqual(["device-challenge", "register-device"]);
     expect(await store.get("device.token")).toBe(token);
   });
@@ -102,7 +149,9 @@ describe("registerDevice and ensureDeviceToken", () => {
     const good = jwt(Math.floor(Date.now() / 1000) + 3600);
     await store.set("device.token", good);
     const server = fakeServer();
-    expect(await ensureDeviceToken(store, { fetchFn: server.fetchFn })).toBe(good);
+    expect(await ensureDeviceToken(store, { fetchFn: server.fetchFn })).toBe(
+      good,
+    );
     expect(server.calls).toEqual([]);
   });
 
@@ -112,13 +161,23 @@ describe("registerDevice and ensureDeviceToken", () => {
     await store.set("device.token", jwt(Math.floor(Date.now() / 1000) + 60));
     const fresh = jwt(Math.floor(Date.now() / 1000) + 43200);
     const server = fakeServer({ token: fresh });
-    expect(await ensureDeviceToken(store, { fetchFn: server.fetchFn, apiBase: "http://x/api/v1" })).toBe(fresh);
+    expect(
+      await ensureDeviceToken(store, {
+        fetchFn: server.fetchFn,
+        apiBase: "http://x/api/v1",
+      }),
+    ).toBe(fresh);
     expect(server.calls).toEqual(["device-challenge", "register-device"]);
   });
 
   it("reports a refused registration with its status and message", async () => {
     const server = fakeServer({ registerStatus: 409 });
-    await expect(registerDevice(new MemoryStore(), { fetchFn: server.fetchFn, apiBase: "http://x/api/v1" })).rejects.toMatchObject({
+    await expect(
+      registerDevice(new MemoryStore(), {
+        fetchFn: server.fetchFn,
+        apiBase: "http://x/api/v1",
+      }),
+    ).rejects.toMatchObject({
       status: 409,
       message: "taken",
     });

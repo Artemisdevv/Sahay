@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     sahay_dev: bool = False
     sahay_database_url: str = "sqlite:///./sahay.db"
     sahay_jwt_secret: str = ""
-    sahay_cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    sahay_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
     sahay_rate_limit_per_minute: int = 120
     sahay_register_rate_limit_per_minute: int = 10
     sahay_login_rate_limit_per_minute: int = 10
@@ -19,7 +19,13 @@ class Settings(BaseSettings):
     sahay_pii_key_file: str = ".sahay-pii-key"
     sahay_pipeline_autorun: bool = True  # run the agent pipeline after each accepted report
     sahay_llm_mode: str = "mock"  # mock = deterministic rules, no network
-    sahay_stt_mode: str = "mock"  # mock = no audio model; text payloads still work
+    sahay_stt_mode: str = "mock"  # mock = no audio model; text payloads still work; live = providers below
+    sahay_stt_providers: str = "gemini:gemini-2.5-flash,groq:whisper-large-v3"  # tried left to right, see app/agents/stt_live.py
+    sahay_stt_timeout_s: float = 20.0
+    stt_api_key: str = ""  # Cloudflare Workers AI token (used when CLOUDFLARE_API_TOKEN is empty)
+    sahay_stt_prompt: str = ""  # optional Whisper prompt, e.g. a Malayalam sentence to steer script and vocabulary
+    cloudflare_account_id: str = ""
+    cloudflare_api_token: str = ""
     llm_provider: str = ""  # "groq" (default endpoint) or any OpenAI-compatible provider with LLM_BASE_URL
     llm_api_key: str = ""  # key for the primary provider (Groq)
     llm_api_key_gemini: str = ""
@@ -31,6 +37,11 @@ class Settings(BaseSettings):
     llm_reasoning_effort: str = "low"  # for reasoning models (gpt-oss); set empty for providers that reject it
     sahay_search_mode: str = "mock"  # mock = canned hazard tips; live = Firecrawl web search
     sahay_web_search_key: str = ""
+    sahay_static_dir: str = ""  # built SPA (web/dist/client). Set in the Docker image so one origin serves app + API
+    # Production seeding without /dev/seed: when both are set and the database has no units/users, units and
+    # staff accounts are created at startup with these passwords (never the demo defaults).
+    sahay_seed_admin_password: str = ""
+    sahay_seed_service_password: str = ""
 
     @property
     def cors_origins(self) -> list[str]:
