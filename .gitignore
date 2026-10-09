@@ -56,3 +56,7 @@ htmlcov/
 .sahay-server-key
 .sahay-server-ed25519-key
 .sahay-pii-key
+
+# Web build output
+web/.output/
+web/.wrangler/

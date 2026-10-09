@@ -76,7 +76,7 @@ class FileStore(private val dir: File) : RelayStore {
             put("sources", JsonArray(r.sources.map { JsonPrimitive(it) }))
             put("delivered", r.delivered); put("received_at", r.receivedAt)
             put("receipt", r.receipt ?: JsonNull)
-            r.status?.let { put("status", buildJsonObject { put("status", it.status); put("message", it.message); put("signature", it.signature) }) }
+            r.status?.let { put("status", buildJsonObject { put("status", it.status); put("message", it.message); put("signature", it.signature); put("updated_at", it.updatedAt) }) }
             put("receipt_sent_to", JsonArray(r.receiptSentTo.map { JsonPrimitive(it) }))
             put("status_sent_to", JsonArray(r.statusSentTo.map { JsonPrimitive(it) }))
         }
@@ -90,7 +90,7 @@ class FileStore(private val dir: File) : RelayStore {
                 receipt = o["receipt"] as? JsonObject,
                 status = (o["status"] as? JsonObject)?.let {
                     Msg.Status(id, it["status"]!!.jsonPrimitive.content, it["message"]!!.jsonPrimitive.content,
-                        (it["signature"] as? JsonPrimitive)?.content ?: "")
+                        (it["signature"] as? JsonPrimitive)?.content ?: "", (it["updated_at"] as? JsonPrimitive)?.content ?: "")
                 },
                 receivedAt = o["received_at"]!!.jsonPrimitive.long,
                 receiptSentTo = set("receipt_sent_to"), statusSentTo = set("status_sent_to"),

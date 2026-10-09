@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sahay relay test</title>
+<style>
+  body { font: 15px system-ui, sans-serif; margin: 12px; background: #f6f7f8; color: #1b1f23; }
+  h1 { font-size: 18px; margin: 4px 0 10px; }
+  button { font-size: 16px; padding: 14px 10px; margin: 4px 4px 4px 0; border: 1px solid #aab; border-radius: 8px; background: #fff; }
+  #log { white-space: pre-wrap; font: 12px ui-monospace, monospace; background: #fff; border: 1px solid #ccd; border-radius: 8px; padding: 8px; margin-top: 8px; min-height: 240px; }
+</style>
+</head>
+<body>
+<h1>Sahay relay test (dev build only)</h1>
+<div id="state">loading</div>
+<div>
+  <button id="start">Start</button>
+  <button id="stop">Stop</button>
+  <button id="vector">Queue vector report</button>
+  <button id="random">Queue random report</button>
+  <button id="count">Counts</button>
+  <button id="real">Send REAL receipt+status</button>
+  <button id="forged">Send FORGED status</button>
+</div>
+<div id="log"></div>
+<script>
+  // TEST-ONLY data: contract/crypto-test-vector.json, copied here by `CAP_DEV=1 npm run build:app`.
+  const plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SahayNearby;
+  const logEl = document.getElementById('log');
+  const log = (m) => { logEl.textContent += new Date().toISOString().slice(11, 19) + ' ' + m + '\n'; };
+  const b64 = (n) => btoa(String.fromCharCode(...Array.from({ length: n }, (_, i) => (i * 7 + 3) & 255)));
+  let vector = null;
+  let deviceId = localStorage.getItem('relayDeviceId');
+  if (!deviceId) { deviceId = crypto.randomUUID(); localStorage.setItem('relayDeviceId', deviceId); }
+  document.getElementById('state').textContent = 'device ' + deviceId.slice(0, 8) + (plugin ? '' : ' (NO PLUGIN)');
+  log(plugin ? 'plugin ready' : 'SahayNearby plugin missing');
+
+  fetch('/crypto-test-vector.json').then((r) => r.json()).then((v) => { vector = v; log('vector loaded'); })
+    .catch((e) => log('vector missing: ' + e));
+
+  const run = (id, fn) => document.getElementById(id).addEventListener('click', async () => {
+    try { await fn(); } catch (e) { log(id + ' failed: ' + (e && e.message || e)); }
+  });
+
+  for (const ev of ['peerConnected', 'peerLost']) plugin.addListener(ev, (e) => log('EVENT ' + ev + ' ' + e.peerId.slice(0, 8)));
+  plugin.addListener('envelopeReceived', (e) => log('EVENT envelopeReceived ' + e.envelope.report_id.slice(0, 8) + ' hops=' + (e.envelope.hops ?? 0) + ' from ' + e.fromPeer.slice(0, 8)));
+  plugin.addListener('receiptReceived', (e) => log('EVENT receiptReceived ' + e.reportId.slice(0, 8) + ' VERIFIED'));
+  plugin.addListener('statusReceived', (e) => log('EVENT statusReceived ' + e.reportId.slice(0, 8) + ' ' + e.status + ': ' + e.message));
+
+  run('start', async () => {
+    if (!vector) throw new Error('vector not loaded yet');
+    // Real flow: serverVerifyKey comes from GET /config/server-key. Here it is the test vector verify key.
+    await plugin.start({ deviceId, mode: 'both', serverVerifyKey: vector.server.verify_key });
+    log('started');
+  });
+  run('stop', async () => { await plugin.stop(); log('stopped'); });
+  run('vector', async () => { await plugin.enqueue({ envelope: { ...vector.envelope } }); log('queued vector report ' + vector.envelope.report_id.slice(0, 8)); });
+  run('random', async () => {
+    const id = crypto.randomUUID();
+    await plugin.enqueue({ envelope: { envelope_version: 1, report_id: id, device_id: deviceId, created_at: new Date().toISOString(), ttl: 5, key_id: 'k1', ciphertext: b64(120), signature: b64(64) } });
+    log('queued random report ' + id.slice(0, 8));
+  });
+  run('count', async () => {
+    const c = await plugin.carryingCount(); const p = await plugin.pendingForUpload();
+    log('carrying ' + c.count + ', pending ' + p.envelopes.length);
+  });
+  run('real', async () => {
+    // Pretend this phone uploaded the vector report and got the genuine server receipt and status.
+    await plugin.relayReceipt({ reportId: vector.receipt.report_id, receipt: { server_time: vector.receipt.server_time, signature: vector.receipt.signature } });
+    const s = vector.status;
+    await plugin.relayStatus({ reportId: s.report_id, status: s.status, message: s.message, signature: s.signature, updatedAt: s.updated_at });
+    log('sent real receipt + status');
+  });
+  run('forged', async () => {
+    const s = vector.status;
+    await plugin.relayStatus({ reportId: s.report_id, status: 'resolved', message: 'Fake: all clear', signature: s.signature, updatedAt: '2026-10-09T11:00:00Z' });
+    log('sent forged status');
+  });
+</script>
+</body>
+</html>

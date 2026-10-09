@@ -148,7 +148,10 @@ class RelayEngine(
 
     private fun onStatus(peer: Peer, m: Msg.Status) {
         val rec = records[m.reportId] ?: return
-        if (rec.status?.status == m.status && rec.status?.message == m.message) return
+        val old = rec.status
+        if (old?.status == m.status && old.message == m.message) return
+        // A signed status carries updated_at: never let an older one replace a newer one (replay).
+        if (old != null && old.updatedAt.isNotEmpty() && m.updatedAt.isNotEmpty() && m.updatedAt <= old.updatedAt) return
         if (!statusVerifier(m)) return drop(peer)
         rec.status = m
         rec.statusSentTo.clear()
@@ -191,9 +194,9 @@ class RelayEngine(
     }
 
     @Synchronized
-    fun relayStatus(reportId: String, status: String, message: String, signature: String = "") {
+    fun relayStatus(reportId: String, status: String, message: String, signature: String = "", updatedAt: String = "") {
         val rec = records[reportId] ?: return
-        rec.status = Msg.Status(reportId, status, message, signature)
+        rec.status = Msg.Status(reportId, status, message, signature, updatedAt)
         rec.statusSentTo.clear()
         store.save(rec)
         peers.values.filter { it.ready }.forEach { flushBackChannel(it) }

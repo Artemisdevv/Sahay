@@ -24,5 +24,5 @@ adb -s <phone> install -r relay-demo/build/outputs/apk/debug/relay-demo-debug.ap
 3. Phone B: **Simulate upload + receipt**. Phone A logs `RECEIPT` and `STATUS`.
 
 ## Hardening still open
-- `RelayEngine` requires a `receiptVerifier` and a `statusVerifier` (contract section 5 rule 9). The demo app passes accept-all stubs because it fabricates receipts; the Capacitor plugin (N-01) must verify with the server Ed25519 key from `/config/server-key`.
+- `RelayEngine` requires a `receiptVerifier` and a `statusVerifier` (contract section 5 rule 9). `ServerVerifier(serverVerifyKeyB64)` implements both against the server Ed25519 key from `/config/server-key` and is tested on the frozen contract vector. The demo app still passes accept-all stubs because it fabricates receipts.
 - Foreground service so the relay survives screen-off: N-04.

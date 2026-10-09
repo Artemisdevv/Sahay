@@ -18,7 +18,9 @@ sealed class Msg {
     data class Envelope(val envelope: JsonObject) : Msg()
     data class Ack(val reportId: String) : Msg()
     data class Receipt(val reportId: String, val receipt: JsonObject) : Msg()
-    data class Status(val reportId: String, val status: String, val message: String, val signature: String = "") : Msg()
+    data class Status(
+        val reportId: String, val status: String, val message: String, val signature: String = "", val updatedAt: String = "",
+    ) : Msg()
 
     companion object {
         const val APP = "sahay"
@@ -43,7 +45,7 @@ object Codec {
             is Msg.Receipt -> buildJsonObject { put("t", "receipt"); put("report_id", msg.reportId); put("receipt", msg.receipt) }
             is Msg.Status -> buildJsonObject {
                 put("t", "status"); put("report_id", msg.reportId); put("status", msg.status); put("message", msg.message)
-                put("signature", msg.signature)
+                put("signature", msg.signature); put("updated_at", msg.updatedAt)
             }
         }
         return obj.toString().toByteArray(Charsets.UTF_8)
@@ -64,7 +66,7 @@ object Codec {
                 "envelope" -> Msg.Envelope(o["envelope"] as? JsonObject ?: return null)
                 "ack" -> Msg.Ack(o.str("report_id") ?: return null)
                 "receipt" -> Msg.Receipt(o.str("report_id") ?: return null, o["receipt"] as? JsonObject ?: return null)
-                "status" -> Msg.Status(o.str("report_id") ?: return null, o.str("status") ?: return null, o.str("message") ?: "", o.str("signature") ?: "")
+                "status" -> Msg.Status(o.str("report_id") ?: return null, o.str("status") ?: return null, o.str("message") ?: "", o.str("signature") ?: "", o.str("updated_at") ?: "")
                 else -> null
             }
         } catch (e: Exception) {

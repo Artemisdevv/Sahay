@@ -217,7 +217,7 @@ export function Shell({
             </span>
             <span>
               <Radio size={10} />
-              Aegis network v2.4.0 <span className="mx-1">·</span> Simulation only
+              Sahay network <span className="mx-1">·</span> Simulation only
             </span>
           </footer>
         </motion.main>
