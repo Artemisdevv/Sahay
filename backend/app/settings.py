@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     sahay_dev: bool = False
     sahay_database_url: str = "sqlite:///./sahay.db"
     sahay_jwt_secret: str = ""
-    sahay_cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    sahay_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
     sahay_rate_limit_per_minute: int = 120
     sahay_register_rate_limit_per_minute: int = 10
     sahay_login_rate_limit_per_minute: int = 10
