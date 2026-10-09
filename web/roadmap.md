@@ -1,0 +1,4 @@
+- [ ] Build citizen incident workflow and emergency profile.
+- [ ] Build role login, hospital/fire consoles, and orchestration dashboard.
+- [ ] Connect private profile persistence and geographic map.
+- [ ] Verify dispatch walkthrough, saved profile, and all routes.
