@@ -45,6 +45,7 @@ import {
   type ReportStatus,
 } from "@/lib/report/service";
 import type { Category } from "@/lib/report/envelope";
+import { warmLocation } from "@/lib/report/location";
 import {
   getRelayState,
   isRelayEnabled,
@@ -152,6 +153,8 @@ export function CitizenPortal() {
     return watchRelay(setRelay);
   }, []);
   const voice = useVoiceCapture();
+  // Follow the position while this screen is open so sending does not wait for a GPS fix.
+  useEffect(() => warmLocation(), []);
   const [canUseCamera, setCanUseCamera] = useState(false);
 
   // Follow the report we just sent: local queue state every 3 s, server status once it is delivered.
@@ -887,7 +890,7 @@ function Progress({
     viaRelay
       ? "Delivered through a nearby phone"
       : "Sent to the response centre",
-    "A team is on the way",
+    k === 3 ? "A team is on the way" : "A team is being arranged",
   ];
   return (
     <section className="cz-help" aria-live="polite">
