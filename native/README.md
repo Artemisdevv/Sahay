@@ -25,4 +25,20 @@ adb -s <phone> install -r relay-demo/build/outputs/apk/debug/relay-demo-debug.ap
 
 ## Hardening still open
 - `RelayEngine` requires a `receiptVerifier` and a `statusVerifier` (contract section 5 rule 9). `ServerVerifier(serverVerifyKeyB64)` implements both against the server Ed25519 key from `/config/server-key` and is tested on the frozen contract vector. The demo app still passes accept-all stubs because it fabricates receipts.
-- Foreground service so the relay survives screen-off: N-04.
+
+## Foreground service (N-04)
+`web/android/.../RelayForegroundService.kt`, started by `SahayNearby.start()` and stopped by `stop()` or the **Stop** action in its notification.
+- Type `connectedDevice` (Android 14+ requires a type). Manifest: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE`, `POST_NOTIFICATIONS`, `WAKE_LOCK`. Android only lets this type start when the app holds a Bluetooth / Nearby Wi-Fi runtime permission, which `start()` requests first.
+- The relay state (engine, transport) lives in a process-wide `RelaySession`, not in the plugin, so pressing Back (Activity destroyed) does not stop the relay. Events that arrive while no UI is attached stay in the store and come out through `pendingForUpload()`.
+- A partial wake lock (max 6 h, renewed on each `start()`) keeps the CPU awake for Nearby with the screen off.
+- Notification permission (Android 13+) is asked once, together with the radio permissions, and is not required: the service runs without a visible notification if the user denies it.
+- `START_NOT_STICKY`: if the system kills the process the relay is not silently restarted; the app starts it again from the UI.
+
+### Measured battery drain: NOT YET MEASURED
+To fill in on both test phones (screen off, relay on, no peers): `adb shell dumpsys batterystats --reset`, wait 60 min, then `adb shell dumpsys batterystats | grep -A5 in.sahay.app`. Record %/h here.
+
+### OEM battery settings for the demo
+Do these on every demo phone, otherwise the service can be frozen with the screen off:
+- **Vivo / iQOO (Funtouch / OriginOS):** Settings > Battery > Background power consumption management > Sahay > Allow high background power consumption; Recent apps > lock Sahay; Settings > Apps > Autostart > Sahay on.
+- **Motorola:** Settings > Apps > Sahay > Battery > Unrestricted (not Optimized).
+- **All:** keep Bluetooth, Location and (for Nearby) Wi-Fi switched on; Wi-Fi does not need to be connected to a network.
