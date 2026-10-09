@@ -42,7 +42,7 @@ class Agents:
 
 
 def default_agents() -> Agents:
-    return Agents(build_llm(settings.sahay_llm_mode), build_transcriber(settings.sahay_stt_mode), build_search("mock"))
+    return Agents(build_llm(settings.sahay_llm_mode), build_transcriber(settings.sahay_stt_mode), build_search(settings.sahay_search_mode))
 
 
 @dataclass

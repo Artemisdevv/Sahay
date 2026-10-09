@@ -101,7 +101,11 @@ def test_triage_urgency_capped_at_one():
 
 # ---- seams --------------------------------------------------------------------
 
-def test_builders_and_mock_seams():
+def test_builders_and_mock_seams(monkeypatch):
+    from app.settings import settings
+
+    monkeypatch.setattr(settings, "llm_api_key", "")  # live builders need keys; do not depend on backend/.env
+    monkeypatch.setattr(settings, "sahay_web_search_key", "")
     assert isinstance(build_llm("mock"), MockLLM)
     assert isinstance(build_transcriber("mock"), MockTranscriber)
     assert isinstance(build_search("mock"), MockSearch)

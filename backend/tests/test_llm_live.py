@@ -152,3 +152,38 @@ def test_pipeline_survives_the_network_going_away(db):  # noqa: F811
     intake_trace = [t for t in traces(db, res.incident) if t.step == "intake"][0]
     assert intake_trace.output["fallback"] is True
     assert "9876543210" not in res.incident.summary_redacted
+
+
+# ---- Firecrawl search adapter ------------------------------------------------------------------
+
+def test_firecrawl_search_builds_a_pii_free_query_and_caps_the_result():
+    from app.agents.search import FirecrawlSearch, build_search
+
+    seen = {}
+
+    def handler(request):
+        seen["auth"] = request.headers["authorization"]
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"success": True, "data": {"web": [
+            {"title": "LPG leak safety", "description": "Evacuate and avoid ignition. " * 20},
+            {"title": "Second", "description": "More"}, {"title": "Third", "description": "ignored"}]}})
+
+    s = FirecrawlSearch("fc-test", client=httpx.Client(transport=httpx.MockTransport(handler)))
+    out = s.lookup("gas   smoke traffic")
+    assert seen["auth"] == "Bearer fc-test"
+    assert seen["body"] == {"query": "gas smoke emergency response safety guidance", "limit": 3}
+    assert s.lookup("traffic weapon") is None  # not a searchable hazard: no request
+    assert out.startswith("LPG leak safety: Evacuate") and len(out) <= 300 and "Third" not in out
+    assert s.lookup("   ") is None
+    with pytest.raises(RuntimeError, match="SAHAY_WEB_SEARCH_KEY"):
+        FirecrawlSearch("")
+    with pytest.raises(RuntimeError):
+        build_search("nope")
+
+
+def test_firecrawl_http_error_propagates_so_the_pipeline_can_ignore_it():
+    from app.agents.search import FirecrawlSearch
+
+    s = FirecrawlSearch("k", client=httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(402))))
+    with pytest.raises(httpx.HTTPStatusError):
+        s.lookup("gas")

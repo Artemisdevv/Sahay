@@ -118,7 +118,7 @@ class LiveLLM:
             "model": self._model,
             "messages": messages,
             "temperature": 0,
-            "max_tokens": 700,
+            "max_tokens": 2000,
             "response_format": {"type": "json_object"},
         }
         try:
