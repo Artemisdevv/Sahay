@@ -5,15 +5,34 @@ import { AlertTriangle, Loader2, MapPin, X } from "lucide-react";
 import {
   getIncidents,
   getPublicIncidents,
+  getPublicUnits,
   getUnits,
   type IncidentSummary,
   type PublicIncident,
+  type PublicUnit,
   type Unit,
 } from "@/lib/api";
 import { getSession } from "@/lib/session";
 import { useDispatchWS, type WSEvent } from "@/hooks/use-dispatch-ws";
 
 type MapRole = "admin" | "service" | "civilian" | "public";
+
+type MapUnit = {
+  unit_id: string;
+  name: string;
+  service_type: Unit["service_type"];
+  status: string;
+  location: { lat: number; lng: number };
+  incident_id?: string | null;
+  eta_seconds?: number | null;
+  eta_minutes?: number | null;
+};
+
+type UnitLayers = {
+  marker: L.Marker;
+  route: L.Polyline | null;
+  frame: number | null;
+};
 
 const PUBLIC_SEVERITY = { low: 2, medium: 3, high: 4, critical: 5 } as const;
 
@@ -38,6 +57,63 @@ function fromPublic(item: PublicIncident): IncidentSummary {
   };
 }
 
+function fromPublicUnit(item: PublicUnit): MapUnit {
+  return {
+    unit_id: item.id,
+    name: `${item.service_type} response unit`,
+    service_type: item.service_type,
+    status: item.status,
+    location: item.location,
+    incident_id: item.incident,
+    eta_minutes: item.eta_minutes,
+  };
+}
+
+function isMovingStatus(status: string): boolean {
+  const normalized = status.toLowerCase().replaceAll("_", " ");
+  return normalized.includes("en route") || normalized.includes("on the way");
+}
+
+function isArrivedStatus(status: string): boolean {
+  return status.toLowerCase().replaceAll("_", " ").includes("on scene");
+}
+
+function etaChip(unit: MapUnit): string {
+  if (isArrivedStatus(unit.status)) return "On scene";
+  const etaSeconds =
+    unit.eta_seconds ??
+    (unit.eta_minutes === null || unit.eta_minutes === undefined
+      ? null
+      : unit.eta_minutes * 60);
+  if (etaSeconds !== null && Number.isFinite(etaSeconds))
+    return etaSeconds <= 0 ? "On scene" : `~${Math.ceil(etaSeconds / 60)} min`;
+  return isMovingStatus(unit.status) ? "En route" : "Assigned";
+}
+
+function unitIcon(unit: MapUnit): L.DivIcon {
+  const abbreviation = {
+    ambulance: "A",
+    police: "P",
+    fire: "F",
+    municipal: "M",
+  }[unit.service_type];
+  return L.divIcon({
+    className: `unit-marker unit-${unit.service_type}${isArrivedStatus(unit.status) ? " is-arrived" : ""}`,
+    html: `<span aria-hidden="true">${abbreviation}</span>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  });
+}
+
+function unitColor(serviceType: Unit["service_type"]): string {
+  return {
+    ambulance: "#3b82f6",
+    police: "#818cf8",
+    fire: "#f97316",
+    municipal: "#2dd4bf",
+  }[serviceType];
+}
+
 export function IncidentMap({
   role,
   className = "",
@@ -55,13 +131,12 @@ export function IncidentMap({
   const map = useRef<L.Map | null>(null);
   const incidentMarkers = useRef<L.LayerGroup | null>(null);
   const unitMarkers = useRef<L.LayerGroup | null>(null);
+  const unitLayers = useRef(new Map<string, UnitLayers>());
   const fitted = useRef(false);
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
+  const [units, setUnits] = useState<MapUnit[]>([]);
   const [selected, setSelected] = useState<IncidentSummary | null>(null);
-  const [loadingState, setLoading] = useState(
-    role !== "civilian" && role !== "public" && !incidentData,
-  );
+  const [loadingState, setLoading] = useState(!incidentData);
   const [error, setError] = useState<string | null>(null);
   const loading = loadingOverride ?? loadingState;
   const visibleError = errorOverride ?? error;
@@ -75,7 +150,15 @@ export function IncidentMap({
               ? {
                   ...unit,
                   location: event.data.location,
-                  status: event.data.status as Unit["status"],
+                  name: event.data.name ?? unit.name,
+                  service_type: event.data.service_type ?? unit.service_type,
+                  ...(event.data.incident_id === undefined
+                    ? {}
+                    : { incident_id: event.data.incident_id }),
+                  ...(event.data.eta_seconds === undefined
+                    ? {}
+                    : { eta_seconds: event.data.eta_seconds }),
+                  status: event.data.status,
                 }
               : unit,
           ),
@@ -103,28 +186,42 @@ export function IncidentMap({
   );
   useDispatchWS(onEvent);
 
-  // Open map: poll the public feed every 10 s. No login, no websocket.
+  // Public and civilian maps consume only the coarse, non-identifying feeds.
   useEffect(() => {
-    if (role !== "public") return;
+    if (role !== "public" && role !== "civilian") return;
     let active = true;
-    const load = () =>
-      getPublicIncidents()
-        .then((result) => {
-          if (!active) return;
-          setIncidents(result.incidents.map(fromPublic));
-          setError(null);
-        })
-        .catch(() => {
-          if (active) setError("The map could not be refreshed. Retrying.");
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
+    let timer: number | null = null;
+    const load = async () => {
+      try {
+        const [incidentResult, unitResult] = await Promise.all([
+          getPublicIncidents(),
+          getPublicUnits().catch(() => null),
+        ]);
+        if (!active) return;
+        setIncidents(incidentResult.incidents.map(fromPublic));
+        const nextUnits = unitResult?.units.map(fromPublicUnit) ?? [];
+        setUnits(nextUnits);
+        setError(
+          unitResult
+            ? null
+            : "Response unit locations are temporarily unavailable.",
+        );
+        timer = window.setTimeout(
+          () => void load(),
+          nextUnits.some((unit) => isMovingStatus(unit.status)) ? 3000 : 10_000,
+        );
+      } catch {
+        if (!active) return;
+        setError("The map could not be refreshed. Retrying.");
+        timer = window.setTimeout(() => void load(), 10_000);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
     void load();
-    const timer = window.setInterval(() => void load(), 10_000);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      if (timer !== null) window.clearTimeout(timer);
     };
   }, [role]);
 
@@ -148,7 +245,7 @@ export function IncidentMap({
       .then(([incidentData, unitData]) => {
         if (!active) return;
         setIncidents(incidentData.incidents);
-        setUnits(unitData.units);
+        setUnits(unitData.units.map((unit) => ({ ...unit })));
         setError(null);
       })
       .catch((loadError: unknown) => {
@@ -188,6 +285,10 @@ export function IncidentMap({
     unitMarkers.current = L.layerGroup().addTo(instance);
     map.current = instance;
     return () => {
+      unitLayers.current.forEach(({ frame }) => {
+        if (frame !== null) window.cancelAnimationFrame(frame);
+      });
+      unitLayers.current.clear();
       instance.remove();
       map.current = null;
     };
@@ -221,7 +322,7 @@ export function IncidentMap({
     // Open map: show wherever the incidents are, not only the default Kochi view.
     // Only once, so the 10 s refresh does not fight the user panning the map.
     if (
-      role === "public" &&
+      (role === "public" || role === "civilian") &&
       points.length > 0 &&
       map.current &&
       !fitted.current
@@ -237,25 +338,111 @@ export function IncidentMap({
   useEffect(() => {
     const group = unitMarkers.current;
     if (!group) return;
-    group.clearLayers();
+    const activeIds = new Set<string>();
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     units.forEach((unit) => {
       if (
         !Number.isFinite(unit.location?.lat) ||
         !Number.isFinite(unit.location?.lng)
       )
         return;
-      L.marker([unit.location.lat, unit.location.lng], {
-        icon: L.divIcon({
-          className: `unit-marker unit-${unit.service_type}`,
-          html: "<span></span>",
-          iconSize: [22, 22],
-          iconAnchor: [11, 11],
-        }),
-        title: `${unit.name} · ${unit.status}`,
-        alt: `${unit.name} · ${unit.status}`,
-      }).addTo(group);
+      activeIds.add(unit.unit_id);
+      const destination = L.latLng(unit.location.lat, unit.location.lng);
+      const incident = incidents.find(
+        (item) => item.incident_id === unit.incident_id,
+      );
+      const incidentPoint = incident
+        ? L.latLng(incident.location.lat, incident.location.lng)
+        : null;
+      let layers = unitLayers.current.get(unit.unit_id);
+      if (!layers) {
+        const marker = L.marker(destination, {
+          icon: unitIcon(unit),
+          title: `${unit.name} · ${unit.status}`,
+          alt: `${unit.service_type} response unit · ${unit.status}`,
+        })
+          .bindTooltip(etaChip(unit), {
+            permanent: true,
+            direction: "right",
+            offset: [10, 0],
+            opacity: 1,
+            className: `unit-eta-chip unit-eta-${unit.service_type}`,
+          })
+          .addTo(group);
+        const route = incidentPoint
+          ? L.polyline([destination, incidentPoint], {
+              color: unitColor(unit.service_type),
+              weight: 3,
+              opacity: 0.72,
+              dashArray: "7 7",
+              className: "response-route",
+            }).addTo(group)
+          : null;
+        layers = { marker, route, frame: null };
+        unitLayers.current.set(unit.unit_id, layers);
+        return;
+      }
+
+      const start = layers.marker.getLatLng();
+      if (layers.frame !== null) window.cancelAnimationFrame(layers.frame);
+      layers.marker.setIcon(unitIcon(unit));
+      layers.marker.options.title = `${unit.name} · ${unit.status}`;
+      layers.marker.setTooltipContent(etaChip(unit));
+      if (incidentPoint) {
+        if (layers.route) {
+          layers.route.setStyle({ color: unitColor(unit.service_type) });
+        } else {
+          layers.route = L.polyline([start, incidentPoint], {
+            color: unitColor(unit.service_type),
+            weight: 3,
+            opacity: 0.72,
+            dashArray: "7 7",
+            className: "response-route",
+          }).addTo(group);
+        }
+      } else if (layers.route) {
+        group.removeLayer(layers.route);
+        layers.route = null;
+      }
+
+      if (reducedMotion) {
+        layers.marker.setLatLng(destination);
+        if (layers.route && incidentPoint)
+          layers.route.setLatLngs([destination, incidentPoint]);
+        layers.frame = null;
+        return;
+      }
+
+      const startedAt = performance.now();
+      const duration = role === "public" || role === "civilian" ? 2800 : 950;
+      const step = (now: number) => {
+        const progress = Math.min(1, (now - startedAt) / duration);
+        const eased = 1 - (1 - progress) ** 3;
+        const position = L.latLng(
+          start.lat + (destination.lat - start.lat) * eased,
+          start.lng + (destination.lng - start.lng) * eased,
+        );
+        layers!.marker.setLatLng(position);
+        if (layers!.route && incidentPoint)
+          layers!.route.setLatLngs([position, incidentPoint]);
+        if (progress < 1) {
+          layers!.frame = window.requestAnimationFrame(step);
+        } else {
+          layers!.frame = null;
+        }
+      };
+      layers.frame = window.requestAnimationFrame(step);
     });
-  }, [units]);
+    unitLayers.current.forEach((layers, id) => {
+      if (activeIds.has(id)) return;
+      if (layers.frame !== null) window.cancelAnimationFrame(layers.frame);
+      group.removeLayer(layers.marker);
+      if (layers.route) group.removeLayer(layers.route);
+      unitLayers.current.delete(id);
+    });
+  }, [units, incidents]);
 
   return (
     <div className={`incident-map ${className}`}>
@@ -276,24 +463,15 @@ export function IncidentMap({
           <AlertTriangle size={16} /> {visibleError}
         </div>
       )}
-      {!loading &&
-        !visibleError &&
-        incidents.length === 0 &&
-        role !== "civilian" && (
-          <div className="map-state">
-            <MapPin size={15} />{" "}
-            {role === "public"
-              ? "No confirmed incidents right now."
-              : "No incidents available in this view."}
-          </div>
-        )}
-      {role === "civilian" && (
+      {!loading && !visibleError && incidents.length === 0 && (
         <div className="map-state">
-          <MapPin size={15} /> Shared incident locations aren’t available for
-          civilian accounts.
+          <MapPin size={15} />{" "}
+          {role === "public" || role === "civilian"
+            ? "No confirmed incidents right now."
+            : "No incidents available in this view."}
         </div>
       )}
-      {selected && role === "public" && (
+      {selected && (role === "public" || role === "civilian") && (
         <aside className="incident-map-detail" aria-label="Incident details">
           <button
             type="button"
@@ -318,12 +496,10 @@ export function IncidentMap({
               ]
             }
           </small>
-          <small>
-            The marker shows the area (about 1 km), not the exact spot.
-          </small>
+          <small>The marker shows an approximate area.</small>
         </aside>
       )}
-      {selected && role !== "public" && (
+      {selected && role !== "public" && role !== "civilian" && (
         <aside className="incident-map-detail" aria-label="Incident details">
           <button
             type="button"
@@ -351,9 +527,24 @@ export function IncidentMap({
         <span>
           <i className="legend-incident" /> Incidents
         </span>
-        {role === "admin" && (
+        {role !== "service" && (
           <span>
-            <i className="legend-unit" /> Units
+            <i className="legend-ambulance" /> Ambulance
+          </span>
+        )}
+        {role !== "service" && (
+          <span>
+            <i className="legend-police" /> Police
+          </span>
+        )}
+        {role !== "service" && (
+          <span>
+            <i className="legend-fire" /> Fire
+          </span>
+        )}
+        {role !== "service" && (
+          <span>
+            <i className="legend-municipal" /> Municipal
           </span>
         )}
       </div>

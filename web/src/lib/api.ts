@@ -221,6 +221,25 @@ export async function getPublicIncidents(): Promise<{
   return request("/public/incidents");
 }
 
+export interface PublicUnit {
+  id: string;
+  service_type: Unit["service_type"];
+  status: string;
+  location: { lat: number; lng: number };
+  /** Opaque shared identifier matching `PublicIncident.id`. */
+  incident: string;
+  eta_minutes: number | null;
+}
+
+export async function getPublicUnits(): Promise<{
+  units: PublicUnit[];
+  generated_at: string;
+}> {
+  return request<{ units: PublicUnit[]; generated_at: string }>(
+    "/public/units",
+  );
+}
+
 export { API_BASE };
 
 /**
