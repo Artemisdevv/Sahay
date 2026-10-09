@@ -133,8 +133,8 @@ def test_admin_websocket_gets_dispatch_and_incident_events():
     token = admin["Authorization"].split()[1]
     with client.websocket_connect(f"/ws/v1?token={token}") as ws:
         client.post(f"/api/v1/incidents/{iid}/approve", headers=admin)
-        seen = {ws.receive_json()["type"], ws.receive_json()["type"]}
-    assert seen == {"dispatch.updated", "incident.updated"}
+        seen = {ws.receive_json()["type"] for _ in range(3)}
+    assert seen == {"dispatch.updated", "dispatch.called", "incident.updated"}
 
 
 def test_service_websocket_does_not_get_proposed_dispatch_updates():

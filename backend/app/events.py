@@ -12,10 +12,13 @@ ADMIN_EVENTS = {
     "dispatch.proposed",
     "dispatch.updated",
     "unit.moved",
+    "dispatch.called",
     "agent.trace",
     "audit.appended",
 }
-SERVICE_EVENTS = {"incident.updated", "dispatch.updated"}
+# unit.moved and dispatch.called reach a unit only when it is in the sender-supplied service_unit_ids (own unit and
+# the other units on the same incident; the candidate list it appears in). See app/live.py.
+SERVICE_EVENTS = {"incident.updated", "dispatch.updated", "unit.moved", "dispatch.called"}
 CIVILIAN_EVENTS = {"report.status"}
 SERVICE_INCIDENT_FIELDS = {
     "incident_id",

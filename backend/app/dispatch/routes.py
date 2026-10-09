@@ -63,6 +63,10 @@ async def broadcast(db: Session, out: engine.Outcome, incident_json: Callable) -
     """Push what an engine Outcome changed to admins, the affected unit(s) and the reporting civilian(s)."""
     for d in out.dispatches:
         await manager.publish("dispatch.updated", dispatch_json(d))
+    if out.dispatches:
+        from app.live import publish_called  # late import: live.py imports this module
+
+        await publish_called(db, out.dispatches)
     if out.incident is not None:
         unit_ids = {
             u for (u,) in db.execute(
