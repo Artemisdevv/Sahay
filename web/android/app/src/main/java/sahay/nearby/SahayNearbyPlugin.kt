@@ -37,12 +37,20 @@ import java.io.File
             Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN,
         ]),
         Permission(alias = "wifi", strings = [Manifest.permission.NEARBY_WIFI_DEVICES]),
+        Permission(alias = "notifications", strings = [Manifest.permission.POST_NOTIFICATIONS]),
     ],
 )
 class SahayNearbyPlugin : Plugin(), RelayListener {
-    private var engine: RelayEngine? = null
-    private var transport: NearbyTransport? = null
-    private var startedAs: String? = null
+    // The relay outlives this plugin: with the foreground service running it must keep working after the Activity
+    // (and so this plugin instance) is destroyed, e.g. the user presses Back. State lives in [RelaySession].
+    private val engine get() = RelaySession.engine
+    private val transport get() = RelaySession.transport
+    private val startedAs get() = RelaySession.startedAs
+
+    override fun load() {
+        RelaySession.sink = this
+        RelayForegroundService.onStopRequested = { stopRelay() }
+    }
 
     // ---- lifecycle ------------------------------------------------------------------------------
 
@@ -54,8 +62,10 @@ class SahayNearbyPlugin : Plugin(), RelayListener {
             return call.reject("deviceId and serverVerifyKey (ed25519_public_key from /config/server-key) are required")
         }
         val missing = requiredAliases().filter { getPermissionState(it) != PermissionState.GRANTED }
-        if (missing.isNotEmpty()) {
-            requestPermissionForAliases(missing.toTypedArray(), call, "permissionsResult")
+        // Notifications are asked in the same dialog round but never required (see notificationsToAsk).
+        val ask = missing + notificationsToAsk()
+        if (ask.isNotEmpty()) {
+            requestPermissionForAliases(ask.toTypedArray(), call, "permissionsResult")
             return
         }
         startRelay(call)
@@ -83,15 +93,16 @@ class SahayNearbyPlugin : Plugin(), RelayListener {
                     return@synchronized
                 }
                 transport?.stop()
-                val t = NearbyTransport(context, deviceId)
+                val t = NearbyTransport(context.applicationContext, deviceId)
                 val e = RelayEngine(
-                    deviceId, t, FileStore(File(context.filesDir, "relay")), this,
+                    deviceId, t, FileStore(File(context.filesDir, "relay")), RelaySession.forwarder,
                     receiptVerifier = verifier::receipt, statusVerifier = verifier::status,
                 )
                 t.engine = e
                 t.start(mode)
-                transport = t; engine = e; startedAs = deviceId
+                RelaySession.transport = t; RelaySession.engine = e; RelaySession.startedAs = deviceId
             }
+            startService()
             call.resolve()
         } catch (e: Exception) {
             call.reject(e.message ?: "could not start relay")
@@ -100,12 +111,27 @@ class SahayNearbyPlugin : Plugin(), RelayListener {
 
     @PluginMethod
     fun stop(call: PluginCall) {
-        synchronized(this) { transport?.stop(); transport = null; engine = null; startedAs = null }
+        stopRelay()
         call.resolve()
     }
 
+    private fun stopRelay() {
+        synchronized(RelaySession) { RelaySession.reset() }
+        RelayForegroundService.stop(context.applicationContext)
+    }
+
+    /** Foreground service keeps the relay alive with the screen off. A refusal (e.g. notifications blocked) must not kill the relay. */
+    private fun startService() {
+        try {
+            RelayForegroundService.start(context.applicationContext)
+        } catch (e: Exception) {
+            android.util.Log.w("SahayNearby", "foreground service not started: ${e.message}")
+        }
+    }
+
     override fun handleOnDestroy() {
-        transport?.stop()
+        // Do NOT stop the transport: the foreground service exists so the relay keeps running without the UI.
+        if (RelaySession.sink === this) RelaySession.sink = null
         super.handleOnDestroy()
     }
 
@@ -184,5 +210,37 @@ class SahayNearbyPlugin : Plugin(), RelayListener {
         add("location")
         if (Build.VERSION.SDK_INT >= 31) add("bluetooth")
         if (Build.VERSION.SDK_INT >= 33) add("wifi")
+    }
+
+    /**
+     * Android 13+: the relay notification is hidden until POST_NOTIFICATIONS is granted. The service still runs without it,
+     * so it is asked once (state PROMPT) and a denial never blocks start().
+     */
+    private fun notificationsToAsk(): List<String> {
+        if (Build.VERSION.SDK_INT < 33) return emptyList()
+        val state = getPermissionState("notifications")
+        return if (state == PermissionState.PROMPT || state == PermissionState.PROMPT_WITH_RATIONALE) listOf("notifications") else emptyList()
+    }
+}
+
+/** Process-wide relay state, shared by the plugin and the foreground service lifetime. */
+private object RelaySession {
+    @Volatile var engine: RelayEngine? = null
+    @Volatile var transport: NearbyTransport? = null
+    @Volatile var startedAs: String? = null
+
+    /** Receives engine events; null while no UI is attached (reports stay in the store, see pendingForUpload). */
+    @Volatile var sink: RelayListener? = null
+
+    val forwarder = object : RelayListener {
+        override fun onPeerConnected(deviceId: String) { sink?.onPeerConnected(deviceId) }
+        override fun onPeerLost(deviceId: String) { sink?.onPeerLost(deviceId) }
+        override fun onEnvelopeReceived(envelope: JsonObject, fromPeer: String) { sink?.onEnvelopeReceived(envelope, fromPeer) }
+        override fun onReceipt(reportId: String, receipt: JsonObject) { sink?.onReceipt(reportId, receipt) }
+        override fun onStatus(reportId: String, status: String, message: String) { sink?.onStatus(reportId, status, message) }
+    }
+
+    fun reset() {
+        transport?.stop(); transport = null; engine = null; startedAs = null
     }
 }
