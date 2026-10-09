@@ -114,8 +114,17 @@ export interface IncidentSummary {
   status: string;
   incident_type: string;
   severity: number;
+  urgency_score: number;
+  location: { lat: number; lng: number };
   summary_redacted: string;
+  people_count: number;
+  hazards: string[];
+  needed_services: string[];
+  report_count: number;
+  report_ids: string[];
+  reason: string;
   created_at: string;
+  updated_at: string;
 }
 
 export async function getIncidents(
@@ -126,6 +135,19 @@ export async function getIncidents(
     {},
     token,
   );
+}
+
+export interface Unit {
+  unit_id: string;
+  service_type: "ambulance" | "police" | "fire" | "municipal";
+  name: string;
+  status: "available" | "assigned" | "en_route" | "on_scene" | "offline";
+  location: { lat: number; lng: number };
+  updated_at: string;
+}
+
+export async function getUnits(token: string): Promise<{ units: Unit[] }> {
+  return request<{ units: Unit[] }>("/units", {}, token);
 }
 
 export interface IncidentPii {
