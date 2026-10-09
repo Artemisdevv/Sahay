@@ -117,3 +117,12 @@ class Report(Base):
     receipt_signature: Mapped[str] = mapped_column(String(128))
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class IncidentPrivate(Base):
+    """PII for an incident, sealed (X25519 sealed box) to the server key. Read only through a logged reveal."""
+
+    __tablename__ = "incident_private"
+    incident_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    sealed: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)

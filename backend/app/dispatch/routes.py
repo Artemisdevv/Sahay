@@ -59,6 +59,34 @@ def dispatch_json(d: Dispatch) -> dict:
     }
 
 
+async def broadcast(db: Session, out: engine.Outcome, incident_json: Callable) -> None:
+    """Push what an engine Outcome changed to admins, the affected unit(s) and the reporting civilian(s)."""
+    for d in out.dispatches:
+        await manager.publish("dispatch.updated", dispatch_json(d))
+    if out.incident is not None:
+        unit_ids = {
+            u for (u,) in db.execute(
+                select(Dispatch.unit_id).where(
+                    Dispatch.incident_id == out.incident.incident_id, Dispatch.status.in_(engine.OCCUPYING)
+                )
+            )
+        }
+        await manager.publish("incident.updated", incident_json(out.incident), service_unit_ids=unit_ids)
+    for r in out.reports:
+        eta = None
+        etas = [d.eta_minutes for d in out.dispatches if d.status in ("approved", "accepted", "en_route")]
+        if etas:
+            eta = min(etas)
+        msg = STATUS_MESSAGES.get(r.status, r.status)
+        if r.status == "dispatched" and eta is not None:
+            msg = f"Help dispatched, ETA {eta} min"
+        await manager.publish(
+            "report.status",
+            {"report_id": r.report_id, "status": r.status, "eta_minutes": eta, "message": msg},
+            civilian_device_id=r.device_id,
+        )
+
+
 def install(app: FastAPI, current_user: Callable, require_admin: Callable, incident_json: Callable) -> None:
     @app.exception_handler(engine.DispatchError)
     async def _dispatch_error(_: Request, exc: engine.DispatchError):
@@ -81,32 +109,6 @@ def install(app: FastAPI, current_user: Callable, require_admin: Callable, incid
     def service_actor(user: dict) -> dict:
         return {"type": "service", "id": user["unit_id"]}
 
-    async def broadcast(db: Session, out: engine.Outcome, *, proposed_new: bool = False) -> None:
-        for d in out.dispatches:
-            await manager.publish("dispatch.updated", dispatch_json(d))
-        if out.incident is not None:
-            unit_ids = {
-                u for (u,) in db.execute(
-                    select(Dispatch.unit_id).where(
-                        Dispatch.incident_id == out.incident.incident_id, Dispatch.status.in_(engine.OCCUPYING)
-                    )
-                )
-            }
-            await manager.publish("incident.updated", incident_json(out.incident), service_unit_ids=unit_ids)
-        for r in out.reports:
-            eta = None
-            etas = [d.eta_minutes for d in out.dispatches if d.status in ("approved", "accepted", "en_route")]
-            if etas:
-                eta = min(etas)
-            msg = STATUS_MESSAGES.get(r.status, r.status)
-            if r.status == "dispatched" and eta is not None:
-                msg = f"Help dispatched, ETA {eta} min"
-            await manager.publish(
-                "report.status",
-                {"report_id": r.report_id, "status": r.status, "eta_minutes": eta, "message": msg},
-                civilian_device_id=r.device_id,
-            )
-
     def result(out: engine.Outcome) -> dict:
         return {
             "incident": incident_json(out.incident),
@@ -119,19 +121,19 @@ def install(app: FastAPI, current_user: Callable, require_admin: Callable, incid
     @router.post("/incidents/{incident_id}/approve")
     async def approve(incident_id: str, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
         out = engine.approve_incident(db, incident_id, admin_actor(user))
-        await broadcast(db, out)
+        await broadcast(db, out, incident_json)
         return result(out)
 
     @router.post("/incidents/{incident_id}/reject")
     async def reject(incident_id: str, body: RejectBody, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
         out = engine.reject_incident(db, incident_id, admin_actor(user), body.reason)
-        await broadcast(db, out)
+        await broadcast(db, out, incident_json)
         return result(out)
 
     @router.post("/incidents/{incident_id}/reassign")
     async def reassign(incident_id: str, body: ReassignBody, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
         out = engine.reassign(db, incident_id, admin_actor(user), body.needed_service, body.unit_id)
-        await broadcast(db, out)
+        await broadcast(db, out, incident_json)
         return result(out)
 
     # ---- service -----------------------------------------------------------
@@ -148,20 +150,20 @@ def install(app: FastAPI, current_user: Callable, require_admin: Callable, incid
     @router.post("/dispatches/{dispatch_id}/accept")
     async def accept(dispatch_id: str, user: dict = Depends(service), db: Session = Depends(get_db)):
         out = engine.accept(db, dispatch_id, user["unit_id"], service_actor(user))
-        await broadcast(db, out)
+        await broadcast(db, out, incident_json)
         return dispatch_json(out.dispatches[0])
 
     @router.post("/dispatches/{dispatch_id}/decline")
     async def decline(dispatch_id: str, body: DeclineBody, user: dict = Depends(service), db: Session = Depends(get_db)):
         out = engine.decline(db, dispatch_id, user["unit_id"], service_actor(user), body.reason)
-        await broadcast(db, out)
+        await broadcast(db, out, incident_json)
         return {"declined": dispatch_json(out.dispatches[0]),
                 "replacement": dispatch_json(out.dispatches[1]) if len(out.dispatches) > 1 else None}
 
     @router.post("/dispatches/{dispatch_id}/status")
     async def progress(dispatch_id: str, body: StatusBody, user: dict = Depends(service), db: Session = Depends(get_db)):
         out = engine.set_progress(db, dispatch_id, user["unit_id"], service_actor(user), body.status)
-        await broadcast(db, out)
+        await broadcast(db, out, incident_json)
         return dispatch_json(out.dispatches[0])
 
     app.include_router(router)
