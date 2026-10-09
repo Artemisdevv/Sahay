@@ -83,6 +83,18 @@ def _dispatch_json(dispatch: Dispatch, iso: Callable[[datetime], str]) -> dict:
     }
 
 
+def _calls_json(dispatch: Dispatch, iso: Callable[[datetime], str]) -> dict:
+    return {
+        "dispatch_id": dispatch.dispatch_id,
+        "service_type": dispatch.service_type,
+        "status": dispatch.status,
+        "distance_km": dispatch.distance_km,
+        "eta_minutes": dispatch.eta_minutes,
+        "created_at": iso(dispatch.created_at),
+        "updated_at": iso(dispatch.updated_at),
+    }
+
+
 def install(
     app: FastAPI,
     current_user: Callable,
@@ -163,6 +175,22 @@ def install(
         result = _for_role(incident_json(incident), user["role"])
         result["dispatches"] = [_dispatch_json(dispatch, utc_iso) for dispatch in dispatches]
         return result
+
+    @router.get("/incidents/{incident_id}/calls")
+    def get_incident_calls(
+        incident_id: str,
+        user: dict = Depends(incident_reader),
+        db: Session = Depends(get_db),
+    ):
+        incident = require_visible(incident_id, user, db)
+        dispatch_query = select(Dispatch).where(Dispatch.incident_id == incident_id)
+        if user["role"] == "service":
+            dispatch_query = dispatch_query.where(
+                Dispatch.unit_id == user["unit_id"],
+                Dispatch.status.in_(SERVICE_VISIBLE_DISPATCH_STATUSES),
+            )
+        dispatches = db.scalars(dispatch_query.order_by(Dispatch.created_at, Dispatch.dispatch_id)).all()
+        return {"incident_id": incident_id, "calls": [_calls_json(dispatch, utc_iso) for dispatch in dispatches]}
 
     @router.get("/incidents/{incident_id}/trace")
     def get_incident_trace(

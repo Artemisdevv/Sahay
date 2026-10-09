@@ -248,3 +248,102 @@ def test_pii_ciphertext_cannot_be_tampered_with_or_moved_between_fields():
         assert False, "ciphertext should be bound to its field context"
     except RuntimeError as exc:
         assert "context" in str(exc)
+
+
+def test_public_units_endpoint_is_public_and_fuzzed():
+    client.post("/api/v1/dev/seed")
+    r = client.get("/api/v1/public/units")
+    assert r.status_code == 200
+    data = r.json()
+    assert "units" in data
+    assert len(data["units"]) == 6
+    for unit in data["units"]:
+        assert set(unit.keys()) == {"service_type", "name", "status", "location", "updated_at"}
+        assert "unit_id" not in unit
+        assert "lat" not in unit and "lng" not in unit
+        loc = unit["location"]
+        assert "lat" in loc and "lng" in loc
+        # Coordinates should be fuzzed (different from exact seed coordinates)
+        # Original seed lat/lng are 9.9816, 76.2999 for Ambulance 01 etc.
+        # Fuzzing is +/- 0.01, so values should differ from exact seeds
+        assert isinstance(loc["lat"], float) and isinstance(loc["lng"], float)
+
+
+def test_public_units_no_auth_required():
+    client.post("/api/v1/dev/seed")
+    r = client.get("/api/v1/public/units")
+    assert r.status_code == 200
+    # No Authorization header needed
+
+
+def test_incident_calls_endpoint_admin_sees_all_dispatches():
+    admin = setup()
+    incident_id = create_incident("medical", ["ambulance", "police"])
+    client.post(f"/api/v1/incidents/{incident_id}/approve", headers=admin)
+
+    r = client.get(f"/api/v1/incidents/{incident_id}/calls", headers=admin)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["incident_id"] == incident_id
+    assert "calls" in data
+    assert len(data["calls"]) == 2
+    for call in data["calls"]:
+        assert set(call.keys()) == {"dispatch_id", "service_type", "status", "distance_km", "eta_minutes", "created_at", "updated_at"}
+        assert call["service_type"] in ("ambulance", "police")
+        assert call["status"] in ("proposed", "approved", "accepted", "en_route", "on_scene", "completed", "declined", "cancelled")
+
+
+def test_incident_calls_endpoint_service_sees_only_own_approved_dispatch():
+    admin = setup()
+    incident_id = create_incident("medical", ["ambulance", "police"])
+    client.post(f"/api/v1/incidents/{incident_id}/approve", headers=admin)
+
+    ambulance = login("amb-01")
+    r = client.get(f"/api/v1/incidents/{incident_id}/calls", headers=ambulance)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["incident_id"] == incident_id
+    assert len(data["calls"]) == 1
+    assert data["calls"][0]["service_type"] == "ambulance"
+    assert data["calls"][0]["status"] == "approved"
+
+    police = login("police-01")
+    r = client.get(f"/api/v1/incidents/{incident_id}/calls", headers=police)
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["calls"]) == 1
+    assert data["calls"][0]["service_type"] == "police"
+
+
+def test_incident_calls_endpoint_service_cannot_see_before_approval():
+    admin = setup()
+    incident_id = create_incident("medical", ["ambulance"])
+    ambulance = login("amb-01")
+
+    # Dispatch is only proposed
+    r = client.get(f"/api/v1/incidents/{incident_id}/calls", headers=ambulance)
+    assert r.status_code == 404
+
+
+def test_incident_calls_endpoint_unknown_incident_returns_404():
+    admin = setup()
+    r = client.get("/api/v1/incidents/missing/calls", headers=admin)
+    assert r.status_code == 404
+
+
+def test_incident_calls_endpoint_civilian_forbidden():
+    admin = setup()
+    incident_id = create_incident("medical", ["ambulance"])
+    from tests.device_helpers import register_device
+    from nacl.signing import SigningKey
+    dev = register_device(client, "55555555-5555-4555-8555-555555555555", SigningKey.generate(), "en").json()
+    civ = {"Authorization": f"Bearer {dev['token']}"}
+    r = client.get(f"/api/v1/incidents/{incident_id}/calls", headers=civ)
+    assert r.status_code == 403
+
+
+def test_incident_calls_endpoint_unauthenticated_returns_401():
+    admin = setup()
+    incident_id = create_incident("medical", ["ambulance"])
+    r = client.get(f"/api/v1/incidents/{incident_id}/calls")
+    assert r.status_code == 401
