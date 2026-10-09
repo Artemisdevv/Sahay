@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 import unicodedata
@@ -23,6 +24,19 @@ from app.agents.stt_live import STTError, build_live  # noqa: E402
 from app.settings import settings  # noqa: E402
 
 MIME = {".opus": "audio/ogg", ".ogg": "audio/ogg", ".webm": "audio/webm", ".wav": "audio/wav", ".mp3": "audio/mpeg", ".m4a": "audio/mp4"}
+
+
+def read_truth(folder: Path) -> dict:
+    """Ground truth: transcripts.json if present, else '<clip>.md' files with a 'Ground-truth transcript:' section."""
+    out: dict = {}
+    for md in folder.glob("*.md"):
+        text = md.read_text(encoding="utf-8")
+        m = re.search(r"Ground-truth transcript:\**\s*(.+)", text, re.S)
+        lang = re.search(r"Language:\**\s*(\w+)", text)
+        if m:
+            code = {"malayalam": "ml", "hindi": "hi", "english": "en", "tamil": "ta"}.get((lang.group(1) if lang else "").lower(), "")
+            out[md.stem + ".opus"] = {"language": code, "text": m.group(1).strip()}
+    return out
 
 
 def words(text: str) -> list[str]:
@@ -49,13 +63,15 @@ def main() -> int:
     ap.add_argument("--providers", default=settings.sahay_stt_providers)
     ap.add_argument("--dir", default=str(Path(__file__).with_name("voice_recordings")))
     ap.add_argument("--lang", default="", help="language hint for every clip (default: from transcripts.json, else auto)")
+    ap.add_argument("--prompt", default="", help="Whisper prompt to steer script/vocabulary")
     ap.add_argument("--delay", type=float, default=2.0, help="seconds between calls (free-tier rate limits)")
     args = ap.parse_args()
 
-    groq_key = settings.stt_api_key or (settings.llm_api_key if settings.llm_provider.lower() == "groq" else "")
+    groq_key = settings.llm_api_key if settings.llm_provider.lower() == "groq" else ""
+    cf_token = settings.cloudflare_api_token or settings.stt_api_key
     folder = Path(args.dir)
     truth_file = folder / "transcripts.json"
-    truth = json.loads(truth_file.read_text(encoding="utf-8")) if truth_file.exists() else {}
+    truth = json.loads(truth_file.read_text(encoding="utf-8")) if truth_file.exists() else read_truth(folder)
     clips = sorted(p for p in folder.iterdir() if p.suffix.lower() in MIME)
     if not clips:
         print(f"no audio clips in {folder}")
@@ -63,7 +79,7 @@ def main() -> int:
 
     for name in (x.strip() for x in args.providers.split(",") if x.strip()):
         try:
-            provider = build_live(name, groq_key, settings.cloudflare_account_id, settings.cloudflare_api_token, settings.sahay_stt_timeout_s).providers[0]
+            provider = build_live(name, groq_key, settings.cloudflare_account_id, cf_token, settings.sahay_stt_timeout_s, args.prompt).providers[0]
         except RuntimeError as exc:
             print(f"== {name}: skipped ({exc})")
             continue

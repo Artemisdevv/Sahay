@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     sahay_stt_mode: str = "mock"  # mock = no audio model; text payloads still work; live = providers below
     sahay_stt_providers: str = "groq:whisper-large-v3"  # tried left to right, see app/agents/stt_live.py
     sahay_stt_timeout_s: float = 20.0
-    stt_api_key: str = ""  # Groq key for speech; falls back to LLM_API_KEY when LLM_PROVIDER=groq
+    stt_api_key: str = ""  # Cloudflare Workers AI token (used when CLOUDFLARE_API_TOKEN is empty)
+    sahay_stt_prompt: str = ""  # optional Whisper prompt, e.g. a Malayalam sentence to steer script and vocabulary
     cloudflare_account_id: str = ""
     cloudflare_api_token: str = ""
     llm_provider: str = ""  # "groq" (default endpoint) or any OpenAI-compatible provider with LLM_BASE_URL

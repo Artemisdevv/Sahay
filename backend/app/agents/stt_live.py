@@ -5,8 +5,8 @@ error, empty result) makes the adapter try the next provider; if all fail it rai
 "failed" and continues from the quick-tap category, so a report is never lost.
 
 Provider names (SAHAY_STT_PROVIDERS, comma separated, tried left to right):
-  groq:whisper-large-v3-turbo   groq:whisper-large-v3        needs STT_API_KEY (or LLM_API_KEY when LLM_PROVIDER=groq)
-  cf:whisper-large-v3-turbo     needs CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN  (UNVERIFIED against the live API)
+  groq:whisper-large-v3         needs LLM_API_KEY with LLM_PROVIDER=groq
+  cf:whisper-large-v3-turbo     Cloudflare Workers AI: needs CLOUDFLARE_ACCOUNT_ID and a token in CLOUDFLARE_API_TOKEN or STT_API_KEY
 
 Privacy: audio is sent to the provider as-is (voice is personal data). The pipeline's PII step runs on the transcript
 afterwards. Provider error bodies are never logged or put into exceptions (they may echo content).
@@ -40,15 +40,17 @@ def _filename(mime: str) -> str:
 
 
 class GroqWhisper:
-    def __init__(self, model: str, api_key: str, timeout_s: float = 20.0, client: httpx.Client | None = None):
+    def __init__(self, model: str, api_key: str, timeout_s: float = 20.0, client: httpx.Client | None = None, prompt: str = ""):
         self.name = f"groq:{model}"
-        self._model, self._key, self._timeout = model, api_key, timeout_s
+        self._model, self._key, self._timeout, self._prompt = model, api_key, timeout_s, prompt
         self._client = client
 
     def transcribe(self, audio: bytes, mime: str, language: str) -> str | None:
         data = {"model": self._model, "response_format": "json", "temperature": "0"}
         if (lang := _lang(language)) is not None:
             data["language"] = lang
+        if self._prompt:
+            data["prompt"] = self._prompt
         client = self._client or httpx.Client(timeout=self._timeout)
         try:
             r = client.post(GROQ_URL, headers={"Authorization": f"Bearer {self._key}"}, data=data,
@@ -61,15 +63,17 @@ class GroqWhisper:
 
 
 class CloudflareWhisper:
-    def __init__(self, model: str, account: str, token: str, timeout_s: float = 20.0, client: httpx.Client | None = None):
+    def __init__(self, model: str, account: str, token: str, timeout_s: float = 20.0, client: httpx.Client | None = None, prompt: str = ""):
         self.name = f"cf:{model}"
         self._url, self._token, self._timeout = CF_URL.format(account=account, model=model), token, timeout_s
-        self._client = client
+        self._client, self._prompt = client, prompt
 
     def transcribe(self, audio: bytes, mime: str, language: str) -> str | None:
         body: dict = {"audio": base64.b64encode(audio).decode("ascii")}
         if (lang := _lang(language)) is not None:
             body["language"] = lang
+        if self._prompt:
+            body["initial_prompt"] = self._prompt
         client = self._client or httpx.Client(timeout=self._timeout)
         try:
             r = client.post(self._url, headers={"Authorization": f"Bearer {self._token}"}, json=body)
@@ -107,17 +111,17 @@ class FailoverTranscriber:
         raise STTError("; ".join(failures))
 
 
-def build_live(providers: str, groq_key: str, cf_account: str, cf_token: str, timeout_s: float) -> FailoverTranscriber:
+def build_live(providers: str, groq_key: str, cf_account: str, cf_token: str, timeout_s: float, prompt: str = "") -> FailoverTranscriber:
     chain = []
     for item in (x.strip() for x in providers.split(",") if x.strip()):
         kind, _, model = item.partition(":")
         if kind == "groq" and model and groq_key:
-            chain.append(GroqWhisper(model, groq_key, timeout_s))
+            chain.append(GroqWhisper(model, groq_key, timeout_s, prompt=prompt))
         elif kind == "cf" and model and cf_account and cf_token:
-            chain.append(CloudflareWhisper(model, cf_account, cf_token, timeout_s))
+            chain.append(CloudflareWhisper(model, cf_account, cf_token, timeout_s, prompt=prompt))
     if not chain:
         raise RuntimeError(
             "SAHAY_STT_MODE=live needs at least one usable provider in SAHAY_STT_PROVIDERS "
-            "(groq:<model> with STT_API_KEY/LLM_API_KEY, or cf:<model> with CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN)"
+            "(groq:<model> with LLM_API_KEY and LLM_PROVIDER=groq, or cf:<model> with CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN or STT_API_KEY)"
         )
     return FailoverTranscriber(chain)
