@@ -38,7 +38,9 @@ def main() -> int:
         samples = [s for s in samples if s["id"] in args.only]
     llm = build_llm("live")
     search = None if args.no_search or not settings.sahay_web_search_key else build_search("live")
-    print(f"model={settings.llm_model} provider={settings.llm_provider} search={'on' if search else 'off'}\n")
+    chain = getattr(llm, "_providers", [llm])
+    models = " -> ".join(f"{p._url.split('/')[2]}:{p._model}" for p in chain)
+    print(f"llm={models} search={'on' if search else 'off'}\n")
 
     failures = 0
     for s in samples:

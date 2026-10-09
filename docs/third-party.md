@@ -18,6 +18,7 @@ The hackathon rules ask us to acknowledge open-source code, third-party resource
 |---|---|---|
 | Cloudflare Workers AI: Whisper large-v3-turbo (primary), Deepgram Nova-3, gpt-4o-transcribe (fallbacks) | Server-side transcription | chosen; ranking confirmed by B-05 Malayalam test |
 | Groq (OpenAI-compatible API), model `openai/gpt-oss-120b` | Intake, PII-tagging and triage agents (B-06b). Receives report text with phone, email, ID, plate and the reporter's known name/phone masked; never audio, location or contact details. Mock mode for the offline demo and as the fallback. | chosen; live adapter in `backend/app/agents/llm_live.py` |
+| Google Gemini API (`gemini-flash-latest`, OpenAI-compatible endpoint) | Optional failover for the same three agents when the primary LLM fails or is rate-limited (B-06b). Same masking rules apply. Free-tier prompts may be used by Google to improve products: use a paid key for anything beyond synthetic demo data. | chosen as fallback; `LLM_FALLBACK_PROVIDER=gemini` |
 | Firecrawl search API | Hazard context for triage (B-06b). Query holds only hazard words such as "gas" or "chemical"; no report text, PII or location. | chosen; `backend/app/agents/search.py` |
 | SMS gateway | SMS fallback | to be chosen (B-10) |
 

@@ -154,6 +154,36 @@ class LiveLLM:
             raise LLMError("unexpected provider response shape") from None
 
 
+class FailoverLLM:
+    """Try each provider in order; the first one that answers wins. If all fail, raise so the pipeline uses rules.
+
+    Every provider is an external one, so the same masking rules apply (`external = True`).
+    """
+
+    external = True
+
+    def __init__(self, providers: list[LiveLLM]) -> None:
+        self._providers = providers
+
+    def _first(self, call: str, *args):
+        last: Exception | None = None
+        for provider in self._providers:
+            try:
+                return getattr(provider, call)(*args)
+            except Exception as exc:  # noqa: BLE001 - network, rate limit, bad output: move to the next provider
+                last = exc
+        raise LLMError(f"all providers failed: {last}") from None
+
+    def intake(self, *args):
+        return self._first("intake", *args)
+
+    def tag_pii(self, text: str):
+        return self._first("tag_pii", text)
+
+    def triage(self, *args):
+        return self._first("triage", *args)
+
+
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.I)
 
 

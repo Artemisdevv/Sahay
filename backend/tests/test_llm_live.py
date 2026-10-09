@@ -259,3 +259,53 @@ def test_should_ignore_requires_text_to_judge():
     assert should_ignore(intake, "report", "other", "I want ice cream")
     assert not should_ignore(intake, "report", "other", None)        # audio we could not transcribe
     assert not should_ignore(intake, "report", "other", "   ")
+
+
+# ---- provider selection and failover ---------------------------------------------------------------
+
+def test_build_llm_supports_gemini_and_a_failover_chain(monkeypatch):
+    from app.agents.llm_live import FailoverLLM
+    from app.settings import settings
+
+    monkeypatch.setattr(settings, "llm_base_url", "")
+    monkeypatch.setattr(settings, "llm_api_key", "groq-key")
+    monkeypatch.setattr(settings, "llm_api_key_gemini", "")
+    monkeypatch.setattr(settings, "llm_provider", "gemini")
+    with pytest.raises(RuntimeError, match="LLM_API_KEY_GEMINI"):
+        build_llm("live")
+    monkeypatch.setattr(settings, "llm_api_key_gemini", "gem-key")
+    gemini = build_llm("live")
+    assert gemini._url.startswith("https://generativelanguage.googleapis.com/") and gemini._model == "gemini-flash-latest"
+
+    monkeypatch.setattr(settings, "llm_provider", "groq")
+    monkeypatch.setattr(settings, "llm_fallback_provider", "gemini")
+    chain = build_llm("live")
+    assert isinstance(chain, FailoverLLM) and chain.external is True
+    assert [p._url.split("/")[2] for p in chain._providers] == ["api.groq.com", "generativelanguage.googleapis.com"]
+
+    monkeypatch.setattr(settings, "llm_fallback_provider", "groq")  # same as primary: no chain
+    assert not isinstance(build_llm("live"), FailoverLLM)
+    monkeypatch.setattr(settings, "llm_fallback_provider", "nope")
+    with pytest.raises(RuntimeError, match="Unknown LLM provider"):
+        build_llm("live")
+
+
+def test_failover_uses_the_second_provider_when_the_first_fails():
+    from app.agents.llm_live import FailoverLLM
+
+    down = Provider(intake=[429, 429])
+    up = Provider(intake=[json.dumps(INTAKE_JSON)])
+    chain = FailoverLLM([live(down), live(up)])
+    assert chain.intake("crash", "accident", "en", "report").severity == 4
+    assert len(down.requests) == 2 and len(up.requests) == 1  # primary tried (with its one backoff), then secondary
+
+
+def test_failover_raises_when_every_provider_fails_so_rules_take_over(db):  # noqa: F811
+    from app.agents.llm_live import FailoverLLM
+
+    chain = FailoverLLM([live(Provider(intake=[500, 500], pii=[500, 500])), live(Provider(intake=[500, 500], pii=[500, 500]))])
+    with pytest.raises(LLMError):
+        chain.intake("crash", "accident", "en", "report")
+    r = make_report(db, text="car crash, two injured")
+    res = run_pipeline(db, r.report_id, _agents(chain))
+    assert res.incident is not None                                   # report kept via the rules fallback

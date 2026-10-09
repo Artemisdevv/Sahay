@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     sahay_llm_mode: str = "mock"  # mock = deterministic rules, no network
     sahay_stt_mode: str = "mock"  # mock = no audio model; text payloads still work
     llm_provider: str = ""  # "groq" (default endpoint) or any OpenAI-compatible provider with LLM_BASE_URL
-    llm_api_key: str = ""
+    llm_api_key: str = ""  # key for the primary provider (Groq)
+    llm_api_key_gemini: str = ""
+    llm_gemini_model: str = "gemini-flash-latest"
+    llm_fallback_provider: str = ""  # "gemini" = try it when the primary fails, before dropping to rules
     llm_model: str = "openai/gpt-oss-120b"
     llm_base_url: str = ""  # empty = provider default
     llm_timeout_s: float = 15.0
