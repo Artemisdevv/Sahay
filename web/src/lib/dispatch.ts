@@ -10,7 +10,7 @@ export const defaultProfile = {
   allergies: "Penicillin",
   medications: "Albuterol inhaler",
   devices: "None",
-  address: "124 Market Street, San Francisco, CA",
+  address: "Kochi, Kerala",
   access: "Apartment 4B · Gate code 2048",
   mobility: "None",
 };
@@ -65,9 +65,9 @@ export function recipients(type: IncidentType) {
 export function pageHead(title: string, description: string) {
   return {
     meta: [
-      { title: `${title} — Aegis Dispatch` },
+      { title: `${title} — Sahay` },
       { name: "description", content: description },
-      { property: "og:title", content: `${title} — Aegis Dispatch` },
+      { property: "og:title", content: `${title} — Sahay` },
       { property: "og:description", content: description },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

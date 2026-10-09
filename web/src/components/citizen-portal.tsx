@@ -41,7 +41,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { Shell, Badge, ZoneMap } from "./dispatch-shell";
 import {
   buildPayload,
@@ -77,7 +76,7 @@ type Media = { name: string; url: string; type: string };
 export function CitizenPortal() {
   const [type, setType] = useState<IncidentType>("medical");
   const [description, setDescription] = useState("");
-  const [location, setLocation] = useState("124 Market Street, San Francisco, CA");
+  const [location, setLocation] = useState("Kochi, Kerala");
   const [landmark, setLandmark] = useState("");
   const [hazards, setHazards] = useState("");
   const [people, setPeople] = useState(1);
@@ -114,27 +113,7 @@ export function CitizenPortal() {
   const audioRef = useRef<HTMLInputElement>(null);
   const urls = useRef<string[]>([]);
   useEffect(() => {
-    let active = true;
-    void supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return;
-      if (active) setConsent(false);
-      const result = await supabase
-        .from("emergency_profiles")
-        .select("data,sharing_consent")
-        .eq("user_id", data.user.id)
-        .maybeSingle();
-      if (active && result.data) {
-        const raw = result.data.data as Record<string, unknown>;
-        const next = { ...defaultProfile };
-        for (const key of Object.keys(defaultProfile) as (keyof EmergencyProfile)[])
-          if (typeof raw[key] === "string") next[key] = raw[key];
-        setProfile(next);
-        setDraft(next);
-        setConsent(result.data.sharing_consent);
-      }
-    });
     return () => {
-      active = false;
       urls.current.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
@@ -159,50 +138,15 @@ export function CitizenPortal() {
       return;
     }
     setSaving(true);
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) {
-      setProfile(draft);
-      setSaving(false);
-      setProfileOpen(false);
-      toast("Profile updated for this demo session", {
-        description: "Sign in with an account to securely save between visits.",
-      });
-      return;
-    }
-    const { error } = await supabase
-      .from("emergency_profiles")
-      .upsert({
-        user_id: data.user.id,
-        data: draft,
-        sharing_consent: consent,
-        updated_at: new Date().toISOString(),
-      });
+    // Keep sensitive profile data local until it can be included in the encrypted report.
     setSaving(false);
-    if (error) {
-      toast.error("Profile could not be saved. Please try again.");
-      return;
-    }
     setProfile(draft);
     setProfileOpen(false);
-    toast.success("Emergency profile securely saved");
+    toast.success("Emergency profile saved on this device");
   }
   async function changeConsent(value: boolean) {
     setConsent(value);
-    const { data } = await supabase.auth.getUser();
-    if (data.user) {
-      const { error } = await supabase
-        .from("emergency_profiles")
-        .upsert({
-          user_id: data.user.id,
-          data: profile,
-          sharing_consent: value,
-          updated_at: new Date().toISOString(),
-        });
-      if (error) {
-        setConsent(!value);
-        toast.error("Consent could not be saved. Please try again.");
-      }
-    }
+    toast(value ? "Consent enabled for this report" : "Consent disabled");
   }
   function attach(files: FileList | null) {
     if (!files) return;
@@ -291,7 +235,7 @@ export function CitizenPortal() {
             Current location
           </div>
           <div className="status-value">
-            San Francisco, CA<Badge tone="green">GPS ready</Badge>
+            Kochi, Kerala<Badge tone="green">GPS ready</Badge>
           </div>
         </div>
         <div className="status-cell">

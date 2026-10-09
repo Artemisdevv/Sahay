@@ -79,13 +79,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Aegis Dispatch" },
+      { title: "Sahay" },
       {
         name: "description",
         content: "Coordinated emergency response and autonomous agent dispatch simulation.",
       },
-      { name: "author", content: "Aegis" },
-      { property: "og:title", content: "Aegis Dispatch" },
+      { name: "author", content: "Sahay" },
+      { property: "og:title", content: "Sahay" },
       {
         property: "og:description",
         content: "Coordinated emergency response and autonomous agent dispatch simulation.",
