@@ -137,6 +137,17 @@ def test_admin_websocket_gets_dispatch_and_incident_events():
     assert seen == {"dispatch.updated", "incident.updated"}
 
 
+def test_service_websocket_does_not_get_proposed_dispatch_updates():
+    from app.events import manager
+
+    claims = {"role": "service", "unit_id": "amb-01"}
+    dispatch = {"unit_id": "amb-01", "status": "proposed"}
+    assert not manager._can_receive("dispatch.updated", dispatch, "service", claims, None, None)
+
+    dispatch["status"] = "approved"
+    assert manager._can_receive("dispatch.updated", dispatch, "service", claims, None, None)
+
+
 def test_civilian_gets_report_status_push_when_dispatched():
     from app.database import SessionLocal
     from app.models import Incident, Report

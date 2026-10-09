@@ -272,7 +272,7 @@ Message shape:
 | `incident.created` | `Incident` | admin |
 | `incident.updated` | `Incident` | admin, service (own dispatches) |
 | `dispatch.proposed` | `Dispatch` | admin |
-| `dispatch.updated` | `Dispatch` | admin, service (own unit) |
+| `dispatch.updated` | `Dispatch` | admin, service (own unit; proposed dispatches are admin-only) |
 | `unit.moved` | `{ unit_id, location, status }` | admin |
 | `agent.trace` | `TraceStep` | admin |
 | `audit.appended` | `AuditEntry` | admin |
