@@ -21,6 +21,14 @@ Development login accounts (only active when `SAHAY_DEV=1`):
 | `police-01` | `demo123` | service |
 | `fire-01` | `demo123` | service |
 
+These fixed passwords apply only when running the backend directly in dev mode
+with the default local database. They do not work in the Docker demo. Docker
+generates unique staff passwords in the ignored file `deploy/.env.demo`; use
+the values of `SAHAY_SEED_ADMIN_PASSWORD` and `SAHAY_SEED_SERVICE_PASSWORD`
+from that file. The Docker database creates accounts only on its first start,
+so changing those environment values later does not change passwords already
+stored in its persistent volume. See [the Docker demo instructions](../deploy/README.md).
+
 Use `POST /api/v1/dev/seed` to reset the demo units and users. Demo state is
 stored in `sahay.db` by default. Set `SAHAY_DATABASE_URL` to a PostgreSQL URL
 for a shared development environment. Do not use the development credentials
