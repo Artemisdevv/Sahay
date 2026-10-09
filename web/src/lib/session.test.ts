@@ -49,13 +49,11 @@ describe("session guards", () => {
     });
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify({ error: { code: "unauthorized" } }), {
-            status: 401,
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: "unauthorized" } }), {
+          status: 401,
+        }),
+      ),
     );
     const { getIncidents } = await import("./api");
     await expect(getIncidents("t")).rejects.toThrow();

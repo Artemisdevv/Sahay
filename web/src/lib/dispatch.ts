@@ -17,9 +17,13 @@ export const defaultProfile = {
 export type EmergencyProfile = typeof defaultProfile;
 export type IncidentType = "medical" | "fire" | "rescue" | "other";
 export function detectPriority(description: string, type: IncidentType) {
-  return /unconscious|severe bleeding|trapped|gas leak|not breathing/i.test(description)
+  return /unconscious|severe bleeding|trapped|gas leak|not breathing/i.test(
+    description,
+  )
     ? "Critical"
-    : type === "fire" || type === "rescue" || /smoke|chest pain/i.test(description)
+    : type === "fire" ||
+        type === "rescue" ||
+        /smoke|chest pain/i.test(description)
       ? "High"
       : description.trim()
         ? "Standard"
@@ -42,14 +46,22 @@ export function buildPayload(
     mode: "simulation",
     medical_context: consent ? profile : null,
     sharing_consent: consent,
-    incident: { ...incident, priority: detectPriority(incident.description, incident.type) },
+    incident: {
+      ...incident,
+      priority: detectPriority(incident.description, incident.type),
+    },
     response_agents:
       incident.type === "medical"
         ? ["TriageAgent-01", "DispatchRouter-v2", "HospitalAlert"]
         : incident.type === "fire"
           ? ["TriageAgent-01", "DispatchRouter-v2", "FireRescueAlert"]
           : incident.type === "rescue"
-            ? ["TriageAgent-01", "DispatchRouter-v2", "HospitalAlert", "FireRescueAlert"]
+            ? [
+                "TriageAgent-01",
+                "DispatchRouter-v2",
+                "HospitalAlert",
+                "FireRescueAlert",
+              ]
             : ["TriageAgent-01", "DispatchRouter-v2", "ServiceCoordinator"],
   };
 }
