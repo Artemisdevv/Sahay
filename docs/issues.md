@@ -1,6 +1,6 @@
 # Sahay Work Breakdown
 
-Owners (tag in brackets on each item): **Adnan** native/Android, crypto, dispatch, agents, STT, integration; **Aswin** backend foundation (scaffold, auth, realtime, incidents, audit, deploy) plus Services/Admin-extras frontend; **Shreyas** civilian app, Distress Map, admin incident panel; **Adarsh** UI/UX + presentation.
+Owners (tag in brackets on each item): **Adnan** native/Android, crypto, dispatch, agents, STT, integration; **Aswin** backend foundation (scaffold, auth, realtime, incidents, audit, deploy) plus Services/Admin-extras frontend; **Shreyas** frontend plus visual design (design system, high-fidelity screens): civilian app, Distress Map, admin incident panel; **Adarsh** UX flow, UI/UX testing, pitch deck and presentation.
 Each item below becomes a GitHub issue (title = `ID: title`, labels = area + milestone). Contract: [api-contract.md](api-contract.md).
 
 Milestones:
@@ -89,13 +89,13 @@ Dependency rule: frontend and native work against the **contract and `/dev/*` mo
 
 ---
 
-## Adarsh: UI/UX and presentation (`design/`, `docs/`, label `design`)
+## Design and UX (`design/`, `docs/`, label `design`): visual design is Shreyas (D-01, D-03); UX flow, UI/UX testing, deck and presentation are Adarsh
 
-**D-01 [Adarsh] (M0) Design system.** Dark "Dispatch" look: colors (severity scale), type, spacing, map marker and unit icon set, motion rules. Figma plus tokens JSON for Shreyas.
+**D-01 [Shreyas] (M0) Design system.** Dark "Dispatch" look: colors (severity scale), type, spacing, map marker and unit icon set, motion rules. Figma plus tokens JSON for Shreyas.
 
-**D-02 [Adarsh] (M0) Wireframes for all three dashboards plus civilian flows.** Civilian screens must be usable under stress: one-hand, huge hold-to-talk button, minimal text, status clarity.
+**D-02 [Adarsh] (M0) UX flows and wireframes for all three dashboards plus civilian flows.** Civilian screens must be usable under stress: one-hand, huge hold-to-talk button, minimal text, status clarity.
 
-**D-03 [Adarsh] (M1) High-fidelity screens.** Distress Map, incident panel with agent trace, services card, PII reveal modal, audit log.
+**D-03 [Shreyas] (M1) High-fidelity screens.** Distress Map, incident panel with agent trace, services card, PII reveal modal, audit log.
 
 **D-04 [Adarsh] (M1) Demo script and run sheet.** Turn section 7 of `solution.md` (shared outside the repo) into a minute-by-minute run sheet with roles per person and physical setup checklist.
 
@@ -105,7 +105,7 @@ Dependency rule: frontend and native work against the **contract and `/dev/*` mo
 
 **D-07 [Adarsh] (M2) Pitch deck.** Problem, solution, delivery ladder, security model, agent pipeline, why it wins. Max 8 slides.
 
-**D-08 [Adarsh] (M3) Rehearsals and fallback drill.** Three full run-throughs, one with relay failing, one with STT failing, one with venue Wi-Fi down. Accessibility pass (contrast, tap targets).
+**D-08 [Adarsh] (M3) Rehearsals and fallback drill.** Three full run-throughs, one with relay failing, one with STT failing, one with venue Wi-Fi down. UI/UX testing with real users on the two phones, plus accessibility pass (contrast, tap targets).
 
 ---
 
@@ -120,4 +120,4 @@ Dependency rule: frontend and native work against the **contract and `/dev/*` mo
 1. Aswin: B-01 first (unblocks everyone), then B-02. Follow the contract exactly.
 2. Shreyas: F-01 against fixtures.
 3. Adnan: X-01, then N-01 and N-02 on two real phones; B-03 crypto test vector right after.
-4. Adarsh: D-01, D-02, and record voice samples (D-05).
+4. Adarsh: D-02 (UX flows), and record voice samples (D-05). Shreyas picks up D-01 (design system) alongside F-01.

@@ -30,7 +30,7 @@ Full design doc (`solution.md`) is kept outside this repo, in the team's shared 
 backend/    FastAPI, agents, dispatch engine, audit log      (Aswin foundation, Adnan agents/dispatch)
 web/        React + Vite PWA: civilian, services, admin       (Shreyas)
 android/    Capacitor project + Kotlin plugins (Nearby, SMS)  (Adnan)
-design/     Design system, wireframes, deck                   (Adarsh)
+design/     Design system (Shreyas), UX flows, deck (Adarsh)
 contract/   fixtures + crypto test vectors shared by all
 docs/       solution, API contract, issues, runbook
 ```
@@ -48,9 +48,9 @@ docs/       solution, API contract, issues, runbook
 | Person | Role | Owns |
 |---|---|---|
 | Adnan | Native + hard backend | Android/Nearby/SMS, crypto ingest, dispatch, agents, STT, integration |
-| Shreyas | Frontend | Web app, dashboards, client crypto, offline queue |
+| Shreyas | Frontend + visual design | Web app, dashboards, client crypto, offline queue, design system, high-fidelity screens |
 | Aswin | Backend foundation + frontend support | API scaffold, auth, WebSocket, incidents, audit log, deploy, Services/PII-reveal/PWA screens |
-| Adarsh | UI/UX + presentation | Design system, deck, demo script, rehearsals |
+| Adarsh | UX + presentation | UX flows and wireframes, UI/UX testing, pitch deck, demo script, rehearsals |
 
 ## Working agreement
 
