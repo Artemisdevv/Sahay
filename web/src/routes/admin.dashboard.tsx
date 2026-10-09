@@ -5,7 +5,7 @@ export const Route = createFileRoute("/admin/dashboard")({
   head: () =>
     pageHead(
       "Agent orchestration control",
-      "Monitor the Aegis multi-agent mesh, pipeline health, vector memory retrieval, and human oversight simulation.",
+      "Monitor the Sahay multi-agent mesh, pipeline health, vector memory retrieval, and human oversight simulation.",
     ),
   component: AdminDashboard,
 });

@@ -115,7 +115,7 @@ export function LoginHub() {
             <ShieldCheck size={12} />
             Secure network access
           </Badge>
-          <h1 className="mt-5">Welcome to Aegis</h1>
+          <h1 className="mt-5">Welcome to Sahay</h1>
           <p className="subtitle">Sign in to your citizen workspace or explore a demo role.</p>
           <form onSubmit={signIn}>
             <div className="section-label">Select your workspace</div>

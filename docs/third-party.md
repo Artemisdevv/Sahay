@@ -22,6 +22,9 @@ The hackathon rules ask us to acknowledge open-source code, third-party resource
 | Firecrawl search API | Hazard context for triage (B-06b). Query holds only hazard words such as "gas" or "chemical"; no report text, PII or location. | chosen; `backend/app/agents/search.py` |
 | SMS gateway | SMS fallback | to be chosen (B-10) |
 
+## AI-generated code
+- The initial `web/` UI scaffold (layouts, shadcn/ui components, mock screens) was generated with an AI app builder (Lovable) and then adapted by the team. Its npm helper `@lovable.dev/vite-tanstack-config` is still a build dependency. Screens are being rewired to the Sahay API; the team reviews what is merged.
+
 ## Reference only (no code copied)
 - Dictation apps such as OpenWhispr (MIT) and Wispr Flow were looked at as product references. We do not use or copy their code: they are desktop apps, Sahay's capture is a hold-to-talk button in an Android-wrapped PWA with server-side STT.
 

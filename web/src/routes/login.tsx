@@ -5,7 +5,7 @@ export const Route = createFileRoute("/login")({
   head: () =>
     pageHead(
       "Secure network access",
-      "Sign in to Aegis or explore the citizen, hospital, fire rescue and orchestrator demonstration workspaces.",
+      "Sign in to Sahay or explore the citizen, hospital, fire rescue and orchestrator demonstration workspaces.",
     ),
   component: LoginHub,
 });
