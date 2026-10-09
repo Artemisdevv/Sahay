@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     llm_reasoning_effort: str = "low"  # for reasoning models (gpt-oss); set empty for providers that reject it
     sahay_search_mode: str = "mock"  # mock = canned hazard tips; live = Firecrawl web search
     sahay_web_search_key: str = ""
+    sahay_static_dir: str = ""  # built SPA (web/dist/client). Set in the Docker image so one origin serves app + API
+    # Production seeding without /dev/seed: when both are set and the database has no units/users, units and
+    # staff accounts are created at startup with these passwords (never the demo defaults).
+    sahay_seed_admin_password: str = ""
+    sahay_seed_service_password: str = ""
 
     @property
     def cors_origins(self) -> list[str]:

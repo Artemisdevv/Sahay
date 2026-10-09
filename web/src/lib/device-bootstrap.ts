@@ -17,10 +17,15 @@ export interface BootstrapOptions extends RegisterOptions {
   onStatus?: (status: "ready" | "waiting") => void;
 }
 
-export function startDeviceBootstrap(store: SecretStore, options: BootstrapOptions = {}): () => void {
+export function startDeviceBootstrap(
+  store: SecretStore,
+  options: BootstrapOptions = {},
+): () => void {
   const backoff = options.backoffMs ?? [2_000, 10_000, 30_000, 120_000];
   const later = options.setTimeoutFn ?? setTimeout;
-  const target = options.onlineTarget ?? (typeof window !== "undefined" ? window : undefined);
+  const target =
+    options.onlineTarget ??
+    (typeof window !== "undefined" ? window : undefined);
   let attempt = 0;
   let stopped = false;
   let running = false;

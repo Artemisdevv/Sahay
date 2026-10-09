@@ -22,7 +22,11 @@ export type RelayMode = "advertise" | "discover" | "both";
 
 export interface SahayNearbyPlugin {
   /** serverVerifyKey = `ed25519_public_key` from GET /config/server-key. Receipts and statuses that do not verify are dropped. */
-  start(opts: { deviceId: string; mode: RelayMode; serverVerifyKey: string }): Promise<void>;
+  start(opts: {
+    deviceId: string;
+    mode: RelayMode;
+    serverVerifyKey: string;
+  }): Promise<void>;
   stop(): Promise<void>;
   /** Hand our own new report to the native queue so it is forwarded to nearby phones. */
   enqueue(opts: { envelope: ReportEnvelope }): Promise<void>;
@@ -31,12 +35,21 @@ export interface SahayNearbyPlugin {
   /** After uploading someone else's report: return the server receipt along the path it arrived on. */
   relayReceipt(opts: { reportId: string; receipt: Receipt }): Promise<void>;
   /** `signature` and `updatedAt` come from GET /reports/{id}/status. */
-  relayStatus(opts: { reportId: string; status: string; message: string; signature: string; updatedAt: string }): Promise<void>;
+  relayStatus(opts: {
+    reportId: string;
+    status: string;
+    message: string;
+    signature: string;
+    updatedAt: string;
+  }): Promise<void>;
   /** Everything carried and not yet delivered (own and others'), for upload when this phone gets online. */
   pendingForUpload(): Promise<{ envelopes: ReportEnvelope[] }>;
   /** Reports carried for other people. The UI shows only this count, never contents. */
   carryingCount(): Promise<{ count: number }>;
-  addListener(event: "peerConnected" | "peerLost", cb: (e: { peerId: string }) => void): Promise<{ remove: () => Promise<void> }>;
+  addListener(
+    event: "peerConnected" | "peerLost",
+    cb: (e: { peerId: string }) => void,
+  ): Promise<{ remove: () => Promise<void> }>;
   addListener(
     event: "envelopeReceived",
     cb: (e: { envelope: ReportEnvelope; fromPeer: string }) => void,
@@ -53,7 +66,10 @@ export interface SahayNearbyPlugin {
 
 /** Browser and PWA: there is no Nearby. Reads return empty, anything that would need the radio rejects. */
 const notAvailable = () =>
-  Object.assign(new Error("Nearby relay is only available in the Android app"), { code: "UNAVAILABLE" });
+  Object.assign(
+    new Error("Nearby relay is only available in the Android app"),
+    { code: "UNAVAILABLE" },
+  );
 
 class SahayNearbyWeb extends WebPlugin implements Partial<SahayNearbyPlugin> {
   start = () => Promise.reject<void>(notAvailable());

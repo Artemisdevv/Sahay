@@ -1,10 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { getSession } from "@/lib/session";
 
-const WS_BASE = (import.meta.env["VITE_WS_BASE"] || "ws://localhost:8000/ws/v1")
-  .replace(/^http:/, "ws:")
-  .replace(/^https:/, "wss:")
-  .replace(/\/+$/, "");
+// VITE_WS_URL may be a full ws(s):// URL or a path like "/ws/v1" (same origin as the page, used by the Docker image).
+function resolveWsBase(raw: string): string {
+  const value = raw.replace(/\/+$/, "");
+  if (value.startsWith("/") && typeof window !== "undefined") {
+    const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${scheme}//${window.location.host}${value}`;
+  }
+  return value.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+}
+
+const WS_BASE = resolveWsBase(
+  import.meta.env["VITE_WS_URL"] || "ws://localhost:8000/ws/v1",
+);
 
 export type DispatchUpdatedEvent = {
   type: "dispatch.updated";

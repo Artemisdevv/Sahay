@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/.output
+**/.venv
+**/__pycache__
+**/*.db
+**/.sahay-*
+**/.env
+**/.env.*
+.git
+native
+spikes
+web/android
+backend/tests
