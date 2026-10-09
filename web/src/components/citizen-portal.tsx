@@ -122,6 +122,10 @@ const whenText = (iso: string) =>
   });
 type ScenePhoto = { file: File; url: string };
 
+// An SOS may carry no message at all. The server needs audio or text, so it gets this line.
+const SOS_TEXT = "SOS: the sender needs urgent help and could not describe it.";
+const SOS_HOLD_MS = 2000;
+
 const fmt = (s: number) =>
   `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -333,19 +337,24 @@ export function CitizenPortal() {
   // A category alone is not a report: the response team needs a message. The buttons only label it.
   const hasReport = !!voice.clip || note.trim().length >= 5;
 
-  async function send() {
-    if (!hasReport || sending) return;
+  async function send(kind: "report" | "sos" = "report") {
+    if (sending || (kind === "report" && !hasReport)) return;
     setSending(true);
     try {
       const language =
         LANGUAGE_CODES[profile.language.trim().toLowerCase()] ?? "en";
       const { item, approximateLocation } = await submitReport({
+        kind,
         category: CATEGORY_FOR[picked ?? "other"],
         language,
         ...(voice.clip
           ? { audio: { blob: voice.clip.blob, seconds: voice.clip.seconds } }
           : {}),
-        ...(note.trim() ? { text: note } : {}),
+        ...(note.trim()
+          ? { text: note }
+          : kind === "sos" && !voice.clip
+            ? { text: SOS_TEXT }
+            : {}),
         ...(consent
           ? {
               reporter: { name: profile.fullName },
@@ -531,6 +540,12 @@ export function CitizenPortal() {
           {!hasReport && (
             <p className="cz-hint">Record a message or type one to send.</p>
           )}
+
+          <SosButton disabled={sending} onTrigger={() => void send("sos")} />
+          <p className="cz-hint">
+            Cannot talk or type? Hold SOS for 2 seconds. Your location goes to
+            the response centre.
+          </p>
 
           <a href="tel:112" className="cz-call">
             <Phone />
@@ -964,5 +979,70 @@ function ClipPlayer({ url }: { url: string }) {
         {playing ? "Stop playing" : "Play my message"}
       </Button>
     </>
+  );
+}
+
+/**
+ * SOS: hold for 2 seconds (a fill shows the progress, so it cannot be set off by a tap in a pocket).
+ * Works with a finger or with Space/Enter held down. Letting go early cancels.
+ */
+export function SosButton({
+  disabled,
+  onTrigger,
+}: {
+  disabled: boolean;
+  onTrigger: () => void;
+}) {
+  const [progress, setProgress] = useState(0);
+  const timer = useRef<number | null>(null);
+  const startedAt = useRef(0);
+
+  const cancel = () => {
+    if (timer.current !== null) window.clearInterval(timer.current);
+    timer.current = null;
+    setProgress(0);
+  };
+  const begin = () => {
+    if (disabled || timer.current !== null) return;
+    startedAt.current = performance.now();
+    timer.current = window.setInterval(() => {
+      const p = Math.min(
+        1,
+        (performance.now() - startedAt.current) / SOS_HOLD_MS,
+      );
+      setProgress(p);
+      if (p >= 1) {
+        cancel();
+        navigator.vibrate?.(250);
+        onTrigger();
+      }
+    }, 40);
+  };
+  useEffect(() => cancel, []);
+
+  return (
+    <button
+      type="button"
+      className="cz-sos"
+      disabled={disabled}
+      aria-label="SOS. Hold for 2 seconds to send your location to the response centre"
+      style={{ ["--sos-progress" as string]: `${Math.round(progress * 100)}%` }}
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        begin();
+      }}
+      onPointerUp={cancel}
+      onPointerCancel={cancel}
+      onContextMenu={(e) => e.preventDefault()}
+      onKeyDown={(e) => {
+        if ((e.key === " " || e.key === "Enter") && !e.repeat) {
+          e.preventDefault();
+          begin();
+        }
+      }}
+      onKeyUp={cancel}
+    >
+      <span>{progress > 0 ? "Keep holding..." : "SOS"}</span>
+    </button>
   );
 }

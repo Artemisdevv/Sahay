@@ -212,6 +212,11 @@ def run_pipeline(db: Session, report_id: str, agents: Agents | None = None) -> R
         triage: TriageResult = agents.llm.triage(intake, context)
     except Exception:  # noqa: BLE001
         triage = MockLLM().triage(intake, context)
+    if payload["kind"] == "sos" and intake.incident_type == "other":
+        # An SOS with no details could be anything. "other" maps to a municipal unit, which cannot rescue anyone, so
+        # call medical and police; the admin approves and can reassign (SOS always needs approval).
+        triage.needed_services = ["ambulance", "police"]
+        triage.reason = "SOS without details: medical and police called, admin to confirm"
     steps.add("triage", "triage_agent", "done", f"Needs {', '.join(triage.needed_services)}, severity {intake.severity}", t0,
               {"needed_services": triage.needed_services, "urgency_score": triage.urgency_score,
                "reason": triage.reason, "search_used": context is not None})
