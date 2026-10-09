@@ -86,9 +86,13 @@ def install(app: FastAPI, current_user: Callable) -> None:
         declared = request.headers.get("content-length")
         if declared and declared.isdigit() and int(declared) > MAX_BODY_BYTES:
             raise crypto.IngestError(413, "too_large", "request body too large")
-        raw = await request.body()
-        if len(raw) > MAX_BODY_BYTES:
-            raise crypto.IngestError(413, "too_large", "request body too large")
+        chunks, size = [], 0
+        async for chunk in request.stream():  # cap while streaming: chunked uploads carry no Content-Length
+            size += len(chunk)
+            if size > MAX_BODY_BYTES:
+                raise crypto.IngestError(413, "too_large", "request body too large")
+            chunks.append(chunk)
+        raw = b"".join(chunks)
         try:
             env = json.loads(raw)
         except ValueError:
