@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     sahay_demo_auto_accept_seconds: float = 0.0  # >0: a called unit accepts (then departs) after this long
     sahay_demo_auto_complete_seconds: float = 0.0  # >0: units on scene complete after this long
     sahay_call_timeout_s: float = 0.0  # >0: a called unit that does not answer in this time is skipped
+    sahay_ws_auth_timeout_s: float = 5.0  # first WebSocket message must be {"type":"auth","token":...} within this
     sahay_pipeline_autorun: bool = True  # run the agent pipeline after each accepted report
     sahay_llm_mode: str = "mock"  # mock = deterministic rules, no network
     sahay_stt_mode: str = "mock"  # mock = no audio model; text payloads still work; live = providers below

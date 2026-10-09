@@ -1,5 +1,6 @@
 import pytest
 
+from tests.ws_helpers import authenticate
 from app.database import SessionLocal
 from app.models import AgentTrace, Incident, Report
 from app.agents.store import load_pii
@@ -52,7 +53,8 @@ def test_admin_websocket_sees_incident_and_agent_traces(autorun):
     h = admin_headers()
     token = h["Authorization"].split()[1]
     d = Dev()
-    with client.websocket_connect(f"/ws/v1?token={token}") as ws:
+    with client.websocket_connect("/ws/v1") as ws:
+        authenticate(ws, token)
         post(d.envelope({**PAYLOAD, "text": "car crash with injured people"}), d)
         types = []
         for _ in range(12):
@@ -67,7 +69,8 @@ def test_civilian_gets_status_push_after_auto_dispatch(autorun):
     admin_headers()
     d = Dev()
     env = d.envelope({**PAYLOAD, "category": "crime", "text": "someone stole my bike"})
-    with client.websocket_connect(f"/ws/v1?token={d.token}") as ws:
+    with client.websocket_connect("/ws/v1") as ws:
+        authenticate(ws, d.token)
         post(env, d)
         msg = ws.receive_json()
     assert msg["type"] == "report.status" and msg["data"]["report_id"] == env["report_id"]

@@ -1,3 +1,4 @@
+from tests.ws_helpers import authenticate
 from fastapi.testclient import TestClient
 from nacl.signing import SigningKey
 
@@ -131,7 +132,8 @@ def test_admin_websocket_gets_dispatch_and_incident_events():
     admin = setup()
     iid = mock_incident()
     token = admin["Authorization"].split()[1]
-    with client.websocket_connect(f"/ws/v1?token={token}") as ws:
+    with client.websocket_connect("/ws/v1") as ws:
+        authenticate(ws, token)
         client.post(f"/api/v1/incidents/{iid}/approve", headers=admin)
         seen = {ws.receive_json()["type"] for _ in range(3)}
     assert seen == {"dispatch.updated", "dispatch.called", "incident.updated"}
@@ -161,7 +163,8 @@ def test_civilian_gets_report_status_push_when_dispatched():
                       kind="report", category="medical", server_time="t", receipt_signature="s"))
         db.get(Incident, iid).report_ids = ["rep-push-1"]
         db.commit()
-    with client.websocket_connect(f"/ws/v1?token={reg['token']}") as ws:
+    with client.websocket_connect("/ws/v1") as ws:
+        authenticate(ws, reg["token"])
         client.post(f"/api/v1/incidents/{iid}/approve", headers=admin)
         msg = ws.receive_json()
     assert msg["type"] == "report.status"

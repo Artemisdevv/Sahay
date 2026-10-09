@@ -274,7 +274,11 @@ These let the frontend work **before** crypto and agents exist.
 
 ## 3. Realtime (WebSocket)
 
-`GET /ws/v1?token=<jwt>` (WebSocket). Server pushes; client messages are not used except `{"type":"ping"}`.
+`GET /ws/v1` (WebSocket). **The token is not sent in the URL** (URLs are logged by proxies, ngrok and the server). After connecting, the client sends one message within 5 s (`SAHAY_WS_AUTH_TIMEOUT_S`):
+```json
+{ "type": "auth", "token": "<jwt>" }
+```
+The server answers `{ "type": "auth.ok" }` and only then registers the client and delivers events. Anything else (no message, bad token, query-string token, a different first message) closes the socket with code `1008`. Server pushes; the only other client message is `{"type":"ping"}` (answered with `{"type":"pong"}`).
 
 Message shape:
 ```json
