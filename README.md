@@ -1,4 +1,8 @@
+<div align="center">
+  
 # Sahay | സഹായ് | सहाय | சஹாய்
+  
+</div>
 
 An emergency and civic reporting app that works when the network doesn't. Speak a report, AI agents triage it, protect the reporter's identity and propose dispatch, and the nearest right service is sent. If the reporter's phone is offline, the encrypted report hops through a nearby phone to get out.
 
