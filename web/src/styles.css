@@ -331,6 +331,63 @@ button {
   gap: 20px;
   margin-bottom: 24px;
 }
+.emergency-call-banner {
+  text-align: center;
+  margin: 12px 0 8px;
+  padding: 0 20px;
+}
+.emergency-call-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg, var(--destructive) 0%, oklch(0.52 0.22 25) 100%);
+  color: white;
+  padding: 22px 40px;
+  border-radius: 14px;
+  font-size: 18px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 8px 30px color-mix(in oklch, var(--destructive) 35%, transparent), inset 0 1px 0 color-mix(in oklch, white 15%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.emergency-call-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px color-mix(in oklch, var(--destructive) 45%, transparent), inset 0 1px 0 color-mix(in oklch, white 20%, transparent);
+}
+.emergency-call-button:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 20px color-mix(in oklch, var(--destructive) 30%, transparent);
+}
+.emergency-number {
+  background: rgba(255, 255, 255, 0.18);
+  padding: 6px 18px;
+  border-radius: 10px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  font-family: var(--font-mono);
+  margin: 0 4px;
+}
+.emergency-call-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+@media (max-width: 600px) {
+  .emergency-call-button {
+    padding: 18px 28px;
+    font-size: 16px;
+    gap: 12px;
+  }
+  .emergency-number {
+    font-size: 18px;
+    padding: 4px 14px;
+  }
+  .emergency-call-hint {
+    font-size: 11px;
+  }
+}
 .eyebrow {
   text-transform: uppercase;
   font-size: 9px;

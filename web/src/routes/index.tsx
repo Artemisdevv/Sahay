@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { pageHead } from "@/lib/dispatch";
+import { getSession } from "@/lib/session";
 export const Route = createFileRoute("/")({
   head: () =>
     pageHead(
@@ -7,9 +8,20 @@ export const Route = createFileRoute("/")({
       "A coordinated incident response workspace for citizens and emergency services.",
     ),
   beforeLoad: () => {
-    throw redirect({
-      to: "/user/$username",
-      params: { username: "alex-morgan" },
-    });
+    const session = getSession();
+    if (!session?.token) {
+      throw redirect({ to: "/login" });
+    }
+    if (session.role === "admin") {
+      throw redirect({ to: "/admin/dashboard" });
+    }
+    if (session.role === "service" && session.unit_id) {
+      throw redirect({
+        to: "/service/$serviceId",
+        params: { serviceId: session.unit_id },
+      });
+    }
+    // For civilian role or fallback
+    throw redirect({ to: "/user/$username", params: { username: "civilian" } });
   },
 });

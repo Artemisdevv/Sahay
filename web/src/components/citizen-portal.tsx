@@ -220,13 +220,16 @@ export function CitizenPortal() {
             <span className="dot" />
             Network connected
           </Badge>
-          <Button variant="outline" size="sm" asChild>
-            <a href="tel:112">
-              <Phone />
-              Emergency: 112
-            </a>
-          </Button>
         </div>
+      </div>
+      <div className="emergency-call-banner">
+        <a href="tel:112" className="emergency-call-button">
+          <Phone size={28} />
+          <span>Emergency Call</span>
+          <span className="emergency-number">112</span>
+          <ArrowUpRight size={20} />
+        </a>
+        <p className="emergency-call-hint">Connects directly to emergency services</p>
       </div>
       <div className="status-strip">
         <div className="status-cell">
