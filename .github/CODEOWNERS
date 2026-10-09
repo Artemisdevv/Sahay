@@ -1,8 +1,13 @@
-# Default reviewer per area. Replace handles with real GitHub usernames.
-/backend/            @aswin-TODO @adnan-TODO
-/backend/app/dispatch/ @adnan-TODO
-/web/                @shreyas-TODO
-/android/            @adnan-TODO
-/design/             @adarsh-TODO
-/contract/           @adnan-TODO
-/docs/api-contract.md @adnan-TODO
+# Default reviewer per area.
+# adn26 = Adnan, Artemisdevv = Aswin, shreyas-syam = Shreyas, adarshkrishna14 = Adarsh
+*                        @adn26
+/backend/                @Artemisdevv @adn26
+/backend/app/dispatch/   @adn26
+/backend/app/ingest/     @adn26
+/web/                    @shreyas-syam
+/android/                @adn26
+/spikes/                 @adn26
+/design/                 @shreyas-syam @adarshkrishna14
+/docs/                   @adarshkrishna14 @adn26
+/contract/               @adn26 @shreyas-syam
+/docs/api-contract.md    @adn26 @Artemisdevv @shreyas-syam
