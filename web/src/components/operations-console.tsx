@@ -34,6 +34,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Shell, Badge, IncidentMap } from "./dispatch-shell";
+import { ResponseTimeline } from "./response-timeline";
 import { toast } from "sonner";
 import { getSession } from "@/lib/session";
 import {
@@ -43,6 +44,7 @@ import {
   updateDispatchStatus,
   getIncidents,
   getIncidentDetails,
+  getIncidentCalls,
   getIncidentTrace,
   getUnits,
   approveIncident,
@@ -60,6 +62,7 @@ import {
   type IncidentSummary,
   type PublicUnit,
   type ServiceType,
+  type ServiceCallList,
   type Unit,
 } from "@/lib/api";
 import { useDispatchWS, type WSEvent } from "@/hooks/use-dispatch-ws";
@@ -99,6 +102,7 @@ function getAuditCategory(action: string) {
 type IncidentPanelData = {
   dispatches: Dispatch[];
   trace: AgentTraceStep[];
+  callLists: ServiceCallList[];
 };
 
 const SERVICE_TYPES: ServiceType[] = [
@@ -922,13 +926,18 @@ export function AdminDashboard() {
     if (!session?.token) return;
     setIncidentPanelLoading(incidentId);
     try {
-      const [details, trace] = await Promise.all([
+      const [details, trace, calls] = await Promise.all([
         getIncidentDetails(incidentId, session.token),
         getIncidentTrace(incidentId, session.token),
+        getIncidentCalls(incidentId, session.token),
       ]);
       setIncidentPanelData((current) => ({
         ...current,
-        [incidentId]: { dispatches: details.dispatches, trace: trace.trace },
+        [incidentId]: {
+          dispatches: details.dispatches,
+          trace: trace.trace,
+          callLists: calls.lists,
+        },
       }));
       setIncidents((current) =>
         current.map((incident) =>
@@ -1521,7 +1530,7 @@ export function AdminDashboard() {
                         <div className="incident-workflow">
                           {incidentPanelLoading === inc.incident_id ? (
                             <p className="text-muted-foreground">
-                              Loading trace and dispatches…
+                              Loading trace, calls, and dispatches…
                             </p>
                           ) : (
                             <>
@@ -1563,6 +1572,8 @@ export function AdminDashboard() {
                                     })}
                   </div>
                                 )}
+                                <h4 className="mt-4">Calling nearby services</h4>
+                                <ResponseTimeline lists={panel?.callLists ?? []} />
                                 <div className="incident-response-controls">
                                   <Button
                                     size="sm"

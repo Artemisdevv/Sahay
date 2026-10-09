@@ -1,4 +1,5 @@
 import { API_BASE } from "@/lib/api";
+import type { ServiceCallList } from "@/lib/api";
 import { ensureDeviceToken, getOrCreateIdentity } from "@/lib/device-identity";
 import { secureStorage } from "@/native/secure-storage";
 import { SahayNearby } from "@/native/sahay-nearby";
@@ -107,6 +108,7 @@ export const listReports = () => getQueue().all();
 export interface ReportStatus {
   status: string;
   message: string;
+  eta_minutes?: number | null;
 }
 
 /** Latest status of one of our reports (GET /reports/{id}/status). Null when offline or not known yet. */
@@ -121,10 +123,32 @@ export async function fetchStatus(
     if (!response.ok) return null;
     const body = (await response.json()) as Partial<ReportStatus>;
     return typeof body.status === "string"
-      ? { status: body.status, message: body.message ?? "" }
+      ? {
+          status: body.status,
+          message: body.message ?? "",
+          eta_minutes:
+            typeof body.eta_minutes === "number" ? body.eta_minutes : null,
+        }
       : null;
   } catch {
     return null;
+  }
+}
+
+/** Response call timeline for this device's report; the server omits unit names and IDs. */
+export async function fetchResponseCalls(
+  reportId: string,
+): Promise<ServiceCallList[]> {
+  try {
+    const token = await ensureDeviceToken(secureStorage);
+    const response = await fetch(`${API_BASE}/reports/${reportId}/calls`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    if (!response.ok) return [];
+    const body = (await response.json()) as { lists?: ServiceCallList[] };
+    return Array.isArray(body.lists) ? body.lists : [];
+  } catch {
+    return [];
   }
 }
 
