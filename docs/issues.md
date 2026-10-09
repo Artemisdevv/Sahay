@@ -115,6 +115,18 @@ Dependency rule: frontend and native work against the **contract and `/dev/*` mo
 **X-02 [Adnan] (M0) Shared crypto test vector.** Backend generates (B-03), frontend and native consume. Prevents the usual signature-mismatch day.
 **X-03 [Adnan] (M3) Stretch (cut first):** RNNoise WASM, multi-hop beyond 2 phones, on-device transcription, offline tile cache.
 
+**X-04 [Adnan] (M3) Live response backend.** Contract section 9: demo mover (units glide to the incident and arrive), optional auto-accept, call timeout with next-nearest unit, `dispatch.called`, richer `unit.moved`, `PATCH /units/{id}/location`, tests. Deterministic dispatch stays in code.
+
+**B-14 [Aswin] (M3) Realtime visibility and public units feed.** Contract 9.2 and 9.4: service role receives `unit.moved` for its own unit and other units on the same incident; `GET /public/units` (coarse, rate limited, tests that nothing identifying leaks); `GET /incidents/{id}/calls`.
+
+**F-11 [Shreyas] (M3) Animated response map.** Admin, public and civilian maps: unit markers by type that glide between `unit.moved` updates (interpolate, do not jump), route line from unit to incident, incident pulse, ETA chip, arrival pulse, legend. Reduced-motion friendly. Public and civilian maps poll `/public/units`.
+
+**F-12 [Shreyas] (M3) "Calling nearby services" timeline.** Admin incident panel and the civilian progress screen: ordered list from `dispatch.called` (calling, declined, no answer, accepted) with distance and ETA, then "Ambulance accepted, about 4 min away" as it arrives. Plain words in the civilian view.
+
+**F-13 [Aswin] (M3) Services console rework.** Map at the top (own unit, assigned incident, route, moving), one-tap Accept, En route, On scene, Complete; remove the hospital-bed demo template for ambulance, police and fire units; show the call countdown. Uses `unit.moved` and `dispatch.called`.
+
+---
+
 ## First-session checklist
 
 1. Aswin: B-01 first (unblocks everyone), then B-02. Follow the contract exactly.
