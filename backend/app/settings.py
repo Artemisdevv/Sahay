@@ -19,7 +19,13 @@ class Settings(BaseSettings):
     sahay_pii_key_file: str = ".sahay-pii-key"
     sahay_pipeline_autorun: bool = True  # run the agent pipeline after each accepted report
     sahay_llm_mode: str = "mock"  # mock = deterministic rules, no network
-    sahay_stt_mode: str = "mock"  # mock = no audio model; text payloads still work
+    sahay_stt_mode: str = "mock"  # mock = no audio model; text payloads still work; live = providers below
+    sahay_stt_providers: str = "gemini:gemini-2.5-flash,groq:whisper-large-v3"  # tried left to right, see app/agents/stt_live.py
+    sahay_stt_timeout_s: float = 20.0
+    stt_api_key: str = ""  # Cloudflare Workers AI token (used when CLOUDFLARE_API_TOKEN is empty)
+    sahay_stt_prompt: str = ""  # optional Whisper prompt, e.g. a Malayalam sentence to steer script and vocabulary
+    cloudflare_account_id: str = ""
+    cloudflare_api_token: str = ""
     llm_provider: str = ""  # "groq" (default endpoint) or any OpenAI-compatible provider with LLM_BASE_URL
     llm_api_key: str = ""  # key for the primary provider (Groq)
     llm_api_key_gemini: str = ""
