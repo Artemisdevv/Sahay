@@ -64,9 +64,9 @@ const tabs: ShellTab[] = [
 const choices: { id: IncidentType; label: string; icon: typeof HeartPulse }[] =
   [
     { id: "medical", label: "Medical", icon: HeartPulse },
-    { id: "fire", label: "Fire or smoke", icon: Flame },
-    { id: "rescue", label: "Someone is trapped", icon: LifeBuoy },
-    { id: "other", label: "Something else", icon: MessageSquare },
+    { id: "fire", label: "Fire", icon: Flame },
+    { id: "rescue", label: "Rescue", icon: LifeBuoy },
+    { id: "other", label: "Other", icon: MessageSquare },
   ];
 const choiceLabel = (id: IncidentType) =>
   choices.find((c) => c.id === id)?.label ?? "Help";
