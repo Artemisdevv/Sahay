@@ -38,6 +38,12 @@
     "signing_input_utf8": "11111111-1111-4111-8111-111111111111|dispatched|Help dispatched, ETA 6 min|2026-10-09T10:20:00Z",
     "signature": "UtR9re17YF5qRL9aISIyZJe6jCI1IzTbgTUYzqQ24ES1y4/hDBqykbF3Aeo945LsS7Wwk8QHGAo0TrIyEsT6Bg=="
   },
+  "register": {
+    "device_id": "22222222-2222-4222-8222-222222222222",
+    "challenge": "v1.1791542400.AAAAAAAAAAAAAAAAAAAAAA.sample-mac-not-verified-by-clients",
+    "signing_input_utf8": "sahay-register-v1|22222222-2222-4222-8222-222222222222|v1.1791542400.AAAAAAAAAAAAAAAAAAAAAA.sample-mac-not-verified-by-clients",
+    "signature": "ByoCYxBdfCOWjRAw5vG4J0jj+h8a5D5lVhCO7uzFCi84vuCR788bA80EXiwLgY+c/7g+M4gGTqlkJJPIOyAPDw=="
+  },
   "negative": {
     "tampered_ciphertext": {
       "envelope": {

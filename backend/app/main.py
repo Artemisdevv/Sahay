@@ -12,6 +12,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.database import Base, engine, get_db
+from app.device_auth import ChallengeError, DeviceChallenges
 from app.dispatch.routes import install as install_dispatch
 from app.events import manager, websocket_loop
 from app.agents.store import store_pii
@@ -23,7 +24,7 @@ from app.keyring import server_public_key_response
 from app.models import AgentTrace, AuditChainHead, AuditEntry, DemoUser, Device, Dispatch, Incident, IncidentPII, Report, Unit
 from app.pii_crypto import ensure_pii_encryption_key
 from app.rate_limit import rate_limiter
-from app.schemas import DeviceRegistrationRequest, LoginRequest, MockReportRequest
+from app.schemas import DeviceChallengeRequest, DeviceRegistrationRequest, LoginRequest, MockReportRequest
 from app.seed import seed_demo
 from app.security import verify_password
 from app.settings import settings
@@ -206,12 +207,28 @@ def get_server_key():
         raise HTTPException(status_code=503, detail="Server encryption key is not configured") from exc
 
 
+device_challenges = DeviceChallenges(JWT_SECRET)
+
+
+@app.post("/api/v1/auth/device-challenge")
+def device_challenge(body: DeviceChallengeRequest, request: Request):
+    """Step 1 of registration / token refresh: a short-lived challenge the device must sign."""
+    device_id = str(body.device_id)
+    rate_limiter.check(f"register-ip:{request_ip(request)}", settings.sahay_register_rate_limit_per_minute)
+    rate_limiter.check(f"register-device:{device_id}", settings.sahay_register_rate_limit_per_minute)
+    return device_challenges.issue(device_id)
+
+
 @app.post("/api/v1/auth/register-device", status_code=status.HTTP_201_CREATED)
 def register_device(body: DeviceRegistrationRequest, request: Request, db: Session = Depends(get_db)):
     ip = request_ip(request)
     device_id = str(body.device_id)
     rate_limiter.check(f"register-ip:{ip}", settings.sahay_register_rate_limit_per_minute)
     rate_limiter.check(f"register-device:{device_id}", settings.sahay_register_rate_limit_per_minute)
+    try:  # proof of possession: only the holder of the private key gets a token for this device
+        device_challenges.verify(device_id, body.ed25519_public_key, body.challenge, body.challenge_signature)
+    except ChallengeError as exc:
+        raise HTTPException(status_code=401, detail=exc.message) from None
     device = db.get(Device, device_id)
     if device is not None:
         if device.disabled or device.ed25519_public_key != body.ed25519_public_key:

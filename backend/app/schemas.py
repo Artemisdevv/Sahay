@@ -51,10 +51,16 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
+class DeviceChallengeRequest(BaseModel):
+    device_id: UUID
+
+
 class DeviceRegistrationRequest(BaseModel):
     device_id: UUID
     ed25519_public_key: str
     language: str = Field(default="en", min_length=2, max_length=12)
+    challenge: str = Field(min_length=10, max_length=300)           # from POST /auth/device-challenge
+    challenge_signature: str = Field(min_length=80, max_length=100)  # base64 Ed25519 over sahay-register-v1|device_id|challenge
 
     @field_validator("ed25519_public_key")
     @classmethod

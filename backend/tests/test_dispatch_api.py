@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
+from nacl.signing import SigningKey
 
 from app.main import app
+from tests.device_helpers import register_device
 
 client = TestClient(app)
 
@@ -110,9 +112,7 @@ def test_roles_are_enforced():
     assert client.post(f"/api/v1/incidents/{iid}/approve").status_code == 401
     assert client.post(f"/api/v1/incidents/{iid}/approve", headers=amb).status_code == 403
     assert client.get("/api/v1/dispatches/mine", headers=admin).status_code == 403
-    dev = client.post("/api/v1/auth/register-device", json={
-        "device_id": "33333333-3333-4333-8333-333333333333",
-        "ed25519_public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "language": "en"}).json()
+    dev = register_device(client, "33333333-3333-4333-8333-333333333333", SigningKey.generate(), "en").json()
     civ = {"Authorization": f"Bearer {dev['token']}"}
     assert client.post(f"/api/v1/incidents/{iid}/approve", headers=civ).status_code == 403
     assert client.get("/api/v1/dispatches/mine", headers=civ).status_code == 403
@@ -155,8 +155,7 @@ def test_civilian_gets_report_status_push_when_dispatched():
     admin = setup()
     iid = mock_incident()
     dev_id = "44444444-4444-4444-8444-444444444444"
-    reg = client.post("/api/v1/auth/register-device", json={
-        "device_id": dev_id, "ed25519_public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "language": "ml"}).json()
+    reg = register_device(client, dev_id, SigningKey.generate()).json()
     with SessionLocal() as db:
         db.add(Report(report_id="rep-push-1", device_id=dev_id, created_at_signed="t", ciphertext=b"x", signature="s",
                       kind="report", category="medical", server_time="t", receipt_signature="s"))

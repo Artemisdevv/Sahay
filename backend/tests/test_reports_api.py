@@ -9,6 +9,7 @@ from nacl.signing import SigningKey
 
 from app.ingest import crypto as c
 from app.main import app
+from tests.device_helpers import challenge_for, register_device, sign_challenge
 
 VECTOR = json.loads((Path(__file__).resolve().parents[2] / "contract" / "crypto-test-vector.json").read_text(encoding="utf-8"))
 SERVER_BOX_PUB = PublicKey(c.b64d(VECTOR["server"]["box_public_key"], "k"))
@@ -29,9 +30,7 @@ class Dev:
     def __init__(self):
         self.id = str(uuid.uuid4())
         self.key = SigningKey.generate()
-        r = client.post("/api/v1/auth/register-device", json={
-            "device_id": self.id, "ed25519_public_key": c.b64e(bytes(self.key.verify_key)), "language": "ml",
-        })
+        r = register_device(client, self.id, self.key)
         assert r.status_code == 201, r.text
         self.token = r.json()["token"]
 

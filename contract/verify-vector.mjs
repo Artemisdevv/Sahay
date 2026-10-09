@@ -27,6 +27,10 @@ ok('verify vector signature', sodium.crypto_sign_verify_detached(b(e.signature),
 const r = v.receipt;
 ok('receipt verifies', sodium.crypto_sign_verify_detached(b(r.signature), enc.encode(r.signing_input_utf8), b(v.server.verify_key)));
 
+const rg = v.register;
+ok('register proof verifies', sodium.crypto_sign_verify_detached(b(rg.signature), enc.encode(rg.signing_input_utf8), b(v.device.public_key)));
+ok('register proof matches JS signature', sodium.to_base64(sodium.crypto_sign_detached(enc.encode(rg.signing_input_utf8), kp.privateKey), sodium.base64_variants.ORIGINAL) === rg.signature);
+
 const st = v.status;
 ok('status verifies', sodium.crypto_sign_verify_detached(b(st.signature), enc.encode(st.signing_input_utf8), b(v.server.verify_key)));
 ok('status tamper rejected', !sodium.crypto_sign_verify_detached(b(st.signature), enc.encode(st.signing_input_utf8.replace('dispatched', 'resolved')), b(v.server.verify_key)));
