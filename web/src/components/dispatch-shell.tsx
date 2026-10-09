@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { clearSession } from "@/lib/session";
+import { clearSession, getSession } from "@/lib/session";
 import { motion, useReducedMotion } from "framer-motion";
 export function Brand() {
   return (
@@ -53,6 +53,7 @@ export function Shell({
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const reduced = useReducedMotion();
+  const session = getSession();
   return (
     <div className="app-shell">
       <aside className={`sidebar ${open ? "open" : ""}`}>
@@ -80,34 +81,42 @@ export function Shell({
         </div>
         <div className="nav-label">Workspace</div>
         <nav aria-label="Main navigation">
-          <Link
-            to="/user/$username"
-            params={{ username: "alex-morgan" }}
-            className={`nav-item ${role === "citizen" ? "active" : ""}`}
-          >
-            <LayoutDashboard />
-            Citizen portal
-          </Link>
-          <Link
-            to="/service/$serviceId"
-            params={{ serviceId: "city-general-hospital" }}
-            className={`nav-item ${role === "hospital" ? "active" : ""}`}
-          >
-            <HeartPulse />
-            Hospital console<span className="count">3</span>
-          </Link>
-          <Link
-            to="/service/$serviceId"
-            params={{ serviceId: "metro-fire-station-4" }}
-            className={`nav-item ${role === "fire" ? "active" : ""}`}
-          >
-            <Flame />
-            Fire & rescue<span className="count">2</span>
-          </Link>
-          <Link to="/admin/dashboard" className={`nav-item ${role === "admin" ? "active" : ""}`}>
-            <Network />
-            Agent orchestration
-          </Link>
+          {role === "citizen" && (
+            <Link
+              to="/user/$username"
+              params={{ username: "alex-morgan" }}
+              className="nav-item active"
+            >
+              <LayoutDashboard />
+              Citizen portal
+            </Link>
+          )}
+          {role === "hospital" && (
+            <Link
+              to="/service/$serviceId"
+              params={{ serviceId: "city-general-hospital" }}
+              className="nav-item active"
+            >
+              <HeartPulse />
+              Hospital console<span className="count">3</span>
+            </Link>
+          )}
+          {role === "fire" && (
+            <Link
+              to="/service/$serviceId"
+              params={{ serviceId: "metro-fire-station-4" }}
+              className="nav-item active"
+            >
+              <Flame />
+              Fire & rescue<span className="count">2</span>
+            </Link>
+          )}
+          {role === "admin" && (
+            <Link to="/admin/dashboard" className="nav-item active">
+              <Network />
+              Agent orchestration
+            </Link>
+          )}
         </nav>
         <div className="nav-label mt-7">System</div>
         <Button
