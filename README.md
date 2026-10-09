@@ -133,7 +133,7 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Vite serves the app locally (normally at `http://localhost:5173`). `.env.example` defines `VITE_API_BASE` and `VITE_WS_URL`, but the current citizen and operations screens are demo UI and do not yet use those API endpoints. The Supabase client integration is separate scaffolding and requires `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` if it is invoked.
+Vite serves the app locally (`npm run dev` in `web/`, at `http://localhost:3000`). `.env.example` defines `VITE_API_BASE` and `VITE_WS_URL`, but the current citizen and operations screens are demo UI and do not yet use those API endpoints. The Supabase client integration is separate scaffolding and requires `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` if it is invoked.
 
 ### Native relay
 

@@ -4,8 +4,8 @@ For testers and judges before a real cloud deploy (B-12). One container serves t
 
 ```
 python deploy/gen_secrets.py        # writes deploy/.env.demo (git-ignored): fresh keys + staff passwords
-docker compose up --build -d        # http://localhost:8000
-ngrok http 8000                     # public https URL (WebSocket works over wss)
+docker compose up --build -d        # http://localhost:8080 (container port 8000 is published on 8080)
+ngrok http 8080                     # public https URL (WebSocket works over wss)
 ```
 
 - Staff logins: `admin`, `amb-01`, `police-01`, `fire-01`. Passwords are `SAHAY_SEED_ADMIN_PASSWORD` / `SAHAY_SEED_SERVICE_PASSWORD` in `deploy/.env.demo`; they are seeded once on the first start (empty database). The admin can reveal PII: hand them only to people you trust.
