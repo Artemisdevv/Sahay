@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session
 
 from app.database import Base, engine, get_db
 from app.events import manager, websocket_loop
+from app.ingest.routes import install as install_ingest
 from app.keyring import server_public_key_response
-from app.models import AgentTrace, AuditEntry, DemoUser, Device, Dispatch, Incident, Unit
+from app.models import AgentTrace, AuditEntry, DemoUser, Device, Dispatch, Incident, Report, Unit
 from app.rate_limit import rate_limiter
 from app.schemas import DeviceRegistrationRequest, LoginRequest, MockReportRequest
 from app.seed import seed_demo
@@ -98,6 +99,9 @@ def decode_access_token(token: str) -> dict:
     if role == "service" and not claims.get("unit_id"):
         raise HTTPException(status_code=401, detail="Unauthenticated")
     return claims
+
+
+install_ingest(app, current_user)
 
 
 def require_admin(user: dict = Depends(current_user)) -> dict:
@@ -251,7 +255,7 @@ def list_units(_: dict = Depends(require_admin), db: Session = Depends(get_db)):
 @app.post("/api/v1/dev/seed", status_code=status.HTTP_200_OK)
 def dev_seed(db: Session = Depends(get_db)):
     require_dev()
-    for model in (AgentTrace, AuditEntry, Dispatch, Incident):
+    for model in (AgentTrace, AuditEntry, Dispatch, Incident, Report):
         db.execute(delete(model))
     seed_demo(db)
     return {"status": "seeded", "units": db.query(Unit).count()}
@@ -260,7 +264,7 @@ def dev_seed(db: Session = Depends(get_db)):
 @app.post("/api/v1/dev/reset")
 def dev_reset(db: Session = Depends(get_db)):
     require_dev()
-    for model in (AgentTrace, AuditEntry, Dispatch, Incident):
+    for model in (AgentTrace, AuditEntry, Dispatch, Incident, Report):
         db.execute(delete(model))
     db.commit()
     return {"status": "reset"}

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String
+from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, LargeBinary, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -98,3 +98,22 @@ class AgentTrace(Base):
     finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     summary: Mapped[str] = mapped_column(String(250))
     output: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class Report(Base):
+    """Opaque stored envelope (B-03). Plaintext/PII is never stored here; the pipeline decrypts on demand."""
+
+    __tablename__ = "reports"
+    report_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    device_id: Mapped[str] = mapped_column(String(64), index=True)
+    created_at_signed: Mapped[str] = mapped_column(String(40))  # exact string covered by the signature
+    ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
+    signature: Mapped[str] = mapped_column(String(128))
+    kind: Mapped[str] = mapped_column(String(8))
+    category: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(24), default="received", index=True)
+    incident_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    server_time: Mapped[str] = mapped_column(String(40))
+    receipt_signature: Mapped[str] = mapped_column(String(128))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
