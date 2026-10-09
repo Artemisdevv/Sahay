@@ -219,7 +219,7 @@ export interface PublicUnit {
   status: string;
   location: { lat: number; lng: number };
   incident: string;
-  eta_minutes: number;
+  eta_minutes: number | null;
 }
 
 /** Open map feed: no login, coarse facts only (backend/app/public_routes.py). */

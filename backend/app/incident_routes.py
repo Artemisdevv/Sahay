@@ -190,7 +190,12 @@ def install(
                 Dispatch.status.in_(SERVICE_VISIBLE_DISPATCH_STATUSES),
             )
         dispatches = db.scalars(dispatch_query.order_by(Dispatch.created_at, Dispatch.dispatch_id)).all()
-        return {"incident_id": incident_id, "calls": [_calls_json(dispatch, utc_iso) for dispatch in dispatches]}
+        from app.live import called_payload  # late import: live imports the dispatch package
+
+        types = dict.fromkeys(dispatch.service_type for dispatch in dispatches)
+        lists = [payload for payload in (called_payload(db, incident_id, t) for t in types) if payload is not None]
+        # `calls` = raw dispatch rows; `lists` = the same ranked candidate lists that `dispatch.called` pushes (contract 9.2)
+        return {"incident_id": incident_id, "calls": [_calls_json(dispatch, utc_iso) for dispatch in dispatches], "lists": lists}
 
     @router.get("/incidents/{incident_id}/trace")
     def get_incident_trace(

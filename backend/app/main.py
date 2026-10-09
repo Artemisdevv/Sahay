@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import math
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -24,7 +23,7 @@ from app.incident_routes import install as install_incident_routes
 from app.ingest.routes import install as install_ingest
 from app.keyring import server_public_key_response
 from app.live import install as install_live
-from app.public_routes import install as install_public_routes, public_incident
+from app.public_routes import install as install_public_routes
 from app.models import AgentTrace, AuditChainHead, AuditEntry, DemoUser, Device, Dispatch, Incident, IncidentPII, Report, Unit
 from app.pii_crypto import ensure_pii_encryption_key
 from app.rate_limit import rate_limiter
@@ -308,76 +307,6 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
 @app.get("/api/v1/units")
 def list_units(_: dict = Depends(require_admin), db: Session = Depends(get_db)):
     return {"units": [unit_json(unit) for unit in db.scalars(select(Unit).order_by(Unit.service_type, Unit.name)).all()]}
-
-
-def fuzz_coordinate(coord: float) -> float:
-    return round(coord + ((hash(str(coord)) % 2000 - 1000) / 100000.0), 5)
-
-
-@app.get("/api/v1/public/units")
-def list_public_units(db: Session = Depends(get_db)):
-    # Per §9.4: units that are accepted, en route or on scene for a confirmed incident
-    # Dispatch statuses: accepted, en_route, on_scene (excludes approved, completed)
-    dispatch_statuses = ("accepted", "en_route", "on_scene")
-    # Incident statuses considered confirmed
-    confirmed_incident_statuses = ("dispatched", "en_route", "on_scene", "resolved")
-
-    # Subquery: for each unit, pick the earliest qualifying dispatch
-    subq = (
-        select(
-            Dispatch.unit_id,
-            Dispatch.dispatch_id,
-            Dispatch.incident_id,
-            Dispatch.eta_minutes,
-            Dispatch.status.label("dispatch_status"),
-            Incident.status.label("incident_status"),
-            Incident.incident_id,
-        )
-        .join(Incident, Dispatch.incident_id == Incident.incident_id)
-        .where(Dispatch.status.in_(dispatch_statuses))
-        .where(Incident.status.in_(confirmed_incident_statuses))
-        .order_by(Dispatch.unit_id, Dispatch.created_at)
-    ).subquery()
-
-    # Distinct on unit_id (first row per unit due to ordering)
-    from sqlalchemy import distinct
-    chosen = (
-        db.query(subq.c.unit_id, subq.c.dispatch_id, subq.c.incident_id, subq.c.eta_minutes, subq.c.dispatch_status, subq.c.incident_status)
-        .distinct(subq.c.unit_id)
-        .all()
-    )
-
-    # Map unit_id -> dispatch info
-    dispatch_by_unit = {row.unit_id: row for row in chosen}
-
-    units = db.scalars(select(Unit).where(Unit.unit_id.in_(dispatch_by_unit.keys()))).all()
-
-    result_units = []
-    for unit in units:
-        d = dispatch_by_unit[unit.unit_id]
-        # Opaque id: hash of unit_id + incident_id (same pattern as incidents)
-        opaque = hashlib.sha256(f"{unit.unit_id}|{d.incident_id}".encode()).hexdigest()[:12]
-        # Map dispatch status to public wording (per §9.4 contract)
-        status_map = {
-            "accepted": "help assigned",
-            "en_route": "help on the way",
-            "on_scene": "help on scene",
-        }
-        public_status = status_map.get(d.dispatch_status, d.dispatch_status)
-        # Per §9.4: coordinates rounded to 3 decimals (~100 m), not fuzzed
-        result_units.append({
-            "id": opaque,
-            "service_type": unit.service_type,
-            "status": public_status,
-            "location": {"lat": round(unit.lat, 3), "lng": round(unit.lng, 3)},
-            "incident": hashlib.sha256(f"{JWT_SECRET}|{d.incident_id}".encode()).hexdigest()[:12],
-            "eta_minutes": d.eta_minutes,
-        })
-
-    return {
-        "units": result_units,
-        "generated_at": utc_iso(datetime.now(timezone.utc)),
-    }
 
 
 @app.post("/api/v1/dev/seed", status_code=status.HTTP_200_OK)

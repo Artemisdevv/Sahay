@@ -41,7 +41,7 @@ export function Badge({
 
 export type ShellTab = { id: string; label: string; icon: LucideIcon };
 
-type Role = "citizen" | "hospital" | "fire" | "admin";
+type Role = "citizen" | "hospital" | "fire" | "ambulance" | "police" | "admin";
 
 function roleLink(role: Role) {
   if (role === "hospital")
