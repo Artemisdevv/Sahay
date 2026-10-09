@@ -87,3 +87,8 @@ def server_public_key_response() -> dict[str, str]:
         "x25519_public_key": base64.b64encode(bytes(private_key.public_key)).decode("ascii"),
         "ed25519_public_key": base64.b64encode(bytes(signing_key.verify_key)).decode("ascii"),
     }
+
+
+def server_box_key() -> PrivateKey:
+    """Server X25519 key used to open sealed-box report ciphertexts (B-03)."""
+    return _load_or_create_private_key()
