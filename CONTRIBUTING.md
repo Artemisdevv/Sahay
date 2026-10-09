@@ -32,7 +32,7 @@ Merge is blocked without tests for:
 
 ## Secrets
 - No secrets in git: keys, tokens, `.env`, keystores, service-account JSON.
-- Copy `.env.example` to `.env` and fill locally.
+- Copy `backend/.env.example` to `backend/.env` and `web/.env.example` to `web/.env.local`; fill locally.
 - If a secret is committed, rotate it first, then clean history.
 
 ## Repo layout
