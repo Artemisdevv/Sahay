@@ -43,3 +43,8 @@ Thumbs.db
 # Docs kept outside the repo on purpose
 solution.md
 vague_idea.txt
+
+# Gradle (any module)
+.gradle/
+build/
+local.properties
