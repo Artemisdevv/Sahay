@@ -1,0 +1,10 @@
+{
+  "reports": [
+    {
+      "report_id": "a1b2c3d4-1234-4234-8234-123456789abc",
+      "status": "dispatched",
+      "eta_minutes": 6,
+      "updated_at": "2026-10-09T10:15:00Z"
+    }
+  ]
+}

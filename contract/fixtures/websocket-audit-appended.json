@@ -1,0 +1,14 @@
+{
+  "type": "audit.appended",
+  "ts": "2026-10-09T10:15:00Z",
+  "data": {
+    "seq": 1,
+    "ts": "2026-10-09T10:15:00Z",
+    "actor": {"type": "system", "id": "dev_mock"},
+    "action": "report.received",
+    "target": {"type": "incident", "id": "22222222-2222-4222-8222-222222222222"},
+    "details": {},
+    "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}
