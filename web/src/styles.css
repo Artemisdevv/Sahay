@@ -1974,6 +1974,9 @@ h1 {
 .cz-status.ok {
   color: var(--primary);
 }
+.cz-status.bad {
+  color: var(--destructive);
+}
 .cz-status.wait {
   color: var(--warning);
 }

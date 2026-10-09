@@ -15,6 +15,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { registerSW } from "@/lib/sw-register";
 import { startDeviceBootstrap } from "@/lib/device-bootstrap";
+import { startReportSync } from "@/lib/report/service";
 import { secureStorage } from "@/native/secure-storage";
 import { SESSION_EXPIRED_EVENT, getSession } from "@/lib/session";
 import { toast } from "sonner";
@@ -160,7 +161,12 @@ function RootComponent() {
     // Civilian device registration/refresh runs in the background; it never blocks or throws.
     // Skipped for staff logins (a browser console is not a civilian device).
     if (getSession()) return;
-    return startDeviceBootstrap(secureStorage);
+    const stopDevice = startDeviceBootstrap(secureStorage);
+    const stopReports = startReportSync();
+    return () => {
+      stopDevice();
+      stopReports();
+    };
   }, []);
   useEffect(() => {
     const onExpired = () => {

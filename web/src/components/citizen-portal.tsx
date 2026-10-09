@@ -34,6 +34,17 @@ import {
   type IncidentType,
 } from "@/lib/dispatch";
 import { useVoiceCapture } from "@/hooks/use-voice-capture";
+import {
+  fetchStatus,
+  listReports,
+  NotReadyError,
+  PayloadError,
+  retryFailedNow,
+  submitReport,
+  type ReportStatus,
+} from "@/lib/report/service";
+import type { Category } from "@/lib/report/envelope";
+import type { QueueItem } from "@/lib/report/queue";
 
 const tabs: ShellTab[] = [
   { id: "help", label: "Get help", icon: Mic },
@@ -66,12 +77,39 @@ const profileFields = [
   ["mobility", "Trouble walking or moving"],
 ] as const;
 
-type Report = {
-  id: string;
-  name: string;
-  when: string;
-  status: "Resolved" | "In progress";
+const CATEGORY_FOR: Record<IncidentType, Category> = {
+  medical: "medical",
+  fire: "fire",
+  rescue: "accident",
+  other: "other",
 };
+const LANGUAGE_CODES: Record<string, string> = {
+  english: "en",
+  malayalam: "ml",
+  hindi: "hi",
+  tamil: "ta",
+};
+const HELP_ARRANGED = new Set([
+  "dispatched",
+  "en_route",
+  "on_scene",
+  "resolved",
+]);
+const NICE_CATEGORY: Record<string, string> = {
+  medical: "Medical",
+  fire: "Fire or smoke",
+  accident: "Accident or trapped",
+  crime: "Crime",
+  flood: "Flood",
+  other: "Something else",
+};
+const whenText = (iso: string) =>
+  new Date(iso).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 type ScenePhoto = { file: File; url: string };
 
 const fmt = (s: number) =>
@@ -79,7 +117,10 @@ const fmt = (s: number) =>
 
 export function CitizenPortal() {
   const [tab, setTab] = useState("help");
-  const [step, setStep] = useState(-1); // -1 = not sent, 0..2 = progress, 3 = done
+  const [current, setCurrent] = useState<QueueItem | null>(null);
+  const [status, setStatus] = useState<ReportStatus | null>(null);
+  const [sending, setSending] = useState(false);
+  const [approx, setApprox] = useState(false);
   const [picked, setPicked] = useState<IncidentType | null>(null);
   const [note, setNote] = useState("");
   const [location, setLocation] = useState("Kochi, Kerala");
@@ -87,20 +128,7 @@ export function CitizenPortal() {
   const [draft, setDraft] = useState<EmergencyProfile>(defaultProfile);
   const [profileOpen, setProfileOpen] = useState(false);
   const [consent, setConsent] = useState(true);
-  const [reports, setReports] = useState<Report[]>([
-    {
-      id: "REQ-1048",
-      name: "Medical",
-      when: "7 Oct 2026, 2:32 pm",
-      status: "Resolved",
-    },
-    {
-      id: "REQ-1036",
-      name: "Something else",
-      when: "28 Sep 2026, 9:18 am",
-      status: "Resolved",
-    },
-  ]);
+  const [reports, setReports] = useState<QueueItem[]>([]);
   const [photoChoiceOpen, setPhotoChoiceOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [photos, setPhotos] = useState<ScenePhoto[]>([]);
@@ -111,11 +139,40 @@ export function CitizenPortal() {
   const voice = useVoiceCapture();
   const [canUseCamera, setCanUseCamera] = useState(false);
 
+  // Follow the report we just sent: local queue state every 3 s, server status once it is delivered.
+  const currentId = current?.report_id;
   useEffect(() => {
-    if (step < 0 || step >= 3) return;
-    const timer = setTimeout(() => setStep((s) => s + 1), 1600);
-    return () => clearTimeout(timer);
-  }, [step]);
+    if (!currentId) return;
+    let alive = true;
+    const tick = async () => {
+      const row = (await listReports()).find((r) => r.report_id === currentId);
+      if (!alive || !row) return;
+      setCurrent(row);
+      if (row.state === "sent") {
+        const st = await fetchStatus(currentId);
+        if (alive && st) setStatus(st);
+      }
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), 3000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [currentId]);
+
+  useEffect(() => {
+    if (tab !== "reports") return;
+    let alive = true;
+    const load = () =>
+      void listReports().then((rows) => alive && setReports(rows));
+    load();
+    const timer = setInterval(load, 5000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [tab]);
 
   useEffect(() => {
     if (cameraOpen && cameraVideo.current && cameraStream.current) {
@@ -255,26 +312,49 @@ export function CitizenPortal() {
     setPhotos((current) => current.filter((item) => item.url !== photo.url));
   }
 
-  const hasReport = !!voice.clip || !!picked || note.trim().length >= 5;
+  // A category alone is not a report: the response team needs a message. The buttons only label it.
+  const hasReport = !!voice.clip || note.trim().length >= 5;
 
-  function send() {
-    if (!hasReport) return;
-    const type = picked ?? "other";
-    setReports((r) => [
-      {
-        id: `REQ-${1050 + r.length}`,
-        name: choiceLabel(type),
-        when: "Just now",
-        status: "In progress",
-      },
-      ...r,
-    ]);
-    setStep(0);
-    // F-03 hook: voice.clip.blob + location + picked + note go to the signed, encrypted report queue here.
+  async function send() {
+    if (!hasReport || sending) return;
+    setSending(true);
+    try {
+      const language =
+        LANGUAGE_CODES[profile.language.trim().toLowerCase()] ?? "en";
+      const { item, approximateLocation } = await submitReport({
+        category: CATEGORY_FOR[picked ?? "other"],
+        language,
+        ...(voice.clip
+          ? { audio: { blob: voice.clip.blob, seconds: voice.clip.seconds } }
+          : {}),
+        ...(note.trim() ? { text: note } : {}),
+        ...(consent
+          ? {
+              reporter: { name: profile.fullName },
+              emergency_contact: {
+                name: profile.contactName,
+                phone: profile.phone,
+              },
+            }
+          : {}),
+      });
+      setApprox(approximateLocation);
+      setStatus(null);
+      setCurrent(item);
+    } catch (e) {
+      if (e instanceof NotReadyError || e instanceof PayloadError) {
+        toast.error(e.message);
+      } else {
+        toast.error("Could not save the report. Try again, or call 112.");
+      }
+    } finally {
+      setSending(false);
+    }
   }
 
   function startOver() {
-    setStep(-1);
+    setCurrent(null);
+    setStatus(null);
     setPicked(null);
     setNote("");
     voice.reset();
@@ -303,7 +383,7 @@ export function CitizenPortal() {
       activeTab={tab}
       onTab={setTab}
     >
-      {tab === "help" && step < 0 && (
+      {tab === "help" && !current && (
         <section className="cz-help" aria-labelledby="help-title">
           <h1 id="help-title">Do you need help?</h1>
           <p className="cz-lead">Hold the button and say what happened.</p>
@@ -376,7 +456,7 @@ export function CitizenPortal() {
             </p>
           )}
 
-          <h2 className="cz-sub">Or tap what is happening</h2>
+          <h2 className="cz-sub">What is happening? (optional)</h2>
           <div className="cz-choices">
             {choices.map((c) => (
               <button
@@ -414,13 +494,15 @@ export function CitizenPortal() {
             </button>
           </div>
 
-          <Button className="cz-send" disabled={!hasReport} onClick={send}>
-            Send help request
+          <Button
+            className="cz-send"
+            disabled={!hasReport || sending}
+            onClick={() => void send()}
+          >
+            {sending ? "Saving..." : "Send help request"}
           </Button>
           {!hasReport && (
-            <p className="cz-hint">
-              Record a message or tap what is happening to send.
-            </p>
+            <p className="cz-hint">Record a message or type one to send.</p>
           )}
 
           <a href="tel:112" className="cz-call">
@@ -433,63 +515,44 @@ export function CitizenPortal() {
         </section>
       )}
 
-      {tab === "help" && step >= 0 && (
-        <section className="cz-help" aria-live="polite">
-          <h1>{step >= 2 ? "Help is on the way" : "We are working on it"}</h1>
-          <p className="cz-lead">Demo only. No real services are contacted.</p>
-          <ol className="cz-steps">
-            {[
-              "We got your request",
-              "We are finding the nearest help",
-              "A team has been told to go to you",
-            ].map((label, i) => (
-              <li
-                key={label}
-                className={step > i ? "done" : step === i ? "now" : ""}
-              >
-                <span className="cz-step-mark" aria-hidden>
-                  {step > i ? (
-                    <Check />
-                  ) : step === i ? (
-                    <LoaderCircle className="animate-spin" />
-                  ) : null}
-                </span>
-                {label}
-              </li>
-            ))}
-          </ol>
-          <a href="tel:112" className="cz-call">
-            <Phone />
-            Call 112 now
-          </a>
-          <Button
-            variant="outline"
-            className="cz-secondary"
-            onClick={startOver}
-          >
-            Done
-          </Button>
-        </section>
+      {tab === "help" && current && (
+        <Progress
+          item={current}
+          status={status}
+          approximate={approx}
+          onDone={startOver}
+          onRetry={() => void retryFailedNow(current.report_id)}
+        />
       )}
 
       {tab === "reports" && (
         <section className="cz-page" aria-labelledby="reports-title">
           <h1 id="reports-title">My reports</h1>
-          <ul className="cz-list">
-            {reports.map((r) => (
-              <li key={r.id}>
-                <div>
-                  <strong>{r.name}</strong>
-                  <small>{r.when}</small>
-                </div>
-                <span
-                  className={`cz-status ${r.status === "Resolved" ? "ok" : "wait"}`}
-                >
-                  {r.status}
-                </span>
-              </li>
-            ))}
-          </ul>
+          {reports.length === 0 ? (
+            <p className="cz-lead">
+              Nothing yet. When you ask for help, it will show here.
+            </p>
+          ) : (
+            <ul className="cz-list">
+              {reports.map((r) => (
+                <li key={r.report_id}>
+                  <div>
+                    <strong>{NICE_CATEGORY[r.category] ?? "Report"}</strong>
+                    <small>{whenText(r.created_at)}</small>
+                  </div>
+                  <span
+                    className={`cz-status ${r.state === "sent" ? "ok" : r.state === "failed" ? "bad" : "wait"}`}
+                  >
+                    {r.state === "sent"
+                      ? "Sent"
+                      : r.state === "failed"
+                        ? "Not accepted"
+                        : "Waiting to send"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
 
@@ -716,5 +779,87 @@ function MicButton({ voice }: { voice: ReturnType<typeof useVoiceCapture> }) {
             : "Hold to talk"}
       </p>
     </div>
+  );
+}
+
+function Progress({
+  item,
+  status,
+  approximate,
+  onDone,
+  onRetry,
+}: {
+  item: QueueItem;
+  status: ReportStatus | null;
+  approximate: boolean;
+  onDone: () => void;
+  onRetry: () => void;
+}) {
+  const failed = item.state === "failed";
+  // k = number of finished steps: 1 saved, 2 sent, 3 a team is arranged
+  const k =
+    item.state === "sent"
+      ? status && HELP_ARRANGED.has(status.status)
+        ? 3
+        : 2
+      : 1;
+  const title = failed
+    ? "We could not send this"
+    : k === 3
+      ? "Help is on the way"
+      : item.state === "sent"
+        ? "Your request was sent"
+        : "Saved on your phone";
+  const lead = failed
+    ? "The response centre did not accept this report. Call 112 now."
+    : status?.message
+      ? status.message
+      : item.state === "sent"
+        ? "The response centre has it. A team is being arranged."
+        : "It will be sent as soon as there is a connection. You do not need to do anything.";
+  const labels = [
+    "Saved on your phone",
+    "Sent to the response centre",
+    "A team is on the way",
+  ];
+  return (
+    <section className="cz-help" aria-live="polite">
+      <h1>{title}</h1>
+      <p className="cz-lead">{lead}</p>
+      {approximate && !failed && (
+        <p className="cz-warn" role="status">
+          We could not find your exact position. Tell the team where you are if
+          they call.
+        </p>
+      )}
+      {!failed && (
+        <ol className="cz-steps">
+          {labels.map((label, i) => (
+            <li key={label} className={k > i ? "done" : k === i ? "now" : ""}>
+              <span className="cz-step-mark" aria-hidden>
+                {k > i ? (
+                  <Check />
+                ) : k === i ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : null}
+              </span>
+              {label}
+            </li>
+          ))}
+        </ol>
+      )}
+      {failed && (
+        <Button variant="outline" className="cz-secondary" onClick={onRetry}>
+          Try sending again
+        </Button>
+      )}
+      <a href="tel:112" className="cz-call">
+        <Phone />
+        Call 112 now
+      </a>
+      <Button variant="outline" className="cz-secondary" onClick={onDone}>
+        Done
+      </Button>
+    </section>
   );
 }
