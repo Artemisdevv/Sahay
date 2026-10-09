@@ -16,7 +16,20 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.agents.store import load_pii
 from app.dispatch.engine import audit
+from app.events import SERVICE_INCIDENT_FIELDS
 from app.models import AgentTrace, Dispatch, Incident, IncidentPII
+
+
+# A service unit only sees an incident once an admin has approved its dispatch and only while that
+# dispatch is live or finished. Proposed, declined and cancelled dispatches stay invisible to it.
+SERVICE_VISIBLE_DISPATCH_STATUSES = ("approved", "accepted", "en_route", "on_scene", "completed")
+
+
+def _for_role(incident: dict, role: str) -> dict:
+    """Services get the same redacted subset as the WebSocket incident.updated event."""
+    if role == "service":
+        return {key: value for key, value in incident.items() if key in SERVICE_INCIDENT_FIELDS}
+    return incident
 
 
 class RevealRequest(BaseModel):
@@ -90,7 +103,10 @@ def install(
     def visible_incident_query(user: dict):
         query = select(Incident)
         if user["role"] == "service":
-            visible_ids = select(Dispatch.incident_id).where(Dispatch.unit_id == user["unit_id"])
+            visible_ids = select(Dispatch.incident_id).where(
+                Dispatch.unit_id == user["unit_id"],
+                Dispatch.status.in_(SERVICE_VISIBLE_DISPATCH_STATUSES),
+            )
             query = query.where(Incident.incident_id.in_(visible_ids))
         return query
 
@@ -128,7 +144,7 @@ def install(
         has_more = len(rows) > limit
         rows = rows[:limit]
         next_cursor = _cursor_encode(rows[-1], utc_iso) if has_more and rows else None
-        return {"incidents": [incident_json(row) for row in rows], "next_cursor": next_cursor}
+        return {"incidents": [_for_role(incident_json(row), user["role"]) for row in rows], "next_cursor": next_cursor}
 
     @router.get("/incidents/{incident_id}")
     def get_incident(
@@ -139,9 +155,12 @@ def install(
         incident = require_visible(incident_id, user, db)
         dispatch_query = select(Dispatch).where(Dispatch.incident_id == incident_id)
         if user["role"] == "service":
-            dispatch_query = dispatch_query.where(Dispatch.unit_id == user["unit_id"])
+            dispatch_query = dispatch_query.where(
+                Dispatch.unit_id == user["unit_id"],
+                Dispatch.status.in_(SERVICE_VISIBLE_DISPATCH_STATUSES),
+            )
         dispatches = db.scalars(dispatch_query.order_by(Dispatch.created_at, Dispatch.dispatch_id)).all()
-        result = incident_json(incident)
+        result = _for_role(incident_json(incident), user["role"])
         result["dispatches"] = [_dispatch_json(dispatch, utc_iso) for dispatch in dispatches]
         return result
 

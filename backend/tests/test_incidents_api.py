@@ -4,6 +4,7 @@ import base64
 import json
 
 from app.database import SessionLocal
+from app.events import SERVICE_INCIDENT_FIELDS
 from app.main import app, decode_access_token
 from app.models import AuditEntry, IncidentPII
 from app.pii_crypto import decrypt_field, encrypt_field
@@ -94,6 +95,7 @@ def test_detail_is_redacted_and_service_scope_is_limited_to_own_dispatch():
     assert "Asha Nair" not in serialized and "+919800000000" not in serialized
     assert "Caller at the scene" not in serialized
 
+    assert client.post(f"/api/v1/incidents/{medical_id}/approve", headers=admin).status_code == 200
     ambulance = login("amb-01")
     service_detail = client.get(f"/api/v1/incidents/{medical_id}", headers=ambulance)
     assert service_detail.status_code == 200
@@ -102,6 +104,43 @@ def test_detail_is_redacted_and_service_scope_is_limited_to_own_dispatch():
     assert client.get(f"/api/v1/incidents/{fire_id}", headers=ambulance).status_code == 404
     service_list = client.get("/api/v1/incidents", headers=ambulance).json()["incidents"]
     assert {incident["incident_id"] for incident in service_list} == {medical_id}
+
+
+def test_service_cannot_see_incident_until_dispatch_is_approved_or_after_it_is_rejected():
+    admin = setup()
+    incident_id = create_incident("medical", ["ambulance"])
+    ambulance = login("amb-01")
+
+    # Dispatch is only proposed: the unit must not learn about the incident yet.
+    assert client.get(f"/api/v1/incidents/{incident_id}", headers=ambulance).status_code == 404
+    assert client.get("/api/v1/incidents", headers=ambulance).json()["incidents"] == []
+
+    assert client.post(f"/api/v1/incidents/{incident_id}/approve", headers=admin).status_code == 200
+    assert client.get(f"/api/v1/incidents/{incident_id}", headers=ambulance).status_code == 200
+
+    # Admin changes their mind: the cancelled dispatch revokes access.
+    reject = client.post(f"/api/v1/incidents/{incident_id}/reject", json={"reason": "duplicate"}, headers=admin)
+    assert reject.status_code == 200, reject.text
+    assert client.get(f"/api/v1/incidents/{incident_id}", headers=ambulance).status_code == 404
+    assert client.get("/api/v1/incidents", headers=ambulance).json()["incidents"] == []
+
+
+def test_service_incident_responses_use_the_websocket_field_whitelist():
+    admin = setup()
+    incident_id = create_incident("medical", ["ambulance"])
+    client.post(f"/api/v1/incidents/{incident_id}/approve", headers=admin)
+    ambulance = login("amb-01")
+
+    detail = client.get(f"/api/v1/incidents/{incident_id}", headers=ambulance).json()
+    listed = client.get("/api/v1/incidents", headers=ambulance).json()["incidents"][0]
+    for body in (detail, listed):
+        assert not {"report_ids"} & body.keys()
+        assert {"incident_id", "status", "location", "summary_redacted"} <= body.keys()
+    assert set(listed) <= SERVICE_INCIDENT_FIELDS
+    assert set(detail) - {"dispatches"} <= SERVICE_INCIDENT_FIELDS
+    # Admin still gets the full shape.
+    admin_detail = client.get(f"/api/v1/incidents/{incident_id}", headers=admin).json()
+    assert "report_ids" in admin_detail
 
 
 def test_trace_is_admin_only():
