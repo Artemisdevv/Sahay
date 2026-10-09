@@ -33,7 +33,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Shell, Badge, ZoneMap } from "./dispatch-shell";
+import { Shell, Badge, IncidentMap } from "./dispatch-shell";
 import { toast } from "sonner";
 import { getSession } from "@/lib/session";
 import {
@@ -50,10 +50,7 @@ import {
   type IncidentPii,
   type IncidentSummary,
 } from "@/lib/api";
-import {
-  useDispatchWS,
-  type DispatchUpdatedEvent,
-} from "@/hooks/use-dispatch-ws";
+import { useDispatchWS, type WSEvent } from "@/hooks/use-dispatch-ws";
 
 function getStatusBadgeTone(status: Dispatch["status"]) {
   switch (status) {
@@ -118,21 +115,13 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
   }, [loadDispatches]);
 
   const handleWsEvent = useCallback(
-    (
-      event:
-        | DispatchUpdatedEvent
-        | {
-            type: "incident.updated";
-            ts: string;
-            data: { incident_id: string; status: string };
-          },
-    ) => {
+    (event: WSEvent) => {
       if (event.type === "dispatch.updated") {
         toast.info(
           `Dispatch ${event.data.dispatch_id.slice(0, 8)}: ${getStatusLabel(event.data.status as Dispatch["status"])}`,
         );
       }
-      void loadDispatches();
+      if (event.type !== "unit.moved") void loadDispatches();
     },
     [loadDispatches],
   );
@@ -508,21 +497,19 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
               </div>
             )}
           </section>
-          {fire && (
-            <section className="panel">
-              <div className="panel-head compact-head">
-                <h2>
-                  <MapPin />
-                  Response zone · Active alerts
-                </h2>
-              </div>
-              <ZoneMap />
-              <div className="zone-meta">
-                <strong>Central District</strong>
-                <Badge tone="amber">2 active alerts</Badge>
-              </div>
-            </section>
-          )}
+          <section className="panel">
+            <div className="panel-head compact-head">
+              <h2>
+                <MapPin />
+                Response map · Assigned incidents
+              </h2>
+            </div>
+            <IncidentMap role="service" />
+            <div className="zone-meta">
+              <strong>Central District</strong>
+              <Badge tone="sky">Contract filtered</Badge>
+            </div>
+          </section>
           <section className="panel">
             <div className="panel-head compact-head">
               <h2>
@@ -613,6 +600,7 @@ export function AdminDashboard() {
   const [auditFilter, setAuditFilter] = useState("All");
   const [selected, setSelected] = useState<string | null>(null);
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
+  const [incidentLoadError, setIncidentLoadError] = useState<string | null>(null);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [adminDataLoading, setAdminDataLoading] = useState(true);
   const [piiModalOpen, setPiiModalOpen] = useState(false);
@@ -641,6 +629,7 @@ export function AdminDashboard() {
       if (incidentResult.status === "fulfilled") {
         setIncidents(incidentResult.value.incidents);
       } else {
+        setIncidentLoadError("Incident data could not be loaded.");
         toast.error("Failed to load incidents");
       }
       if (auditResult.status === "fulfilled") {
@@ -814,6 +803,29 @@ export function AdminDashboard() {
       </div>
       <div className="content-grid">
         <div>
+          <section className="panel mb-5">
+            <div className="panel-head">
+              <div>
+                <h2>
+                  <MapPin className="text-primary" /> Live distress map
+                </h2>
+                <p>
+                  Incidents and response units across the permitted operations
+                  view
+                </p>
+              </div>
+              <Badge tone="green">
+                <span className="dot pulse" /> Live positions
+              </Badge>
+            </div>
+            <IncidentMap
+              role="admin"
+              incidentData={incidents}
+              loading={adminDataLoading}
+              error={incidentLoadError}
+              className="admin-map"
+            />
+          </section>
           <section className="panel">
             <div className="panel-head">
               <div>

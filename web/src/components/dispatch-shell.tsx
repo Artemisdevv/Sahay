@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { clearSession } from "@/lib/session";
 import { motion, useReducedMotion } from "framer-motion";
+import { IncidentMap } from "./incident-map";
 
 export function Brand() {
   return (
@@ -239,41 +240,4 @@ export function Shell({
     </div>
   );
 }
-export function ZoneMap() {
-  const [authorized, setAuthorized] = useState(false);
-  return <MapInner authorized={authorized} setAuthorized={setAuthorized} />;
-}
-import { useEffect } from "react";
-function MapInner({
-  authorized,
-  setAuthorized,
-}: {
-  authorized: boolean;
-  setAuthorized: (value: boolean) => void;
-}) {
-  useEffect(() => {
-    const host = window.location.hostname;
-    setAuthorized(
-      host.endsWith(".lovable.app") ||
-        (host.endsWith(".lovableproject.com") && !host.includes("-devserver-")),
-    );
-  }, [setAuthorized]);
-  const key = import.meta.env["VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY"];
-  return (
-    <div className="network-map">
-      {authorized && key ? (
-        <iframe
-          title="Kochi response zone map"
-          loading="lazy"
-          src={`https://www.google.com/maps/embed/v1/view?key=${key}&center=9.9312,76.2673&zoom=13&maptype=roadmap`}
-        />
-      ) : (
-        <div className="map-placeholder">
-          <MapPin size={23} />
-          <span className="mono">KOCHI · CENTRAL ZONE</span>
-          <small>Map available on authorized deployment</small>
-        </div>
-      )}
-    </div>
-  );
-}
+export { IncidentMap };

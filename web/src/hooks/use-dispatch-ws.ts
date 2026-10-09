@@ -36,7 +36,27 @@ export type IncidentUpdatedEvent = {
   };
 };
 
-export type WSEvent = DispatchUpdatedEvent | IncidentUpdatedEvent;
+export type IncidentCreatedEvent = {
+  type: "incident.created";
+  ts: string;
+  data: Record<string, unknown>;
+};
+
+export type UnitMovedEvent = {
+  type: "unit.moved";
+  ts: string;
+  data: {
+    unit_id: string;
+    location: { lat: number; lng: number };
+    status: string;
+  };
+};
+
+export type WSEvent =
+  | DispatchUpdatedEvent
+  | IncidentUpdatedEvent
+  | IncidentCreatedEvent
+  | UnitMovedEvent;
 
 export function useDispatchWS(onEvent: (event: WSEvent) => void) {
   const wsRef = useRef<WebSocket | null>(null);

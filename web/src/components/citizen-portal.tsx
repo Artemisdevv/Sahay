@@ -27,7 +27,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Shell, type ShellTab } from "./dispatch-shell";
+import { IncidentMap, Shell, type ShellTab } from "./dispatch-shell";
 import {
   defaultProfile,
   type EmergencyProfile,
@@ -49,6 +49,7 @@ import type { QueueItem } from "@/lib/report/queue";
 const tabs: ShellTab[] = [
   { id: "help", label: "Get help", icon: Mic },
   { id: "reports", label: "My reports", icon: ClipboardList },
+  { id: "map", label: "Map", icon: MapPin },
   { id: "details", label: "My details", icon: UserRound },
 ];
 
@@ -553,6 +554,13 @@ export function CitizenPortal() {
               ))}
             </ul>
           )}
+        </section>
+      )}
+
+      {tab === "map" && (
+        <section className="cz-page" aria-labelledby="map-title">
+          <h1 id="map-title">Response map</h1>
+          <IncidentMap role="civilian" className="admin-map" />
         </section>
       )}
 
