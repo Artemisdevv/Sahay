@@ -34,7 +34,10 @@ beforeEach(() => {
   queue = new ReportQueue(new IDBFactory()); // fresh database per test
 });
 
-const deps = (fetchFn: typeof fetch, extra: Partial<FlushDeps> = {}): FlushDeps => ({
+const deps = (
+  fetchFn: typeof fetch,
+  extra: Partial<FlushDeps> = {},
+): FlushDeps => ({
   queue,
   getToken: async () => "tok",
   apiBase: "http://api/v1",
@@ -60,7 +63,10 @@ describe("ReportQueue", () => {
     await queue.put(item("r2", { state: "sent" }));
     await queue.put(item("r3"));
     expect((await queue.due(1_000)).map((i) => i.report_id)).toEqual(["r3"]);
-    expect((await queue.due(5_000)).map((i) => i.report_id).sort()).toEqual(["r1", "r3"]);
+    expect((await queue.due(5_000)).map((i) => i.report_id).sort()).toEqual([
+      "r1",
+      "r3",
+    ]);
   });
 
   it("back-off grows then caps at about five minutes", () => {
@@ -73,16 +79,32 @@ describe("flushReports", () => {
   it("delivers queued reports and keeps the receipt", async () => {
     await queue.put(item("r1"));
     const fetchFn = vi.fn(async () =>
-      reply(202, { receipt: { server_time: "2026-10-09T10:16:00Z", signature: "sig" } }),
+      reply(202, {
+        receipt: { server_time: "2026-10-09T10:16:00Z", signature: "sig" },
+      }),
     ) as unknown as typeof fetch;
     const res = await flushReports(deps(fetchFn));
-    expect(res).toMatchObject({ sent: 1, failed: 0, retrying: 0, offline: false });
+    expect(res).toMatchObject({
+      sent: 1,
+      failed: 0,
+      retrying: 0,
+      offline: false,
+    });
     const saved = await queue.get("r1");
-    expect(saved).toMatchObject({ state: "sent", attempts: 1, receipt_verified: false });
+    expect(saved).toMatchObject({
+      state: "sent",
+      attempts: 1,
+      receipt_verified: false,
+    });
     expect(saved?.receipt?.server_time).toBe("2026-10-09T10:16:00Z");
-    const [url, init] = vi.mocked(fetchFn).mock.calls[0] as [string, RequestInit];
+    const [url, init] = vi.mocked(fetchFn).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
     expect(url).toBe("http://api/v1/reports");
-    expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer tok");
+    expect((init.headers as Record<string, string>)["Authorization"]).toBe(
+      "Bearer tok",
+    );
   });
 
   it("treats a server rejection as final and a network error as retry with back-off", async () => {
@@ -90,13 +112,21 @@ describe("flushReports", () => {
     await queue.put(item("r2"));
     const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => {
       const id = (JSON.parse(String(init?.body)) as ReportEnvelope).report_id;
-      if (id === "r1") return reply(422, { error: { message: "invalid_signature" } });
+      if (id === "r1")
+        return reply(422, { error: { message: "invalid_signature" } });
       throw new TypeError("network down");
     }) as unknown as typeof fetch;
     const res = await flushReports(deps(fetchFn));
     expect(res).toMatchObject({ sent: 0, failed: 1, retrying: 1 });
-    expect(await queue.get("r1")).toMatchObject({ state: "failed", last_error: "invalid_signature" });
-    expect(await queue.get("r2")).toMatchObject({ state: "queued", attempts: 1, next_attempt_at: 1_000_000 + 5_000 });
+    expect(await queue.get("r1")).toMatchObject({
+      state: "failed",
+      last_error: "invalid_signature",
+    });
+    expect(await queue.get("r2")).toMatchObject({
+      state: "queued",
+      attempts: 1,
+      next_attempt_at: 1_000_000 + 5_000,
+    });
     // not due again until the back-off passes
     expect(await queue.due(1_000_000 + 4_000)).toEqual([]);
   });
@@ -112,7 +142,11 @@ describe("flushReports", () => {
   it("does nothing and reports offline when no token can be obtained", async () => {
     await queue.put(item("r1"));
     const fetchFn = vi.fn() as unknown as typeof fetch;
-    const res = await flushReports(deps(fetchFn, { getToken: async () => Promise.reject(new Error("offline")) }));
+    const res = await flushReports(
+      deps(fetchFn, {
+        getToken: async () => Promise.reject(new Error("offline")),
+      }),
+    );
     expect(res.offline).toBe(true);
     expect(fetchFn).not.toHaveBeenCalled();
     expect((await queue.get("r1"))?.attempts).toBe(0);
@@ -120,7 +154,9 @@ describe("flushReports", () => {
 
   it("makes no request and asks for no token when nothing is due", async () => {
     const getToken = vi.fn(async () => "tok");
-    const res = await flushReports(deps(vi.fn() as unknown as typeof fetch, { getToken }));
+    const res = await flushReports(
+      deps(vi.fn() as unknown as typeof fetch, { getToken }),
+    );
     expect(res).toMatchObject({ sent: 0, offline: false });
     expect(getToken).not.toHaveBeenCalled();
   });
@@ -129,7 +165,9 @@ describe("flushReports", () => {
     const delivered: string[] = [];
     const receipts: string[] = [];
     const relay: RelayHooks = {
-      pendingForUpload: async () => ({ envelopes: [envelope("other-1"), envelope("other-2")] }),
+      pendingForUpload: async () => ({
+        envelopes: [envelope("other-1"), envelope("other-2")],
+      }),
       markDelivered: async ({ reportId }) => void delivered.push(reportId),
       relayReceipt: async ({ reportId }) => void receipts.push(reportId),
     };

@@ -26,9 +26,11 @@ function canRecord(): boolean {
  * This hook only captures audio. Signing, encryption, queueing and sending belong to the report pipeline (F-03).
  */
 export function useVoiceCapture() {
-  const [state, setState] = useState<VoiceState>(() =>
-    canRecord() ? "idle" : "unsupported",
-  );
+  // Always "idle" on the first render so server and browser HTML match; support is checked after mount.
+  const [state, setState] = useState<VoiceState>("idle");
+  useEffect(() => {
+    if (!canRecord()) setState("unsupported");
+  }, []);
   const [seconds, setSeconds] = useState(0);
   const [clip, setClip] = useState<VoiceClip | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -78,7 +80,14 @@ export function useVoiceCapture() {
         return;
       }
       chunks.current = [];
-      const rec = new MediaRecorder(media);
+      // 16 kbps Opus keeps 60 s near 120 KB, under the 200 KB cap in the report contract.
+      const preferred = "audio/webm;codecs=opus";
+      const rec = new MediaRecorder(media, {
+        audioBitsPerSecond: 16_000,
+        ...(MediaRecorder.isTypeSupported(preferred)
+          ? { mimeType: preferred }
+          : {}),
+      });
       recorder.current = rec;
       rec.ondataavailable = (e) => {
         if (e.data.size) chunks.current.push(e.data);

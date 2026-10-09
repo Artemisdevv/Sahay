@@ -27,7 +27,8 @@ const STORE = "reports";
 function request<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("IndexedDB request failed"));
+    req.onerror = () =>
+      reject(req.error ?? new Error("IndexedDB request failed"));
   });
 }
 
@@ -43,7 +44,8 @@ export class ReportQueue {
         open.result.createObjectStore(STORE, { keyPath: "report_id" });
       };
       open.onsuccess = () => resolve(open.result);
-      open.onerror = () => reject(open.error ?? new Error("Cannot open IndexedDB"));
+      open.onerror = () =>
+        reject(open.error ?? new Error("Cannot open IndexedDB"));
     });
     return this.dbPromise;
   }
@@ -58,8 +60,7 @@ export class ReportQueue {
 
   async get(reportId: string): Promise<QueueItem | undefined> {
     return (await request((await this.store("readonly")).get(reportId))) as
-      | QueueItem
-      | undefined;
+      QueueItem | undefined;
   }
 
   /** Newest first. */
@@ -76,7 +77,8 @@ export class ReportQueue {
     patch: Partial<QueueItem>,
   ): Promise<QueueItem | undefined> {
     const store = await this.store("readwrite");
-    const current = (await request(store.get(reportId))) as QueueItem | undefined;
+    const current = (await request(store.get(reportId))) as
+      QueueItem | undefined;
     if (!current) return undefined;
     const next = { ...current, ...patch, report_id: current.report_id };
     await request(store.put(next));
@@ -91,7 +93,11 @@ export class ReportQueue {
 }
 
 /** 5 s, 15 s, 45 s, 2 min, 5 min, then every 5 min. A little jitter so phones do not retry in lockstep. */
-export function backoffMs(attempts: number, random: () => number = Math.random): number {
-  const base = [5_000, 15_000, 45_000, 120_000, 300_000][Math.min(attempts, 4)] ?? 300_000;
+export function backoffMs(
+  attempts: number,
+  random: () => number = Math.random,
+): number {
+  const base =
+    [5_000, 15_000, 45_000, 120_000, 300_000][Math.min(attempts, 4)] ?? 300_000;
   return Math.round(base * (0.85 + random() * 0.3));
 }

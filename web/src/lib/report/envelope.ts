@@ -72,7 +72,9 @@ export function validatePayload(p: ReportPayload): ReportPayload {
   if (p.audio) {
     const size = unb64(p.audio.data).length;
     if (size > MAX_AUDIO_BYTES)
-      throw new PayloadError("The recording is too long. Record a shorter one.");
+      throw new PayloadError(
+        "The recording is too long. Record a shorter one.",
+      );
   }
   return p;
 }
@@ -82,7 +84,9 @@ export async function sealPayload(
   serverKey: ServerKey,
 ): Promise<Uint8Array> {
   await sodium.ready;
-  const plain = new TextEncoder().encode(JSON.stringify(validatePayload(payload)));
+  const plain = new TextEncoder().encode(
+    JSON.stringify(validatePayload(payload)),
+  );
   return sodium.crypto_box_seal(plain, unb64(serverKey.x25519_public_key));
 }
 

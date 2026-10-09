@@ -89,12 +89,40 @@ export async function submitReport(input: SubmitInput): Promise<SubmitResult> {
     next_attempt_at: 0,
   };
   await getQueue().put(item);
-  void handOffToRelay(envelope, identity.deviceId, serverKey.ed25519_public_key);
+  void handOffToRelay(
+    envelope,
+    identity.deviceId,
+    serverKey.ed25519_public_key,
+  );
   void syncNow();
   return { item, approximateLocation: location.approximate };
 }
 
 export const listReports = () => getQueue().all();
+
+export interface ReportStatus {
+  status: string;
+  message: string;
+}
+
+/** Latest status of one of our reports (GET /reports/{id}/status). Null when offline or not known yet. */
+export async function fetchStatus(
+  reportId: string,
+): Promise<ReportStatus | null> {
+  try {
+    const token = await ensureDeviceToken(secureStorage);
+    const response = await fetch(`${API_BASE}/reports/${reportId}/status`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as Partial<ReportStatus>;
+    return typeof body.status === "string"
+      ? { status: body.status, message: body.message ?? "" }
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function retryFailedNow(reportId: string): Promise<void> {
   await getQueue().update(reportId, { state: "queued", next_attempt_at: 0 });

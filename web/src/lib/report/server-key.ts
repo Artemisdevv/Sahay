@@ -55,7 +55,9 @@ export async function refreshServerKey(deps: KeyDeps = {}): Promise<ServerKey> {
 }
 
 /** The cached key if there is one (offline-safe), else try the network once. Null when neither works. */
-export async function ensureServerKey(deps: KeyDeps = {}): Promise<ServerKey | null> {
+export async function ensureServerKey(
+  deps: KeyDeps = {},
+): Promise<ServerKey | null> {
   const cached = getCachedServerKey(deps);
   if (cached) return cached;
   try {

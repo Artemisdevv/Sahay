@@ -136,7 +136,9 @@ export async function flushReports(deps: FlushDeps): Promise<FlushResult> {
         receipt_verified: verified,
         last_error: undefined,
       });
-      await deps.relay?.markDelivered({ reportId: item.report_id }).catch(() => {});
+      await deps.relay
+        ?.markDelivered({ reportId: item.report_id })
+        .catch(() => {});
       result.sent += 1;
     } else if (outcome.kind === "permanent") {
       await deps.queue.update(item.report_id, {
@@ -162,10 +164,15 @@ export async function flushReports(deps: FlushDeps): Promise<FlushResult> {
     if (outcome.kind === "retry") continue; // the relay engine keeps it; we try again next flush
     if (outcome.kind === "sent" && outcome.receipt) {
       await deps.relay
-        .relayReceipt({ reportId: envelope.report_id, receipt: outcome.receipt })
+        .relayReceipt({
+          reportId: envelope.report_id,
+          receipt: outcome.receipt,
+        })
         .catch(() => {});
     }
-    await deps.relay.markDelivered({ reportId: envelope.report_id }).catch(() => {});
+    await deps.relay
+      .markDelivered({ reportId: envelope.report_id })
+      .catch(() => {});
     result.relayed += 1;
   }
   return result;
