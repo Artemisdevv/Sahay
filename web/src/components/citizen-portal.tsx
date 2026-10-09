@@ -452,7 +452,7 @@ export function CitizenPortal() {
           {voice.state === "ready" && voice.clip && (
             <div className="cz-clip">
               <p>Your message ({fmt(voice.clip.seconds)})</p>
-              <audio controls src={voice.clip.url} />
+              <ClipPlayer url={voice.clip.url} />
               <Button
                 variant="outline"
                 className="cz-secondary"
@@ -464,8 +464,8 @@ export function CitizenPortal() {
           )}
           {voice.state === "denied" && (
             <p className="cz-warn" role="alert">
-              Microphone access was denied. Allow it in browser settings, or
-              choose what is happening below.
+              The microphone is blocked. Allow it for Sahay in your phone or
+              browser settings, or choose what is happening below.
             </p>
           )}
           {voice.state === "unsupported" && (
@@ -924,5 +924,38 @@ function Progress({
         Done
       </Button>
     </section>
+  );
+}
+
+/** Play button for the recorded message. The native audio bar shows a nonsense length for browser recordings (no duration header). */
+function ClipPlayer({ url }: { url: string }) {
+  const audio = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  return (
+    <>
+      <audio
+        ref={audio}
+        src={url}
+        onEnded={() => setPlaying(false)}
+        onPause={() => setPlaying(false)}
+        onPlay={() => setPlaying(true)}
+      />
+      <Button
+        variant="outline"
+        className="cz-secondary"
+        onClick={() => {
+          const el = audio.current;
+          if (!el) return;
+          if (playing) {
+            el.pause();
+            el.currentTime = 0;
+          } else {
+            void el.play();
+          }
+        }}
+      >
+        {playing ? "Stop playing" : "Play my message"}
+      </Button>
+    </>
   );
 }
