@@ -1,77 +1,72 @@
-// Service Worker for Sahay PWA - Shell caching strategy
-const CACHE_NAME = 'sahay-v1';
+// Cache the app shell for offline launches. Authenticated API responses stay network-only.
+const CACHE_NAME = "sahay-shell-v2";
 const SHELL_ASSETS = [
-  '/',
-  '/manifest.webmanifest',
-  '/favicon.ico',
+  "/",
+  "/manifest.webmanifest",
+  "/icon-192.svg",
+  "/icon-512.svg",
+  "/favicon.ico",
 ];
 
-// Install: cache shell assets
-self.addEventListener('install', (event) => {
+self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(SHELL_ASSETS);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)),
   );
   self.skipWaiting();
 });
 
-// Activate: clean old caches
-self.addEventListener('activate', (event) => {
+self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      );
-    })
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith("sahay-") && key !== CACHE_NAME)
+            .map((key) => caches.delete(key)),
+        ),
+      )
+      .then(() => self.clients.claim()),
   );
-  self.clients.claim();
 });
 
-// Fetch: network-first for API, cache-first for shell
-self.addEventListener('fetch', (event) => {
+self.addEventListener("fetch", (event) => {
   const { request } = event;
+  if (request.method !== "GET") return;
+
   const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
 
-  // Skip non-GET requests
-  if (request.method !== 'GET') return;
+  // Personal and role-scoped data must never enter a shared CacheStorage cache.
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/ws/"))
+    return;
 
-  // Skip cross-origin requests
-  if (url.origin !== location.origin) return;
-
-  // API requests: network-first with fallback
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws/')) {
+  if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // Don't cache error responses
-          if (!response.ok) return response;
-          const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
-          return response;
-        })
-        .catch(() => caches.match(request))
+      fetch(request).catch(async () => {
+        const shell = await caches.match("/");
+        return shell || Response.error();
+      }),
     );
     return;
   }
 
-  // Static assets: cache-first
+  const isShellAsset =
+    SHELL_ASSETS.includes(url.pathname) || url.pathname.startsWith("/assets/");
+  if (!isShellAsset) return;
+
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
       return fetch(request).then((response) => {
-        if (!response.ok) return response;
-        const cloned = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+        if (response.ok) {
+          const copy = response.clone();
+          void caches
+            .open(CACHE_NAME)
+            .then((cache) => cache.put(request, copy));
+        }
         return response;
       });
-    })
+    }),
   );
-});
-
-// Handle messages from client
-self.addEventListener('message', (event) => {
-  if (event.data === 'skipWaiting') {
-    self.skipWaiting();
-  }
 });
