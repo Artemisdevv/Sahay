@@ -49,3 +49,7 @@ Thumbs.db
 # Docs kept outside the repo on purpose
 solution.md
 vague_idea.txt
+.coverage
+htmlcov/
+.sahay-server-key
+.sahay-server-ed25519-key
