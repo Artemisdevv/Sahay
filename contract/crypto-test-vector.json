@@ -1,0 +1,88 @@
+{
+  "_doc": "TEST-ONLY keys. Never use in any real deployment. See backend/scripts/gen_test_vector.py header for how to consume.",
+  "version": 1,
+  "server": {
+    "box_secret_key": "l6KLsDbFrWi1Xji7Fzev3xtqJpJ4fq7O/V27KSXt6oI=",
+    "box_public_key": "XCEeqcAUOFxfGLZA//0HMfVaXvj54TrG0uH6+CfJ/zc=",
+    "sign_seed": "RKKL80A3QTdZaOiXx2D6O09yE7fwvvSxr8U7zbhnJ1c=",
+    "verify_key": "8oFFTpZRV4Vp6ZKQtr1oynO6HuNKurgkGuEq4trteSI="
+  },
+  "device": {
+    "signing_seed": "BFKQKZUpS3EQYyU9MXpUIZVznKuAUhWYUhrr6O8u1UM=",
+    "public_key": "ferJ3LYnrbiPo/FGx8SpiwthGBgF6RFrHB84ERICTf4="
+  },
+  "plaintext_json": "{\"schema\":1,\"kind\":\"report\",\"category\":\"accident\",\"language\":\"ml\",\"captured_at\":\"2026-10-09T10:15:00Z\",\"location\":{\"lat\":9.9312,\"lng\":76.2673,\"accuracy_m\":12},\"audio\":{\"mime\":\"audio/webm;codecs=opus\",\"data\":\"VEVTVC1BVURJTy1CWVRFUw==\",\"duration_s\":1},\"text\":null,\"reporter\":{\"name\":\"Test Reporter\",\"phone\":\"+919800000000\"},\"emergency_contact\":{\"name\":\"Test Contact\",\"phone\":\"+919800000001\"}}",
+  "envelope": {
+    "envelope_version": 1,
+    "report_id": "11111111-1111-4111-8111-111111111111",
+    "device_id": "22222222-2222-4222-8222-222222222222",
+    "created_at": "2026-10-09T10:15:00Z",
+    "ttl": 5,
+    "key_id": "k1",
+    "ciphertext": "Xp+vsRB1biivueyOgr+jKEccryGNuF7gcNIiSu4GekBdvx2kK6cAgG1RqVXy0AWoyGLlVrAbfy+JmYvEU2yXtyM3LZSuSnh9N4qimT/uuThwkiRclII7+5wIszjOsvpCZtlXVLXMLz2wyQlp3ch064LgfritZNb727J5I0YBirv9FqDN9Qq9+U1OEhIkZDP8ODai+wAQQbO/AwdjEcrGGCIl6i5jC+SkU8AXvTch4a4mh+kIzzbJOz9utdc9Jf3Rq/N1iA1sKr/jXsxnDmT1qhaQkLhyNXKSE4ygOVB2iLGixccANI4cPktZPsk1VQsCSC9U9l5wvMq64+aiwWQ28A4e5nN4iNv8PE6ayZUGXD02QCCVqHb89o9xl83HuchGSnkJtYap47FSYoT5LqS8Hwq2F/nb41Pxg7UdTU9i/qejAGGpU/0JMlr9n3QK3TBKdscPhF2szPwqAHJhLn+hgX5s4hJEo9+JDwyZzQOSxvMCKehCLF4pxn6Lh4uUus6X1rViSxDIHHSvvTYohpthSaw6h/IGF7Di3NLnski8PlwzkUSTnl5QiZwbJcyZG7GRmHXkNSrg",
+    "signature": "D+XTr3gpedKDhMmi871+f5OWeDYnUQpQtexYpc/XjMIh9IjCbq79hR6LBuyj3qZrH8vcA3f88K/h29LpRAcRDQ=="
+  },
+  "signing_input_b64": "MTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExfDIyMjIyMjIyLTIyMjItNDIyMi04MjIyLTIyMjIyMjIyMjIyMnwyMDI2LTEwLTA5VDEwOjE1OjAwWnxen6+xEHVuKK+57I6Cv6MoRxyvIY24XuBw0iJK7gZ6QF2/HaQrpwCAbVGpVfLQBajIYuVWsBt/L4mZi8RTbJe3IzctlK5KeH03iqKZP+65OHCSJFyUgjv7nAizOM6y+kJm2VdUtcwvPbDJCWndyHTrguB+uK1k1vvbsnkjRgGKu/0WoM31Cr35TU4SEiRkM/w4NqL7ABBBs78DB2MRysYYIiXqLmML5KRTwBe9NyHhriaH6QjPNsk7P2611z0l/dGr83WIDWwqv+NezGcOZPWqFpCQuHI1cpITjKA5UHaIsaLFxwA0jhw+S1k+yTVVCwJIL1T2XnC8yrrj5qLBZDbwDh7mc3iI2/w8TprJlQZcPTZAIJWodvz2j3GXzce5yEZKeQm1hqnjsVJihPkupLwfCrYX+dvjU/GDtR1NT2L+p6MAYalT/QkyWv2fdArdMEp2xw+EXazM/CoAcmEuf6GBfmziEkSj34kPDJnNA5LG8wIp6EIsXinGfouHi5S6zpfWtWJLEMgcdK+9NiiGm2FJrDqH8gYXsOLc0ueySLw+XDORRJOeXlCJnBslzJkbsZGYdeQ1KuA=",
+  "signing_input_note": "UTF-8 'report_id|device_id|created_at|' + raw ciphertext bytes",
+  "receipt": {
+    "report_id": "11111111-1111-4111-8111-111111111111",
+    "server_time": "2026-10-09T10:15:02Z",
+    "signing_input_utf8": "11111111-1111-4111-8111-111111111111|2026-10-09T10:15:02Z",
+    "signature": "6Cjh0Dxsh02muSNqSbl0glKKyhbwYFheO+7tQdhZHBuaQ+A7snhLqlbUyIlhnr57xUtc7bU5N3A1xMTaLyA5DA=="
+  },
+  "negative": {
+    "tampered_ciphertext": {
+      "envelope": {
+        "envelope_version": 1,
+        "report_id": "11111111-1111-4111-8111-111111111111",
+        "device_id": "22222222-2222-4222-8222-222222222222",
+        "created_at": "2026-10-09T10:15:00Z",
+        "ttl": 5,
+        "key_id": "k1",
+        "ciphertext": "Xp+vsRB1biivueyOgr+jKEccryGNuF7gcNIiSu4GekBdvx2kK6cAgG1RqVXy0AWoyGLlVrAbfy+JmYvEU2yXtyM3LZSuSnh9N4qimT/uuThwkiRclII7+5wIszjOsvpCZtlXVLXMLz2wyQlp3ch064LgfritZNb727J5I0YBirv9FqDN9Qq9+U1OEhIkZDP8ODai+wAQQbO/AwdjEcrGGCIl6i5jC+SkU8AXvTch4a4mh+kIzzbJOz9utdc9Jf3Rq/N1iA1sKr/jXsxnDmT1qhaQkLhyNXKSE4ygOVB2iLGixccANI4cPktZPsk1VQsCSC9U9l5wvMq64+aiwWQ28A4e5nN4iNv8PE6ayZUGXD02QCCVqHb89o9xl83HuchGSnkJtYap47FSYoT5LqS8Hwq2F/nb41Pxg7UdTU9i/qejAGGpU/0JMlr9n3QK3TBKdscPhF2szPwqAHJhLn+hgX5s4hJEo9+JDwyZzQOSxvMCKehCLF4pxn6Lh4uUus6X1rViSxDIHHSvvTYohpthSaw6h/IGF7Di3NLnski8PlwzkUSTnl5QiZwbJcyZG7GRmHXkNSrh",
+        "signature": "D+XTr3gpedKDhMmi871+f5OWeDYnUQpQtexYpc/XjMIh9IjCbq79hR6LBuyj3qZrH8vcA3f88K/h29LpRAcRDQ=="
+      },
+      "expect": "invalid_signature"
+    },
+    "tampered_created_at": {
+      "envelope": {
+        "envelope_version": 1,
+        "report_id": "11111111-1111-4111-8111-111111111111",
+        "device_id": "22222222-2222-4222-8222-222222222222",
+        "created_at": "2026-10-09T10:16:00Z",
+        "ttl": 5,
+        "key_id": "k1",
+        "ciphertext": "Xp+vsRB1biivueyOgr+jKEccryGNuF7gcNIiSu4GekBdvx2kK6cAgG1RqVXy0AWoyGLlVrAbfy+JmYvEU2yXtyM3LZSuSnh9N4qimT/uuThwkiRclII7+5wIszjOsvpCZtlXVLXMLz2wyQlp3ch064LgfritZNb727J5I0YBirv9FqDN9Qq9+U1OEhIkZDP8ODai+wAQQbO/AwdjEcrGGCIl6i5jC+SkU8AXvTch4a4mh+kIzzbJOz9utdc9Jf3Rq/N1iA1sKr/jXsxnDmT1qhaQkLhyNXKSE4ygOVB2iLGixccANI4cPktZPsk1VQsCSC9U9l5wvMq64+aiwWQ28A4e5nN4iNv8PE6ayZUGXD02QCCVqHb89o9xl83HuchGSnkJtYap47FSYoT5LqS8Hwq2F/nb41Pxg7UdTU9i/qejAGGpU/0JMlr9n3QK3TBKdscPhF2szPwqAHJhLn+hgX5s4hJEo9+JDwyZzQOSxvMCKehCLF4pxn6Lh4uUus6X1rViSxDIHHSvvTYohpthSaw6h/IGF7Di3NLnski8PlwzkUSTnl5QiZwbJcyZG7GRmHXkNSrg",
+        "signature": "D+XTr3gpedKDhMmi871+f5OWeDYnUQpQtexYpc/XjMIh9IjCbq79hR6LBuyj3qZrH8vcA3f88K/h29LpRAcRDQ=="
+      },
+      "expect": "invalid_signature"
+    },
+    "signed_by_other_device": {
+      "envelope": {
+        "envelope_version": 1,
+        "report_id": "11111111-1111-4111-8111-111111111111",
+        "device_id": "22222222-2222-4222-8222-222222222222",
+        "created_at": "2026-10-09T10:15:00Z",
+        "ttl": 5,
+        "key_id": "k1",
+        "ciphertext": "Xp+vsRB1biivueyOgr+jKEccryGNuF7gcNIiSu4GekBdvx2kK6cAgG1RqVXy0AWoyGLlVrAbfy+JmYvEU2yXtyM3LZSuSnh9N4qimT/uuThwkiRclII7+5wIszjOsvpCZtlXVLXMLz2wyQlp3ch064LgfritZNb727J5I0YBirv9FqDN9Qq9+U1OEhIkZDP8ODai+wAQQbO/AwdjEcrGGCIl6i5jC+SkU8AXvTch4a4mh+kIzzbJOz9utdc9Jf3Rq/N1iA1sKr/jXsxnDmT1qhaQkLhyNXKSE4ygOVB2iLGixccANI4cPktZPsk1VQsCSC9U9l5wvMq64+aiwWQ28A4e5nN4iNv8PE6ayZUGXD02QCCVqHb89o9xl83HuchGSnkJtYap47FSYoT5LqS8Hwq2F/nb41Pxg7UdTU9i/qejAGGpU/0JMlr9n3QK3TBKdscPhF2szPwqAHJhLn+hgX5s4hJEo9+JDwyZzQOSxvMCKehCLF4pxn6Lh4uUus6X1rViSxDIHHSvvTYohpthSaw6h/IGF7Di3NLnski8PlwzkUSTnl5QiZwbJcyZG7GRmHXkNSrg",
+        "signature": "vZrC4T10Ujz1QjwLMj04d4+sPEKW81/dsXT1nIFt3nx8yUNu+VPwIl2niO0JOucqqHtfIxUmkJMqp/RI0bRODg=="
+      },
+      "expect": "invalid_signature"
+    },
+    "short_signature": {
+      "envelope": {
+        "envelope_version": 1,
+        "report_id": "11111111-1111-4111-8111-111111111111",
+        "device_id": "22222222-2222-4222-8222-222222222222",
+        "created_at": "2026-10-09T10:15:00Z",
+        "ttl": 5,
+        "key_id": "k1",
+        "ciphertext": "Xp+vsRB1biivueyOgr+jKEccryGNuF7gcNIiSu4GekBdvx2kK6cAgG1RqVXy0AWoyGLlVrAbfy+JmYvEU2yXtyM3LZSuSnh9N4qimT/uuThwkiRclII7+5wIszjOsvpCZtlXVLXMLz2wyQlp3ch064LgfritZNb727J5I0YBirv9FqDN9Qq9+U1OEhIkZDP8ODai+wAQQbO/AwdjEcrGGCIl6i5jC+SkU8AXvTch4a4mh+kIzzbJOz9utdc9Jf3Rq/N1iA1sKr/jXsxnDmT1qhaQkLhyNXKSE4ygOVB2iLGixccANI4cPktZPsk1VQsCSC9U9l5wvMq64+aiwWQ28A4e5nN4iNv8PE6ayZUGXD02QCCVqHb89o9xl83HuchGSnkJtYap47FSYoT5LqS8Hwq2F/nb41Pxg7UdTU9i/qejAGGpU/0JMlr9n3QK3TBKdscPhF2szPwqAHJhLn+hgX5s4hJEo9+JDwyZzQOSxvMCKehCLF4pxn6Lh4uUus6X1rViSxDIHHSvvTYohpthSaw6h/IGF7Di3NLnski8PlwzkUSTnl5QiZwbJcyZG7GRmHXkNSrg",
+        "signature": "AAAAAAAAAAAAAA=="
+      },
+      "expect": "invalid_signature"
+    }
+  },
+  "unsigned_fields_note": "ttl and hops may change without invalidating the signature"
+}
