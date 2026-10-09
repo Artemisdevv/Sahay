@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import java.io.File
+import java.security.MessageDigest
 
 /**
  * One carried report. [envelope] is exactly what we received (hops as received); we only ever mutate hops
@@ -47,7 +48,8 @@ class InMemoryStore : RelayStore {
 class FileStore(private val dir: File) : RelayStore {
     init { dir.mkdirs() }
 
-    private fun file(id: String) = File(dir, id.filter { it.isLetterOrDigit() || it == '-' || it == '_' } .take(80) + ".json")
+    /** SHA-256 of the id: distinct ids never share a file, and hostile ids cannot escape [dir]. */
+    private fun file(id: String) = File(dir, sha256Hex(id) + ".json")
 
     override fun save(r: Record) {
         val tmp = File(dir, "${file(r.reportId).name}.tmp")
@@ -66,12 +68,15 @@ class FileStore(private val dir: File) : RelayStore {
         }.sortedBy { it.receivedAt }
 
     companion object {
+        private fun sha256Hex(s: String) =
+            MessageDigest.getInstance("SHA-256").digest(s.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
         fun toJson(r: Record): JsonObject = buildJsonObject {
             put("report_id", r.reportId); put("envelope", r.envelope); put("origin", r.origin)
             put("sources", JsonArray(r.sources.map { JsonPrimitive(it) }))
             put("delivered", r.delivered); put("received_at", r.receivedAt)
             put("receipt", r.receipt ?: JsonNull)
-            r.status?.let { put("status", buildJsonObject { put("status", it.status); put("message", it.message) }) }
+            r.status?.let { put("status", buildJsonObject { put("status", it.status); put("message", it.message); put("signature", it.signature) }) }
             put("receipt_sent_to", JsonArray(r.receiptSentTo.map { JsonPrimitive(it) }))
             put("status_sent_to", JsonArray(r.statusSentTo.map { JsonPrimitive(it) }))
         }
@@ -84,7 +89,8 @@ class FileStore(private val dir: File) : RelayStore {
                 sources = set("sources"), delivered = o["delivered"]!!.jsonPrimitive.boolean,
                 receipt = o["receipt"] as? JsonObject,
                 status = (o["status"] as? JsonObject)?.let {
-                    Msg.Status(id, it["status"]!!.jsonPrimitive.content, it["message"]!!.jsonPrimitive.content)
+                    Msg.Status(id, it["status"]!!.jsonPrimitive.content, it["message"]!!.jsonPrimitive.content,
+                        (it["signature"] as? JsonPrimitive)?.content ?: "")
                 },
                 receivedAt = o["received_at"]!!.jsonPrimitive.long,
                 receiptSentTo = set("receipt_sent_to"), statusSentTo = set("status_sent_to"),

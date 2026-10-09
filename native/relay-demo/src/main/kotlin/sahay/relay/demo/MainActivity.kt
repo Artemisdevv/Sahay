@@ -41,7 +41,11 @@ class MainActivity : AppCompatActivity(), RelayListener {
         deviceId = prefs.getString("device_id", null) ?: UUID.randomUUID().toString().take(8).also { prefs.edit().putString("device_id", it).apply() }
 
         transport = NearbyTransport(this, deviceId, ::log)
-        engine = RelayEngine(deviceId, transport, FileStore(File(filesDir, "relay")), this)
+        engine = RelayEngine(
+            deviceId, transport, FileStore(File(filesDir, "relay")), this,
+            // DEMO ONLY: the demo fabricates receipts/statuses, so it cannot verify them. Production wires Ed25519 checks.
+            receiptVerifier = { _, _ -> true }, statusVerifier = { true },
+        )
         transport.engine = engine
         log("device $deviceId, carrying ${engine.carryingCount()}, pending ${engine.pendingForUpload().size}")
 

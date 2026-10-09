@@ -76,10 +76,13 @@ class NearbyTransport(
         synchronized(this) { connected.clear(); requested.clear() }
     }
 
-    override fun send(endpointId: String, bytes: ByteArray) {
+    override fun send(endpointId: String, bytes: ByteArray, onFailure: () -> Unit) {
         val payload = if (bytes.size <= MAX_BYTES_PAYLOAD) Payload.fromBytes(bytes)
         else Payload.fromStream(ByteArrayInputStream(bytes))
-        client.sendPayload(endpointId, payload).addOnFailureListener { log("send failed to $endpointId: ${it.message}") }
+        client.sendPayload(endpointId, payload).addOnFailureListener {
+            log("send failed to $endpointId: ${it.message}")
+            onFailure()
+        }
     }
 
     override fun disconnect(endpointId: String) {

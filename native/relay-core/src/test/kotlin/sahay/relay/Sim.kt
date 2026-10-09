@@ -11,10 +11,13 @@ class Net {
     val nodes = mutableMapOf<String, Node>()
     private val links = mutableSetOf<Pair<String, String>>()
     private val queue = ArrayDeque<() -> Unit>()
+    /** Directed links ("from" to "to") whose sends report failure, to simulate a transport that drops sends. */
+    val failing = mutableSetOf<Pair<String, String>>()
     val wire = mutableListOf<Triple<String, String, Msg?>>()   // from, to, decoded message
 
-    fun node(id: String, store: RelayStore = InMemoryStore(), clock: () -> Long = { 1_000L }, verifier: ((String, JsonObject) -> Boolean)? = null) =
-        Node(id, this, store, clock, verifier).also { nodes[id] = it }
+    fun node(id: String, store: RelayStore = InMemoryStore(), clock: () -> Long = { 1_000L },
+             verifier: (String, JsonObject) -> Boolean = { _, _ -> true }, statusVerifier: (Msg.Status) -> Boolean = { true }) =
+        Node(id, this, store, clock, verifier, statusVerifier).also { nodes[id] = it }
 
     private fun key(a: String, b: String) = if (a < b) a to b else b to a
 
@@ -50,16 +53,19 @@ class Net {
     fun sent(from: String, to: String, type: Class<out Msg>) = wire.count { it.first == from && it.second == to && type.isInstance(it.third) }
 }
 
-class Node(val id: String, private val net: Net, store: RelayStore, clock: () -> Long, verifier: ((String, JsonObject) -> Boolean)?) :
+class Node(val id: String, private val net: Net, store: RelayStore, clock: () -> Long,
+           verifier: (String, JsonObject) -> Boolean, statusVerifier: (Msg.Status) -> Boolean) :
     Transport, RelayListener {
     val received = mutableListOf<Pair<JsonObject, String>>()
     val receipts = mutableListOf<Pair<String, JsonObject>>()
     val statuses = mutableListOf<Triple<String, String, String>>()
     val peersUp = mutableListOf<String>()
     val peersDown = mutableListOf<String>()
-    val engine = RelayEngine(id, this, store, this, clock, receiptVerifier = verifier)
+    val engine = RelayEngine(id, this, store, this, clock, receiptVerifier = verifier, statusVerifier = statusVerifier)
 
-    override fun send(endpointId: String, bytes: ByteArray) = net.deliver(id, endpointId, bytes)
+    override fun send(endpointId: String, bytes: ByteArray, onFailure: () -> Unit) {
+        if (id to endpointId.removePrefix("to-") in net.failing) onFailure() else net.deliver(id, endpointId, bytes)
+    }
     override fun disconnect(endpointId: String) = net.unlink(id, endpointId.removePrefix("to-"))
 
     override fun onPeerConnected(deviceId: String) { peersUp += deviceId }

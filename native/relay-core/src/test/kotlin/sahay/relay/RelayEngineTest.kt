@@ -319,8 +319,8 @@ class RelayEngineTest {
         var t = 0L
         val net = Net()
         val b = net.node("B", clock = { t++ }, store = InMemoryStore())
-        val tiny = RelayEngine("T", object : Transport { override fun send(endpointId: String, bytes: ByteArray) {} override fun disconnect(endpointId: String) {} },
-            InMemoryStore(), object : RelayListener {}, { t++ }, RelayConfig(maxRecords = 3))
+        val tiny = RelayEngine("T", nullTransport,
+            InMemoryStore(), object : RelayListener {}, { t++ }, RelayConfig(maxRecords = 3), { _, _ -> true }, { true })
         tiny.enqueueOwn(envelope("own"))
         tiny.onConnected("to-X"); tiny.onBytes("to-X", Codec.encode(Msg.Hello("X", emptyList())))
         tiny.onBytes("to-X", Codec.encode(Msg.Envelope(envelope("r1"))))
@@ -335,8 +335,8 @@ class RelayEngineTest {
 
     @Test fun `full of own reports refuses to carry more`() {
         var t = 0L
-        val tiny = RelayEngine("T", object : Transport { override fun send(endpointId: String, bytes: ByteArray) {} override fun disconnect(endpointId: String) {} },
-            InMemoryStore(), object : RelayListener {}, { t++ }, RelayConfig(maxRecords = 1))
+        val tiny = RelayEngine("T", nullTransport,
+            InMemoryStore(), object : RelayListener {}, { t++ }, RelayConfig(maxRecords = 1), { _, _ -> true }, { true })
         tiny.enqueueOwn(envelope("own"))
         tiny.onConnected("to-X"); tiny.onBytes("to-X", Codec.encode(Msg.Hello("X", emptyList())))
         tiny.onBytes("to-X", Codec.encode(Msg.Envelope(envelope("r1"))))
@@ -370,5 +370,73 @@ class RelayEngineTest {
     private inline fun <reified T : Throwable> assertFailsWith(block: () -> Unit) {
         try { block() } catch (e: Throwable) { if (e is T) return else throw e }
         throw AssertionError("expected ${T::class.simpleName}")
+    }
+
+    private val nullTransport = object : Transport {
+        override fun send(endpointId: String, bytes: ByteArray, onFailure: () -> Unit) {}
+        override fun disconnect(endpointId: String) {}
+    }
+
+    // ---- review fixes (PR #52) ------------------------------------------------------------------
+
+    @Test fun `status verifier rejects a forged status and drops the peer`() {
+        val net = Net()
+        val a = net.node("A", statusVerifier = { false }); net.node("B")
+        net.link("A", "B"); net.pump()
+        a.engine.enqueueOwn(envelope("r1")); net.pump()
+        a.engine.onBytes("to-B", Codec.encode(Msg.Status("r1", "dispatched", "fake", "sig")))
+        assertTrue(a.statuses.isEmpty()); assertEquals(1, a.peersDown.size)
+    }
+
+    @Test fun `status signature is passed to the verifier and survives the wire`() {
+        val net = Net(); val seen = mutableListOf<String>()
+        val a = net.node("A", statusVerifier = { seen += it.signature; true }); val b = net.node("B")
+        net.link("A", "B"); net.pump()
+        a.engine.enqueueOwn(envelope("r1")); net.pump()
+        b.engine.relayStatus("r1", "dispatched", "ok", "c2ln"); net.pump()
+        assertEquals(listOf("c2ln"), seen); assertEquals(1, a.statuses.size)
+    }
+
+    @Test fun `file store keeps ids that differ only by stripped characters apart`() {
+        val dir = Files.createTempDirectory("relay").toFile()
+        try {
+            val store = FileStore(dir)
+            store.save(Record("a/b", envelope("a/b"), origin = true, receivedAt = 1))
+            store.save(Record("ab", envelope("ab"), origin = true, receivedAt = 2))
+            store.save(Record("../ab", envelope("../ab"), origin = true, receivedAt = 3))
+            assertEquals(setOf("a/b", "ab", "../ab"), FileStore(dir).loadAll().map { it.reportId }.toSet())
+            store.delete("ab")
+            assertEquals(setOf("a/b", "../ab"), FileStore(dir).loadAll().map { it.reportId }.toSet())
+            assertTrue(dir.listFiles()!!.all { it.parentFile == dir })
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun `oversized report id is rejected`() {
+        assertEquals("report_id", EnvelopeCheck.problem(envelope("x".repeat(EnvelopeCheck.MAX_ID_LENGTH + 1))))
+    }
+
+    @Test fun `receipt and status are retried after a failed send`() {
+        val net = Net()
+        val a = net.node("A"); val b = net.node("B")
+        net.link("A", "B"); net.pump()
+        a.engine.enqueueOwn(envelope("r1")); net.pump()
+        net.failing += "B" to "A"
+        b.engine.relayReceipt("r1", receipt("r1")); b.engine.relayStatus("r1", "dispatched", "ok"); net.pump()
+        assertTrue(a.receipts.isEmpty() && a.statuses.isEmpty())          // both sends failed
+        net.failing.clear()
+        net.unlink("A", "B"); net.link("A", "B"); net.pump()               // reconnect: held back-channel is flushed again
+        assertEquals(listOf("r1"), a.receipts.map { it.first }); assertEquals(1, a.statuses.size)
+    }
+
+    @Test fun `failed envelope send is retried on the next connection`() {
+        val net = Net()
+        val a = net.node("A"); val b = net.node("B")
+        net.failing += "A" to "B"
+        net.link("A", "B"); net.pump()
+        a.engine.enqueueOwn(envelope("r1")); net.pump()
+        assertTrue(b.received.isEmpty())
+        net.failing.clear()
+        net.unlink("A", "B"); net.link("A", "B"); net.pump()
+        assertEquals(1, b.received.size)
     }
 }

@@ -18,7 +18,7 @@ sealed class Msg {
     data class Envelope(val envelope: JsonObject) : Msg()
     data class Ack(val reportId: String) : Msg()
     data class Receipt(val reportId: String, val receipt: JsonObject) : Msg()
-    data class Status(val reportId: String, val status: String, val message: String) : Msg()
+    data class Status(val reportId: String, val status: String, val message: String, val signature: String = "") : Msg()
 
     companion object {
         const val APP = "sahay"
@@ -43,6 +43,7 @@ object Codec {
             is Msg.Receipt -> buildJsonObject { put("t", "receipt"); put("report_id", msg.reportId); put("receipt", msg.receipt) }
             is Msg.Status -> buildJsonObject {
                 put("t", "status"); put("report_id", msg.reportId); put("status", msg.status); put("message", msg.message)
+                put("signature", msg.signature)
             }
         }
         return obj.toString().toByteArray(Charsets.UTF_8)
@@ -63,7 +64,7 @@ object Codec {
                 "envelope" -> Msg.Envelope(o["envelope"] as? JsonObject ?: return null)
                 "ack" -> Msg.Ack(o.str("report_id") ?: return null)
                 "receipt" -> Msg.Receipt(o.str("report_id") ?: return null, o["receipt"] as? JsonObject ?: return null)
-                "status" -> Msg.Status(o.str("report_id") ?: return null, o.str("status") ?: return null, o.str("message") ?: "")
+                "status" -> Msg.Status(o.str("report_id") ?: return null, o.str("status") ?: return null, o.str("message") ?: "", o.str("signature") ?: "")
                 else -> null
             }
         } catch (e: Exception) {
@@ -81,6 +82,7 @@ object EnvelopeCheck {
         fun s(k: String) = (env[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
         if (num(env["envelope_version"]) != 1) return "envelope_version"
         for (k in listOf("report_id", "device_id", "created_at")) if (s(k).isNullOrEmpty()) return k
+        if (s("report_id")!!.length > MAX_ID_LENGTH) return "report_id"
         val ct = s("ciphertext")?.takeIf { it.isNotEmpty() } ?: return "ciphertext"
         val sig = s("signature")?.takeIf { it.isNotEmpty() } ?: return "signature"
         val ttl = num(env["ttl"]) ?: return "ttl"
@@ -95,6 +97,7 @@ object EnvelopeCheck {
     private fun num(e: JsonElement?): Int? = (e as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull
 
     const val MAX_TTL = 10
+    const val MAX_ID_LENGTH = 128
     fun reportId(env: JsonObject): String = env["report_id"]!!.jsonPrimitive.content
     fun ttl(env: JsonObject): Int = num(env["ttl"])!!
     fun hops(env: JsonObject): Int = num(env["hops"]) ?: 0

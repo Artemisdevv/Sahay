@@ -4,7 +4,8 @@ import kotlinx.serialization.json.JsonObject
 
 /** Platform I/O. endpointId is the transport's ephemeral id (Nearby endpoint id), not the device id. */
 interface Transport {
-    fun send(endpointId: String, bytes: ByteArray)
+    /** [onFailure] must be called (from any thread) if the bytes did not reach the peer, so the engine can retry later. */
+    fun send(endpointId: String, bytes: ByteArray, onFailure: () -> Unit = {})
     fun disconnect(endpointId: String)
 }
 
@@ -47,8 +48,10 @@ class RelayEngine(
     private val listener: RelayListener,
     private val now: () -> Long = System::currentTimeMillis,
     private val config: RelayConfig = RelayConfig(),
-    /** Optional: verify a server receipt before trusting it (stops a nearby peer forging "delivered"). */
-    private val receiptVerifier: ((String, JsonObject) -> Boolean)? = null,
+    /** Verifies a server receipt (Ed25519 over report_id|server_time). Required: stops a nearby peer forging "delivered". */
+    private val receiptVerifier: (reportId: String, receipt: JsonObject) -> Boolean,
+    /** Verifies a server-signed status. Required: stops a nearby peer feeding the reporter a fake status. */
+    private val statusVerifier: (Msg.Status) -> Boolean,
 ) {
     private class Peer(val endpointId: String) {
         var deviceId: String? = null
@@ -135,7 +138,7 @@ class RelayEngine(
     private fun onReceipt(peer: Peer, m: Msg.Receipt) {
         val rec = records[m.reportId] ?: return
         if (rec.receipt != null) return
-        if (receiptVerifier != null && !receiptVerifier.invoke(m.reportId, m.receipt)) return drop(peer)
+        if (!receiptVerifier(m.reportId, m.receipt)) return drop(peer)
         rec.receipt = m.receipt
         rec.delivered = true
         store.save(rec)
@@ -146,6 +149,7 @@ class RelayEngine(
     private fun onStatus(peer: Peer, m: Msg.Status) {
         val rec = records[m.reportId] ?: return
         if (rec.status?.status == m.status && rec.status?.message == m.message) return
+        if (!statusVerifier(m)) return drop(peer)
         rec.status = m
         rec.statusSentTo.clear()
         store.save(rec)
@@ -187,9 +191,9 @@ class RelayEngine(
     }
 
     @Synchronized
-    fun relayStatus(reportId: String, status: String, message: String) {
+    fun relayStatus(reportId: String, status: String, message: String, signature: String = "") {
         val rec = records[reportId] ?: return
-        rec.status = Msg.Status(reportId, status, message)
+        rec.status = Msg.Status(reportId, status, message, signature)
         rec.statusSentTo.clear()
         store.save(rec)
         peers.values.filter { it.ready }.forEach { flushBackChannel(it) }
@@ -229,8 +233,8 @@ class RelayEngine(
         if (!canForward(r) || r.reportId in peer.has || pid in r.sources) return
         val hops = EnvelopeCheck.hops(r.envelope)
         val out = if (r.origin) r.envelope else EnvelopeCheck.withHops(r.envelope, hops + 1)
-        transport.send(peer.endpointId, Codec.encode(Msg.Envelope(out)))
         peer.has += r.reportId
+        transport.send(peer.endpointId, Codec.encode(Msg.Envelope(out))) { onSendFailed { peer.has -= r.reportId } }
     }
 
     /** Send held receipts/statuses to a peer if it is on the path back for that report. */
@@ -240,16 +244,23 @@ class RelayEngine(
             if (pid !in r.sources) continue
             val receipt = r.receipt
             if (receipt != null && r.receiptSentTo.add(pid)) {
-                transport.send(peer.endpointId, Codec.encode(Msg.Receipt(r.reportId, receipt)))
                 store.save(r)
+                transport.send(peer.endpointId, Codec.encode(Msg.Receipt(r.reportId, receipt))) {
+                    onSendFailed { if (r.receiptSentTo.remove(pid)) store.save(r) }
+                }
             }
             val st = r.status
             if (st != null && r.statusSentTo.add(pid)) {
-                transport.send(peer.endpointId, Codec.encode(st))
                 store.save(r)
+                transport.send(peer.endpointId, Codec.encode(st)) {
+                    onSendFailed { if (r.status === st && r.statusSentTo.remove(pid)) store.save(r) }
+                }
             }
         }
     }
+
+    /** Transport failure callbacks may arrive on any thread; take the engine lock, then roll back the "sent" marker. */
+    private fun onSendFailed(rollback: () -> Unit) = synchronized(this) { rollback() }
 
     /** Ensure space for one more record: evict delivered first, then oldest relayed. False if only own reports remain. */
     private fun makeRoom(): Boolean {
