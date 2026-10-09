@@ -49,7 +49,14 @@ export interface Dispatch {
   unit_id: string;
   service_type: string;
   status:
-    "proposed" | "accepted" | "declined" | "en_route" | "arrived" | "completed";
+    | "proposed"
+    | "approved"
+    | "accepted"
+    | "declined"
+    | "en_route"
+    | "on_scene"
+    | "completed"
+    | "cancelled";
   distance_km: number;
   eta_minutes: number;
   proposed_by: string;
@@ -81,45 +88,84 @@ export async function acceptDispatch(
 export async function declineDispatch(
   dispatchId: string,
   token: string,
-): Promise<Dispatch> {
-  return request<Dispatch>(
+): Promise<{ declined: Dispatch; replacement: Dispatch | null }> {
+  return request<{ declined: Dispatch; replacement: Dispatch | null }>(
     `/dispatches/${dispatchId}/decline`,
-    { method: "POST" },
+    { method: "POST", body: JSON.stringify({}) },
     token,
   );
 }
 
 export async function updateDispatchStatus(
   dispatchId: string,
-  status: string,
+  status: "en_route" | "on_scene" | "completed",
   token: string,
 ): Promise<Dispatch> {
   return request<Dispatch>(
     `/dispatches/${dispatchId}/status`,
-    { method: "PATCH", body: JSON.stringify({ status }) },
+    { method: "POST", body: JSON.stringify({ status }) },
+    token,
+  );
+}
+
+export interface IncidentSummary {
+  incident_id: string;
+  status: string;
+  incident_type: string;
+  severity: number;
+  summary_redacted: string;
+  created_at: string;
+}
+
+export async function getIncidents(
+  token: string,
+): Promise<{ incidents: IncidentSummary[]; next_cursor: string | null }> {
+  return request<{ incidents: IncidentSummary[]; next_cursor: string | null }>(
+    "/incidents?limit=100",
+    {},
     token,
   );
 }
 
 export interface IncidentPii {
   incident_id: string;
-  transcript: string;
+  transcript: string | null;
   reporters: Array<{
     report_id: string;
-    name: string;
-    phone: string;
+    name: string | null;
+    phone: string | null;
     language: string;
-    emergency_contact: { name: string; phone: string };
+    emergency_contact: { name: string | null; phone: string | null } | null;
   }>;
   pii_spans: Array<{ type: string; text: string; start: number; end: number }>;
-  audio_url: string;
+  audio_url: string | null;
 }
 
 export async function revealIncidentPii(
   incidentId: string,
+  reason: string,
   token: string,
 ): Promise<IncidentPii> {
-  return request<IncidentPii>(`/incidents/${incidentId}/reveal`, {}, token);
+  return request<IncidentPii>(
+    `/incidents/${incidentId}/reveal`,
+    { method: "POST", body: JSON.stringify({ reason }) },
+    token,
+  );
+}
+
+export interface AuditEntry {
+  seq: number;
+  ts: string;
+  actor: { type: string; id: string };
+  action: string;
+  target: { type: string; id: string };
+  details: Record<string, unknown>;
+}
+
+export async function getAuditEntries(
+  token: string,
+): Promise<{ entries: AuditEntry[] }> {
+  return request<{ entries: AuditEntry[] }>("/audit?limit=50", {}, token);
 }
 
 export interface AuditVerifyResponse {

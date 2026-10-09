@@ -1,7 +1,7 @@
 // Service Worker registration for PWA
 export function registerSW() {
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
+    const register = () => {
       navigator.serviceWorker
         .register("/sw.js")
         .then((registration) => {
@@ -24,7 +24,13 @@ export function registerSW() {
         .catch((error) => {
           console.warn("[SW] Registration failed:", error);
         });
-    });
+    };
+
+    if (document.readyState === "complete") {
+      register();
+    } else {
+      window.addEventListener("load", register, { once: true });
+    }
   }
 }
 

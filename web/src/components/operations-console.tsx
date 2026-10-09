@@ -24,6 +24,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -40,10 +41,14 @@ import {
   acceptDispatch,
   declineDispatch,
   updateDispatchStatus,
+  getIncidents,
+  getAuditEntries,
   revealIncidentPii,
   verifyAuditChain,
+  type AuditEntry,
   type Dispatch,
   type IncidentPii,
+  type IncidentSummary,
 } from "@/lib/api";
 import {
   useDispatchWS,
@@ -53,12 +58,13 @@ import {
 function getStatusBadgeTone(status: Dispatch["status"]) {
   switch (status) {
     case "proposed":
+    case "approved":
       return "amber";
     case "accepted":
       return "blue";
     case "en_route":
       return "sky";
-    case "arrived":
+    case "on_scene":
       return "violet";
     case "completed":
       return "green";
@@ -71,6 +77,14 @@ function getStatusBadgeTone(status: Dispatch["status"]) {
 
 function getStatusLabel(status: Dispatch["status"]) {
   return status.charAt(0).toUpperCase() + status.slice(1).replace("_", " ");
+}
+
+function getAuditCategory(action: string) {
+  if (action === "pii.reveal") return "PII";
+  if (action.startsWith("auth.")) return "Auth";
+  if (action.startsWith("dispatch.") || action.startsWith("incident."))
+    return "Dispatch";
+  return "Other";
 }
 
 export function OperationsConsole({ serviceId }: { serviceId: string }) {
@@ -114,26 +128,17 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
           },
     ) => {
       if (event.type === "dispatch.updated") {
-        setDispatches((prev) =>
-          prev.map((d) =>
-            d.dispatch_id === event.data.dispatch_id
-              ? {
-                  ...d,
-                  status: event.data.status as Dispatch["status"],
-                  updated_at: event.ts,
-                }
-              : d,
-          ),
-        );
         toast.info(
           `Dispatch ${event.data.dispatch_id.slice(0, 8)}: ${getStatusLabel(event.data.status as Dispatch["status"])}`,
         );
       }
+      void loadDispatches();
     },
-    [],
+    [loadDispatches],
   );
 
-  useDispatchWS(handleWsEvent);
+  const { connected } = useDispatchWS(handleWsEvent);
+  useEffect(() => setWsConnected(connected), [connected]);
 
   const handleAccept = async (dispatchId: string) => {
     const session = getSession();
@@ -153,10 +158,8 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
     const session = getSession();
     if (!session?.token) return;
     try {
-      const updated = await declineDispatch(dispatchId, session.token);
-      setDispatches((prev) =>
-        prev.map((d) => (d.dispatch_id === dispatchId ? updated : d)),
-      );
+      await declineDispatch(dispatchId, session.token);
+      await loadDispatches();
       toast.success("Dispatch declined");
     } catch (e) {
       toast.error("Failed to decline dispatch");
@@ -165,7 +168,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
 
   const handleStatusUpdate = async (
     dispatchId: string,
-    status: Dispatch["status"],
+    status: "en_route" | "on_scene" | "completed",
   ) => {
     const session = getSession();
     if (!session?.token) return;
@@ -184,10 +187,11 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
     }
   };
 
-  const proposedDispatches = dispatches.filter((d) => d.status === "proposed");
+  const proposedDispatches = dispatches.filter((d) => d.status === "approved");
   const activeDispatches = dispatches.filter(
     (d) =>
       d.status !== "proposed" &&
+      d.status !== "approved" &&
       d.status !== "declined" &&
       d.status !== "completed",
   );
@@ -391,13 +395,13 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                           size="sm"
                           variant="outline"
                           onClick={() =>
-                            handleStatusUpdate(d.dispatch_id, "arrived")
+                            handleStatusUpdate(d.dispatch_id, "on_scene")
                           }
                         >
-                          Arrived
+                          On scene
                         </Button>
                       )}
-                      {d.status === "arrived" && (
+                      {d.status === "on_scene" && (
                         <Button
                           size="sm"
                           onClick={() =>
@@ -606,14 +610,54 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
 }
 export function AdminDashboard() {
   const [intervene, setIntervene] = useState(false);
-  const [severity, setSeverity] = useState("All");
+  const [auditFilter, setAuditFilter] = useState("All");
   const [selected, setSelected] = useState<string | null>(null);
+  const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
+  const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [adminDataLoading, setAdminDataLoading] = useState(true);
   const [piiModalOpen, setPiiModalOpen] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<string | null>(null);
+  const [revealReason, setRevealReason] = useState("");
+  const [piiError, setPiiError] = useState<string | null>(null);
   const [piiData, setPiiData] = useState<IncidentPii | null>(null);
   const [piiLoading, setPiiLoading] = useState(false);
   const [auditVerified, setAuditVerified] = useState<boolean | null>(null);
   const [auditVerifying, setAuditVerifying] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const session = getSession();
+    if (!session?.token) {
+      setAdminDataLoading(false);
+      return;
+    }
+
+    Promise.allSettled([
+      getIncidents(session.token),
+      getAuditEntries(session.token),
+      verifyAuditChain(session.token),
+    ]).then(([incidentResult, auditResult, verificationResult]) => {
+      if (cancelled) return;
+      if (incidentResult.status === "fulfilled") {
+        setIncidents(incidentResult.value.incidents);
+      } else {
+        toast.error("Failed to load incidents");
+      }
+      if (auditResult.status === "fulfilled") {
+        setAudit(auditResult.value.entries);
+      } else {
+        toast.error("Failed to load audit entries");
+      }
+      if (verificationResult.status === "fulfilled") {
+        setAuditVerified(verificationResult.value.valid);
+      }
+      setAdminDataLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const agents = [
     {
@@ -645,68 +689,43 @@ export function AdminDashboard() {
       work: "4,682",
     },
   ];
-  const incidents = [
-    {
-      id: "22222222-2222-4222-8222-222222222222",
-      title: "Car accident · Highway 101",
-      status: "dispatched",
-    },
-    {
-      id: "33333333-3333-4333-8333-333333333333",
-      title: "Structure fire · Market Street",
-      status: "active",
-    },
-    {
-      id: "44444444-4444-4444-8444-444444444444",
-      title: "Medical emergency · Downtown",
-      status: "resolved",
-    },
-  ];
-  const audit = [
-    {
-      time: "07:06:24",
-      level: "Info",
-      text: "DispatchRouter-v2 assigned Ambulance #12 to EMS-1049.",
-    },
-    {
-      time: "07:06:22",
-      level: "Success",
-      text: "ResourceMemory-RAG retrieved medical context. Similarity: 0.98.",
-    },
-    {
-      time: "07:06:20",
-      level: "Warning",
-      text: "Critical care occupancy reached 67%. Capacity monitor notified.",
-    },
-    {
-      time: "07:06:18",
-      level: "Info",
-      text: "TriageAgent-01 classified INC-2041 as critical. Joint response requested.",
-    },
-    {
-      time: "07:06:15",
-      level: "Success",
-      text: "NotificationBot delivered incident alert to Metro Fire Station 4.",
-    },
-    {
-      time: "07:06:11",
-      level: "Info",
-      text: "Vector memory index synchronized. 24,816 context records ready.",
-    },
-  ];
-
-  const handleRevealPii = async (incidentId: string) => {
-    const session = getSession();
-    if (!session?.token) return;
+  const handleRevealPii = (incidentId: string) => {
     setSelectedIncident(incidentId);
-    setPiiLoading(true);
+    setRevealReason("");
+    setPiiError(null);
     setPiiData(null);
-    setAuditVerified(null);
     setPiiModalOpen(true);
+  };
+
+  const submitPiiReveal = async () => {
+    const session = getSession();
+    const reason = revealReason.trim();
+    if (!session?.token || !selectedIncident) return;
+    if (!reason) {
+      setPiiError("Enter a reason before revealing PII.");
+      return;
+    }
+    setPiiLoading(true);
+    setPiiError(null);
     try {
-      const data = await revealIncidentPii(incidentId, session.token);
+      const data = await revealIncidentPii(
+        selectedIncident,
+        reason,
+        session.token,
+      );
       setPiiData(data);
+      const [auditResult, verificationResult] = await Promise.allSettled([
+        getAuditEntries(session.token),
+        verifyAuditChain(session.token),
+      ]);
+      if (auditResult.status === "fulfilled") {
+        setAudit(auditResult.value.entries);
+      }
+      if (verificationResult.status === "fulfilled") {
+        setAuditVerified(verificationResult.value.valid);
+      }
     } catch (e) {
+      setPiiError(e instanceof Error ? e.message : "Failed to reveal PII");
       toast.error("Failed to reveal PII");
     } finally {
       setPiiLoading(false);
@@ -731,8 +750,8 @@ export function AdminDashboard() {
     }
   };
 
-  const formatPhone = (phone: string) =>
-    phone.replace(/(\+\d{2})(\d{5})(\d{5})/, "$1 $2 $3");
+  const formatPhone = (phone: string | null) =>
+    phone?.replace(/(\+\d{2})(\d{5})(\d{5})/, "$1 $2 $3") ?? "Not provided";
 
   return (
     <Shell role="admin" title="Agent orchestration">
@@ -843,13 +862,30 @@ export function AdminDashboard() {
                 </h2>
                 <p>Autonomous decisions & network events</p>
               </div>
+              <Badge
+                tone={
+                  auditVerified === true
+                    ? "green"
+                    : auditVerified === false
+                      ? "rose"
+                      : "amber"
+                }
+              >
+                {auditVerified === true
+                  ? "Chain verified"
+                  : auditVerified === false
+                    ? "Chain invalid"
+                    : adminDataLoading
+                      ? "Verifying chain…"
+                      : "Chain unverified"}
+              </Badge>
               <div className="audit-filters">
-                {["All", "Info", "Warning", "Success"].map((s) => (
+                {["All", "Auth", "Dispatch", "PII", "Other"].map((s) => (
                   <Button
                     key={s}
-                    variant={severity === s ? "secondary" : "ghost"}
-                    aria-pressed={severity === s}
-                    onClick={() => setSeverity(s)}
+                    variant={auditFilter === s ? "secondary" : "ghost"}
+                    aria-pressed={auditFilter === s}
+                    onClick={() => setAuditFilter(s)}
                   >
                     {s}
                   </Button>
@@ -866,25 +902,47 @@ export function AdminDashboard() {
                 </span>
               </div>
             )}
-            {audit
-              .filter((a) => severity === "All" || a.level === severity)
-              .map((a) => (
-                <div className="audit-row" key={a.time}>
-                  <span className="mono">{a.time}</span>
-                  <Badge
-                    tone={
-                      a.level === "Warning"
-                        ? "amber"
-                        : a.level === "Success"
-                          ? "green"
-                          : ""
-                    }
-                  >
-                    {a.level}
-                  </Badge>
-                  <span>{a.text}</span>
-                </div>
-              ))}
+            {adminDataLoading ? (
+              <div className="audit-row">Loading audit entries…</div>
+            ) : audit.length === 0 ? (
+              <div className="audit-row">No audit entries yet.</div>
+            ) : (
+              audit
+                .slice()
+                .reverse()
+                .filter(
+                  (entry) =>
+                    auditFilter === "All" ||
+                    getAuditCategory(entry.action) === auditFilter,
+                )
+                .map((entry) => {
+                  const category = getAuditCategory(entry.action);
+                  return (
+                    <div className="audit-row" key={entry.seq}>
+                      <span className="mono">
+                        {new Date(entry.ts).toLocaleTimeString()}
+                      </span>
+                      <Badge
+                        tone={
+                          category === "PII"
+                            ? "rose"
+                            : category === "Auth"
+                              ? "green"
+                              : category === "Dispatch"
+                                ? "blue"
+                                : ""
+                        }
+                      >
+                        {category}
+                      </Badge>
+                      <span>
+                        {entry.action} · {entry.actor.type}:{entry.actor.id} ·{" "}
+                        {entry.target.type}:{entry.target.id}
+                      </span>
+                    </div>
+                  );
+                })
+            )}
           </section>
           <section className="panel mt-5">
             <div className="panel-head">
@@ -901,39 +959,46 @@ export function AdminDashboard() {
               <Badge tone="amber">Admin only</Badge>
             </div>
             <div className="space-y-3">
-              {incidents.map((inc) => (
-                <div key={inc.id} className="patient">
-                  <div className="patient-top">
-                    <h3>{inc.title}</h3>
-                    <Badge
-                      tone={
-                        inc.status === "active"
-                          ? "rose"
-                          : inc.status === "dispatched"
-                            ? "blue"
-                            : "green"
-                      }
-                    >
-                      {inc.status}
-                    </Badge>
+              {adminDataLoading ? (
+                <p className="text-muted-foreground">Loading incidents…</p>
+              ) : incidents.length === 0 ? (
+                <p className="text-muted-foreground">No incidents available.</p>
+              ) : (
+                incidents.map((inc) => (
+                  <div key={inc.incident_id} className="patient">
+                    <div className="patient-top">
+                      <h3>{inc.summary_redacted || inc.incident_type}</h3>
+                      <Badge
+                        tone={
+                          inc.status === "resolved" ||
+                          inc.status === "completed"
+                            ? "green"
+                            : inc.status === "dispatched"
+                              ? "blue"
+                              : "rose"
+                        }
+                      >
+                        {inc.status}
+                      </Badge>
+                    </div>
+                    <p className="mono text-xs">{inc.incident_id}</p>
+                    <div className="patient-meta">
+                      <Button
+                        size="sm"
+                        onClick={() => handleRevealPii(inc.incident_id)}
+                        disabled={piiLoading}
+                      >
+                        {piiLoading && selectedIncident === inc.incident_id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <ShieldCheck className="h-3 w-3" />
+                        )}
+                        Reveal PII
+                      </Button>
+                    </div>
                   </div>
-                  <p className="mono text-xs">{inc.id}</p>
-                  <div className="patient-meta">
-                    <Button
-                      size="sm"
-                      onClick={() => handleRevealPii(inc.id)}
-                      disabled={piiLoading}
-                    >
-                      {piiLoading && selectedIncident === inc.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <ShieldCheck className="h-3 w-3" />
-                      )}
-                      Reveal PII
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </section>
         </div>
@@ -1084,8 +1149,9 @@ export function AdminDashboard() {
               PII Reveal · {selectedIncident?.slice(0, 12)}
             </DialogTitle>
             <DialogDescription>
-              Decrypted personally identifiable information. Audit trail
-              recorded.
+              {piiData
+                ? "Access was recorded in the audit chain."
+                : "Enter the required reason to record and reveal incident PII."}
             </DialogDescription>
           </DialogHeader>
           {piiLoading ? (
@@ -1137,10 +1203,13 @@ export function AdminDashboard() {
                     <ul className="mt-1 space-y-1">
                       {piiData.reporters.map((r) => (
                         <li key={r.report_id} className="font-mono text-xs">
-                          {r.name} · {formatPhone(r.phone)} · {r.language}
+                          {r.name || "Name not provided"} ·{" "}
+                          {formatPhone(r.phone)} · {r.language}
                           <br />
-                          Emergency: {r.emergency_contact.name} ·{" "}
-                          {formatPhone(r.emergency_contact.phone)}
+                          Emergency:{" "}
+                          {r.emergency_contact?.name ||
+                            "Name not provided"} ·{" "}
+                          {formatPhone(r.emergency_contact?.phone ?? null)}
                         </li>
                       ))}
                     </ul>
@@ -1158,7 +1227,7 @@ export function AdminDashboard() {
                   <div>
                     <strong>Audio:</strong>
                     <p className="mt-1 font-mono text-xs">
-                      {piiData.audio_url}
+                      {piiData.audio_url || "Not provided"}
                     </p>
                   </div>
                 </div>
@@ -1169,9 +1238,34 @@ export function AdminDashboard() {
               </p>
             </div>
           ) : (
-            <p className="text-muted-foreground text-center py-8">
-              Failed to load PII data
-            </p>
+            <div className="space-y-4 mt-4">
+              <label
+                className="block space-y-2 text-sm"
+                htmlFor="pii-reveal-reason"
+              >
+                Reason for access (required)
+                <Input
+                  id="pii-reveal-reason"
+                  value={revealReason}
+                  onChange={(event) => setRevealReason(event.target.value)}
+                  maxLength={250}
+                  autoComplete="off"
+                  placeholder="Explain why this incident’s PII is needed"
+                  disabled={piiLoading}
+                />
+              </label>
+              {piiError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {piiError}
+                </p>
+              )}
+              <Button
+                onClick={submitPiiReveal}
+                disabled={piiLoading || !revealReason.trim()}
+              >
+                Reveal PII and record access
+              </Button>
+            </div>
           )}
         </DialogContent>
       </Dialog>
