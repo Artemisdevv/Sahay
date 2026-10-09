@@ -45,6 +45,7 @@ import {
   type ReportStatus,
 } from "@/lib/report/service";
 import type { Category } from "@/lib/report/envelope";
+import { warmLocation } from "@/lib/report/location";
 import {
   getRelayState,
   isRelayEnabled,
@@ -152,6 +153,8 @@ export function CitizenPortal() {
     return watchRelay(setRelay);
   }, []);
   const voice = useVoiceCapture();
+  // Follow the position while this screen is open so sending does not wait for a GPS fix.
+  useEffect(() => warmLocation(), []);
   const [canUseCamera, setCanUseCamera] = useState(false);
 
   // Follow the report we just sent: local queue state every 3 s, server status once it is delivered.
@@ -452,7 +455,7 @@ export function CitizenPortal() {
           {voice.state === "ready" && voice.clip && (
             <div className="cz-clip">
               <p>Your message ({fmt(voice.clip.seconds)})</p>
-              <audio controls src={voice.clip.url} />
+              <ClipPlayer url={voice.clip.url} />
               <Button
                 variant="outline"
                 className="cz-secondary"
@@ -464,8 +467,8 @@ export function CitizenPortal() {
           )}
           {voice.state === "denied" && (
             <p className="cz-warn" role="alert">
-              Microphone access was denied. Allow it in browser settings, or
-              choose what is happening below.
+              The microphone is blocked. Allow it for Sahay in your phone or
+              browser settings, or choose what is happening below.
             </p>
           )}
           {voice.state === "unsupported" && (
@@ -584,7 +587,11 @@ export function CitizenPortal() {
       {tab === "map" && (
         <section className="cz-page" aria-labelledby="map-title">
           <h1 id="map-title">Response map</h1>
-          <IncidentMap role="civilian" className="admin-map" />
+          <p className="cz-lead">
+            Confirmed incidents near you, by area. No names or messages are
+            shown.
+          </p>
+          <IncidentMap role="public" className="admin-map" />
         </section>
       )}
 
@@ -883,7 +890,7 @@ function Progress({
     viaRelay
       ? "Delivered through a nearby phone"
       : "Sent to the response centre",
-    "A team is on the way",
+    k === 3 ? "A team is on the way" : "A team is being arranged",
   ];
   return (
     <section className="cz-help" aria-live="polite">
@@ -924,5 +931,38 @@ function Progress({
         Done
       </Button>
     </section>
+  );
+}
+
+/** Play button for the recorded message. The native audio bar shows a nonsense length for browser recordings (no duration header). */
+function ClipPlayer({ url }: { url: string }) {
+  const audio = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  return (
+    <>
+      <audio
+        ref={audio}
+        src={url}
+        onEnded={() => setPlaying(false)}
+        onPause={() => setPlaying(false)}
+        onPlay={() => setPlaying(true)}
+      />
+      <Button
+        variant="outline"
+        className="cz-secondary"
+        onClick={() => {
+          const el = audio.current;
+          if (!el) return;
+          if (playing) {
+            el.pause();
+            el.currentTime = 0;
+          } else {
+            void el.play();
+          }
+        }}
+      >
+        {playing ? "Stop playing" : "Play my message"}
+      </Button>
+    </>
   );
 }
