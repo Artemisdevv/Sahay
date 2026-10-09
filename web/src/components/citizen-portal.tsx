@@ -36,6 +36,7 @@ import {
 import { useVoiceCapture } from "@/hooks/use-voice-capture";
 import {
   fetchStatus,
+  fetchResponseCalls,
   listReports,
   NotReadyError,
   PayloadError,
@@ -44,6 +45,7 @@ import {
   submitReport,
   type ReportStatus,
 } from "@/lib/report/service";
+import type { ServiceCallList } from "@/lib/api";
 import type { Category } from "@/lib/report/envelope";
 import { warmLocation } from "@/lib/report/location";
 import {
@@ -55,6 +57,7 @@ import {
 } from "@/lib/report/relay";
 import type { QueueItem } from "@/lib/report/queue";
 import { secureStorage } from "@/native/secure-storage";
+import { ResponseTimeline, serviceLabel } from "./response-timeline";
 
 const tabs: ShellTab[] = [
   { id: "help", label: "Get help", icon: Mic },
@@ -155,6 +158,7 @@ export function CitizenPortal() {
   const [tab, setTab] = useState("help");
   const [current, setCurrent] = useState<QueueItem | null>(null);
   const [status, setStatus] = useState<ReportStatus | null>(null);
+  const [responseCalls, setResponseCalls] = useState<ServiceCallList[]>([]);
   const [sending, setSending] = useState(false);
   const [approx, setApprox] = useState(false);
   const [picked, setPicked] = useState<IncidentType | null>(null);
@@ -209,8 +213,14 @@ export function CitizenPortal() {
       if (!alive || !row) return;
       setCurrent(row);
       if (row.state === "sent") {
-        const st = await fetchStatus(currentId);
-        if (alive && st) setStatus(st);
+        const [st, calls] = await Promise.all([
+          fetchStatus(currentId),
+          fetchResponseCalls(currentId),
+        ]);
+        if (alive) {
+          if (st) setStatus(st);
+          setResponseCalls(calls);
+        }
       }
     };
     void tick();
@@ -405,6 +415,7 @@ export function CitizenPortal() {
       });
       setApprox(approximateLocation);
       setStatus(null);
+      setResponseCalls([]);
       setCurrent(item);
     } catch (e) {
       if (e instanceof NotReadyError || e instanceof PayloadError) {
@@ -420,6 +431,7 @@ export function CitizenPortal() {
   function startOver() {
     setCurrent(null);
     setStatus(null);
+    setResponseCalls([]);
     setPicked(null);
     setNote("");
     voice.reset();
@@ -606,6 +618,7 @@ export function CitizenPortal() {
         <Progress
           item={current}
           status={status}
+          responseCalls={responseCalls}
           approximate={approx}
           nearby={relay.nearby}
           onDone={startOver}
@@ -912,6 +925,7 @@ function MicButton({ voice }: { voice: ReturnType<typeof useVoiceCapture> }) {
 function Progress({
   item,
   status,
+  responseCalls,
   approximate,
   nearby,
   onDone,
@@ -919,6 +933,7 @@ function Progress({
 }: {
   item: QueueItem;
   status: ReportStatus | null;
+  responseCalls: ServiceCallList[];
   approximate: boolean;
   nearby: number;
   onDone: () => void;
@@ -942,17 +957,27 @@ function Progress({
         : "Saved on your phone";
   const serverStatus = status ?? item.relay_status ?? null;
   const viaRelay = item.via === "relay";
+  const acceptedService = responseCalls.find((service) =>
+    service.candidates.some((candidate) => candidate.state === "accepted"),
+  );
+  const arrived = ["on_scene", "resolved"].includes(serverStatus?.status ?? "");
   const lead = failed
     ? "The response centre did not accept this report. Call 112 now."
-    : serverStatus?.message
-      ? serverStatus.message
-      : item.state === "sent"
-        ? viaRelay
-          ? "A nearby phone passed it on and the response centre has it. A team is being arranged."
-          : "The response centre has it. A team is being arranged."
-        : nearby > 0
-          ? "A nearby phone can pass it on. You do not need to do anything."
-          : "It will be sent as soon as there is a connection or a nearby phone. You do not need to do anything.";
+    : arrived
+      ? "Help has arrived."
+      : acceptedService && status?.eta_minutes != null
+        ? `${serviceLabel(acceptedService.service_type)} accepted, about ${status.eta_minutes} ${status.eta_minutes === 1 ? "minute" : "minutes"} away.`
+        : acceptedService
+          ? `${serviceLabel(acceptedService.service_type)} accepted and is on the way.`
+          : serverStatus?.message
+            ? serverStatus.message
+            : item.state === "sent"
+              ? viaRelay
+                ? "A nearby phone passed it on and the response centre has it. A team is being arranged."
+                : "The response centre has it. A team is being arranged."
+              : nearby > 0
+                ? "A nearby phone can pass it on. You do not need to do anything."
+                : "It will be sent as soon as there is a connection or a nearby phone. You do not need to do anything.";
   const labels = [
     "Saved on your phone",
     viaRelay
@@ -985,6 +1010,15 @@ function Progress({
             </li>
           ))}
         </ol>
+      )}
+      {item.state === "sent" && (
+        <section
+          className="cz-response-status"
+          aria-label="Response team updates"
+        >
+          <h2>Calling nearby services</h2>
+          <ResponseTimeline lists={responseCalls} civilian />
+        </section>
       )}
       {failed && (
         <Button variant="outline" className="cz-secondary" onClick={onRetry}>

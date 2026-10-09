@@ -150,6 +150,20 @@ export interface IncidentActionResult {
   unfilled_services: string[];
 }
 
+export interface CallCandidate {
+  rank: number;
+  unit_id?: string;
+  name?: string;
+  distance_km: number;
+  eta_minutes: number;
+  state: "calling" | "accepted" | "declined" | "no_answer" | "standby";
+}
+
+export interface ServiceCallList {
+  service_type: ServiceType;
+  candidates: CallCandidate[];
+}
+
 export async function getIncidents(
   token: string,
 ): Promise<{ incidents: IncidentSummary[]; next_cursor: string | null }> {
@@ -172,6 +186,17 @@ export async function getIncidentTrace(
   token: string,
 ): Promise<{ incident_id: string; trace: AgentTraceStep[] }> {
   return request(`/incidents/${incidentId}/trace`, {}, token);
+}
+
+export async function getIncidentCalls(
+  incidentId: string,
+  token: string,
+): Promise<{
+  incident_id: string;
+  calls: Array<Record<string, unknown>>;
+  lists: ServiceCallList[];
+}> {
+  return request(`/incidents/${incidentId}/calls`, {}, token);
 }
 
 export async function approveIncident(

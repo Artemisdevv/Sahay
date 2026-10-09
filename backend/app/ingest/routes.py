@@ -20,7 +20,7 @@ from app.audit_chain import append_audit_entry
 from app.database import get_db
 from app.ingest import crypto
 from app.keyring import server_box_key, server_signing_key
-from app.models import Device, Report
+from app.models import Device, Dispatch, Report
 from app.settings import settings
 
 MAX_BODY_BYTES = 600 * 1024
@@ -202,19 +202,62 @@ def install(app: FastAPI, current_user: Callable) -> None:
             "signature": crypto.sign_status(report.report_id, report.status, message, updated_at, _sign_key()),
         }
 
+    @router.get("/reports/{report_id}/calls")
+    def report_calls(report_id: str, user: dict = Depends(civilian), db: Session = Depends(get_db)):
+        report = db.get(Report, report_id)
+        if report is None or report.device_id != user["device_id"]:
+            raise HTTPException(status_code=404, detail="Not found")
+        if not report.incident_id:
+            return {"report_id": report.report_id, "lists": []}
+
+        # A civilian may see their own response timeline, but not service unit IDs or names.
+        from app.live import called_payload
+
+        service_types = db.scalars(
+            select(Dispatch.service_type)
+            .where(Dispatch.incident_id == report.incident_id)
+            .distinct()
+        ).all()
+        lists = []
+        for service_type in service_types:
+            payload = called_payload(db, report.incident_id, service_type)
+            if payload is None:
+                continue
+            lists.append({
+                "service_type": payload["service_type"],
+                "candidates": [
+                    {
+                        "rank": candidate["rank"],
+                        "distance_km": candidate["distance_km"],
+                        "eta_minutes": candidate["eta_minutes"],
+                        "state": candidate["state"],
+                    }
+                    for candidate in payload["candidates"]
+                ],
+            })
+        return {"report_id": report.report_id, "lists": lists}
+
     app.include_router(router)
 
 
 def _eta(db: Session, report: Report) -> int | None:
-    """Fastest approved/active dispatch ETA for the report's incident, if any."""
+    """Fastest current ETA from the responding units' latest reported locations."""
     if not report.incident_id:
         return None
-    from app.models import Dispatch
+    from app.dispatch import engine
+    from app.models import Incident, Unit
 
-    etas = db.scalars(
-        select(Dispatch.eta_minutes).where(
+    responses = db.execute(
+        select(Dispatch, Unit, Incident)
+        .join(Unit, Unit.unit_id == Dispatch.unit_id)
+        .join(Incident, Incident.incident_id == Dispatch.incident_id)
+        .where(
             Dispatch.incident_id == report.incident_id,
             Dispatch.status.in_(["approved", "accepted", "en_route"]),
         )
     ).all()
+    etas = [
+        engine.eta_minutes(engine.haversine_km(unit.lat, unit.lng, incident.lat, incident.lng))
+        for _, unit, incident in responses
+    ]
     return min(etas) if etas else None

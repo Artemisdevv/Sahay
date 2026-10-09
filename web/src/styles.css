@@ -1555,6 +1555,97 @@ h1 {
   margin: 0;
   font-size: 12px;
 }
+.response-timeline {
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+}
+.response-timeline h5 {
+  margin: 0 0 7px;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 700;
+}
+.response-timeline ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.response-timeline li {
+  display: grid;
+  grid-template-columns: 22px minmax(90px, 1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11px;
+}
+.response-timeline-rank {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--primary) 16%, var(--card));
+  color: var(--primary);
+  font-weight: 700;
+}
+.response-timeline-unit {
+  font-weight: 600;
+}
+.response-timeline-state {
+  color: var(--muted-foreground);
+}
+.response-timeline-state.is-calling {
+  color: #fbbf24;
+}
+.response-timeline-state.is-accepted {
+  color: #34d399;
+}
+.response-timeline-state.is-declined,
+.response-timeline-state.is-no_answer {
+  color: #f87171;
+}
+.response-timeline-distance {
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.response-timeline-empty {
+  margin: 10px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.cz-help .response-timeline {
+  gap: 12px;
+  margin: 18px 0;
+}
+.cz-help .response-timeline h5 {
+  font-size: 14px;
+}
+.cz-help .response-timeline li {
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 7px;
+  font-size: 12px;
+}
+.cz-help .response-timeline-distance {
+  grid-column: 2 / -1;
+  white-space: normal;
+}
+.cz-help .response-timeline-empty {
+  margin: 16px 0;
+}
+@media (max-width: 620px) {
+  .incident-workflow .response-timeline li {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+  }
+  .incident-workflow .response-timeline-distance {
+    grid-column: 2 / -1;
+    white-space: normal;
+  }
+}
 .briefing {
   border-left: 2px solid var(--hospital);
   background: color-mix(in oklch, var(--hospital) 4%, var(--card));
