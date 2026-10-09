@@ -4,14 +4,39 @@ import "leaflet/dist/leaflet.css";
 import { AlertTriangle, Loader2, MapPin, X } from "lucide-react";
 import {
   getIncidents,
+  getPublicIncidents,
   getUnits,
   type IncidentSummary,
+  type PublicIncident,
   type Unit,
 } from "@/lib/api";
 import { getSession } from "@/lib/session";
 import { useDispatchWS, type WSEvent } from "@/hooks/use-dispatch-ws";
 
-type MapRole = "admin" | "service" | "civilian";
+type MapRole = "admin" | "service" | "civilian" | "public";
+
+const PUBLIC_SEVERITY = { low: 2, medium: 3, high: 4, critical: 5 } as const;
+
+/** Public items carry only coarse facts; the other fields stay empty and are never shown in the public panel. */
+function fromPublic(item: PublicIncident): IncidentSummary {
+  return {
+    incident_id: item.id,
+    status: item.status,
+    incident_type: item.incident_type,
+    severity: PUBLIC_SEVERITY[item.severity],
+    urgency_score: 0,
+    location: item.location,
+    summary_redacted: "",
+    people_count: 0,
+    hazards: [],
+    needed_services: [],
+    report_count: 0,
+    report_ids: [],
+    reason: "",
+    created_at: item.reported_at,
+    updated_at: item.reported_at,
+  };
+}
 
 export function IncidentMap({
   role,
@@ -34,7 +59,7 @@ export function IncidentMap({
   const [units, setUnits] = useState<Unit[]>([]);
   const [selected, setSelected] = useState<IncidentSummary | null>(null);
   const [loadingState, setLoading] = useState(
-    role !== "civilian" && !incidentData,
+    role !== "civilian" && role !== "public" && !incidentData,
   );
   const [error, setError] = useState<string | null>(null);
   const loading = loadingOverride ?? loadingState;
@@ -61,7 +86,7 @@ export function IncidentMap({
         event.type === "incident.updated"
       ) {
         const session = getSession();
-        if (!session?.token || role === "civilian") return;
+        if (!session?.token || role === "civilian" || role === "public") return;
         void getIncidents(session.token)
           .then((result) => setIncidents(result.incidents))
           .catch((refreshError: unknown) => {
@@ -77,8 +102,33 @@ export function IncidentMap({
   );
   useDispatchWS(onEvent);
 
+  // Open map: poll the public feed every 10 s. No login, no websocket.
   useEffect(() => {
-    if (role === "civilian") return;
+    if (role !== "public") return;
+    let active = true;
+    const load = () =>
+      getPublicIncidents()
+        .then((result) => {
+          if (!active) return;
+          setIncidents(result.incidents.map(fromPublic));
+          setError(null);
+        })
+        .catch(() => {
+          if (active) setError("The map could not be refreshed. Retrying.");
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    void load();
+    const timer = window.setInterval(() => void load(), 10_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [role]);
+
+  useEffect(() => {
+    if (role === "civilian" || role === "public") return;
     let active = true;
     const session = getSession();
     if (!session?.token) {
@@ -126,15 +176,13 @@ export function IncidentMap({
       [9.9312, 76.2673],
       12,
     );
-    L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-      {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: "abcd",
-        maxZoom: 20,
-      },
-    ).addTo(instance);
+    // CARTO's free dark basemap now answers "API key required", so use OpenStreetMap's standard tiles
+    // (fine for demo-scale traffic under the OSM tile policy; swap for a keyed provider before real load).
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+    }).addTo(instance);
     incidentMarkers.current = L.layerGroup().addTo(instance);
     unitMarkers.current = L.layerGroup().addTo(instance);
     map.current = instance;
@@ -216,7 +264,10 @@ export function IncidentMap({
         incidents.length === 0 &&
         role !== "civilian" && (
           <div className="map-state">
-            <MapPin size={15} /> No incidents available in this view.
+            <MapPin size={15} />{" "}
+            {role === "public"
+              ? "No confirmed incidents right now."
+              : "No incidents available in this view."}
           </div>
         )}
       {role === "civilian" && (
@@ -225,7 +276,37 @@ export function IncidentMap({
           civilian accounts.
         </div>
       )}
-      {selected && (
+      {selected && role === "public" && (
+        <aside className="incident-map-detail" aria-label="Incident details">
+          <button
+            type="button"
+            aria-label="Close incident details"
+            onClick={() => setSelected(null)}
+          >
+            <X size={15} />
+          </button>
+          <span className="map-detail-kicker">
+            {selected.status} ·{" "}
+            {new Date(selected.created_at).toLocaleTimeString("en-IN", {
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </span>
+          <strong>{selected.incident_type}</strong>
+          <small>
+            Severity:{" "}
+            {
+              ["", "low", "low", "medium", "high", "critical"][
+                selected.severity
+              ]
+            }
+          </small>
+          <small>
+            The marker shows the area (about 1 km), not the exact spot.
+          </small>
+        </aside>
+      )}
+      {selected && role !== "public" && (
         <aside className="incident-map-detail" aria-label="Incident details">
           <button
             type="button"

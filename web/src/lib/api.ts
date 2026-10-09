@@ -203,6 +203,24 @@ export async function verifyAuditChain(
   return request<AuditVerifyResponse>("/audit/verify", {}, token);
 }
 
+export interface PublicIncident {
+  id: string;
+  incident_type: string;
+  severity: "low" | "medium" | "high" | "critical";
+  status: string;
+  location: { lat: number; lng: number };
+  area_precision_km: number;
+  reported_at: string;
+}
+
+/** Open map feed: no login, coarse facts only (backend/app/public_routes.py). */
+export async function getPublicIncidents(): Promise<{
+  incidents: PublicIncident[];
+  generated_at: string;
+}> {
+  return request("/public/incidents");
+}
+
 export { API_BASE };
 
 /**

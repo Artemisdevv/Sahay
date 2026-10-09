@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MapRouteImport } from './routes/map'
 import { Route as AdminDashboardRouteImport } from './routes/admin.dashboard'
 import { Route as ServiceServiceIdRouteImport } from './routes/service.$serviceId'
 import { Route as UserUsernameRouteImport } from './routes/user.$username'
@@ -23,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MapRoute = MapRouteImport.update({
+  id: '/map',
+  path: '/map',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminDashboardRoute = AdminDashboardRouteImport.update({
@@ -44,6 +50,7 @@ const UserUsernameRoute = UserUsernameRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/map': typeof MapRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/service/$serviceId': typeof ServiceServiceIdRoute
   '/user/$username': typeof UserUsernameRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/map': typeof MapRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/service/$serviceId': typeof ServiceServiceIdRoute
   '/user/$username': typeof UserUsernameRoute
@@ -59,6 +67,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/map': typeof MapRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/service/$serviceId': typeof ServiceServiceIdRoute
   '/user/$username': typeof UserUsernameRoute
@@ -68,6 +77,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/map'
     | '/admin/dashboard'
     | '/service/$serviceId'
     | '/user/$username'
@@ -75,6 +85,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/map'
     | '/admin/dashboard'
     | '/service/$serviceId'
     | '/user/$username'
@@ -82,6 +93,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/login'
+    | '/map'
     | '/admin/dashboard'
     | '/service/$serviceId'
     | '/user/$username'
@@ -90,6 +102,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
+  MapRoute: typeof MapRoute
   AdminDashboardRoute: typeof AdminDashboardRoute
   ServiceServiceIdRoute: typeof ServiceServiceIdRoute
   UserUsernameRoute: typeof UserUsernameRoute
@@ -109,6 +122,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/map': {
+      id: '/map'
+      path: '/map'
+      fullPath: '/map'
+      preLoaderRoute: typeof MapRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/dashboard': {
@@ -138,6 +158,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
+  MapRoute: MapRoute,
   AdminDashboardRoute: AdminDashboardRoute,
   ServiceServiceIdRoute: ServiceServiceIdRoute,
   UserUsernameRoute: UserUsernameRoute,

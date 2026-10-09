@@ -21,6 +21,7 @@ from app.audit_routes import install as install_audit_routes
 from app.incident_routes import install as install_incident_routes
 from app.ingest.routes import install as install_ingest
 from app.keyring import server_public_key_response
+from app.public_routes import install as install_public_routes
 from app.models import AgentTrace, AuditChainHead, AuditEntry, DemoUser, Device, Dispatch, Incident, IncidentPII, Report, Unit
 from app.pii_crypto import ensure_pii_encryption_key
 from app.rate_limit import rate_limiter
@@ -170,6 +171,7 @@ def trace_json(trace: AgentTrace) -> dict:
 
 install_incident_routes(app, current_user, require_admin, incident_json, trace_json, utc_iso)
 install_audit_routes(app, require_admin, utc_iso)
+install_public_routes(app, JWT_SECRET, request_ip)
 
 
 def distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
