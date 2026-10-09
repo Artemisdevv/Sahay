@@ -250,6 +250,184 @@ def test_pii_ciphertext_cannot_be_tampered_with_or_moved_between_fields():
         assert "context" in str(exc)
 
 
+def test_public_units_endpoint_is_public_and_fuzzed():
+    client.post("/api/v1/dev/seed")
+    r = client.get("/api/v1/public/units")
+    assert r.status_code == 200
+    data = r.json()
+    assert "units" in data
+    assert "generated_at" in data
+    # After seeding, no incidents are confirmed yet, so list should be empty
+    assert data["units"] == []
+
+
+def test_public_units_no_auth_required():
+    client.post("/api/v1/dev/seed")
+    r = client.get("/api/v1/public/units")
+    assert r.status_code == 200
+    data = r.json()
+    assert "generated_at" in data
+    # No Authorization header needed
+
+
+def test_public_units_contract_compliance():
+    """Test that public units endpoint complies with §9.4 contract."""
+    admin = setup()
+
+    # Create a medical incident and approve it
+    iid = create_incident("medical", ["ambulance"])
+    client.post(f"/api/v1/incidents/{iid}/approve", headers=admin)
+
+    # Accept the dispatch
+    amb = login("amb-01")
+    did = client.get("/api/v1/dispatches/mine", headers=amb).json()["dispatches"][0]["dispatch_id"]
+    client.post(f"/api/v1/dispatches/{did}/accept", headers=amb)
+
+    # Now the unit should appear in public feed (accepted -> "help assigned")
+    r = client.get("/api/v1/public/units")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["units"]) == 1
+
+    unit = data["units"][0]
+    # Check schema per §9.4
+    assert set(unit.keys()) == {"id", "service_type", "status", "location", "incident", "eta_minutes"}
+    assert "name" not in unit
+    assert "unit_id" not in unit
+    assert "updated_at" not in unit
+
+    # Check field values
+    assert unit["service_type"] == "ambulance"
+    assert unit["status"] == "help assigned"  # accepted maps to "help assigned"
+    assert unit["eta_minutes"] >= 1
+    assert isinstance(unit["id"], str) and len(unit["id"]) == 12
+    assert isinstance(unit["incident"], str) and len(unit["incident"]) == 12
+
+    # Check coordinates rounded to 3 decimals (~100 m)
+    loc = unit["location"]
+    assert "lat" in loc and "lng" in loc
+    # Verify rounding: coordinates should have at most 3 decimal places
+    assert round(loc["lat"], 3) == loc["lat"]
+    assert round(loc["lng"], 3) == loc["lng"]
+
+    # Verify incident ID matches public incident feed
+    r2 = client.get("/api/v1/public/incidents")
+    assert r2.status_code == 200
+    incidents = r2.json()["incidents"]
+    assert len(incidents) == 1
+    # The opaque incident ID should match
+    assert unit["incident"] == incidents[0]["id"]
+
+
+def test_public_units_filters_by_dispatch_status():
+    """Only accepted/en_route/on_scene dispatches appear, not approved/completed."""
+    admin = setup()
+
+    # Create two incidents with different service types (ambulance + police)
+    iid1 = create_incident("medical", ["ambulance"])
+    iid2 = create_incident("crime", ["police"])
+    client.post(f"/api/v1/incidents/{iid1}/approve", headers=admin)
+    client.post(f"/api/v1/incidents/{iid2}/approve", headers=admin)
+
+    # Accept both dispatches
+    for user in ["amb-01", "police-01"]:
+        tok = login(user)
+        did = client.get("/api/v1/dispatches/mine", headers=tok).json()["dispatches"][0]["dispatch_id"]
+        client.post(f"/api/v1/dispatches/{did}/accept", headers=tok)
+
+    r = client.get("/api/v1/public/units")
+    assert r.status_code == 200
+    data = r.json()
+    # Both accepted dispatches should appear
+    assert len(data["units"]) == 2
+    statuses = {u["status"] for u in data["units"]}
+    assert statuses == {"help assigned"}
+
+    # Now test that "approved" (not accepted) doesn't appear
+    # Create a third incident
+    iid3 = create_incident("fire", ["fire"])
+    client.post(f"/api/v1/incidents/{iid3}/approve", headers=admin)
+    # Don't accept the fire dispatch - it stays "approved"
+
+    r = client.get("/api/v1/public/units")
+    assert r.status_code == 200
+    data = r.json()
+    # Still only 2 (the accepted ones), not 3
+    assert len(data["units"]) == 2
+
+
+def test_public_units_filters_by_incident_status():
+    """Only confirmed incidents (dispatched/en_route/on_scene/resolved) appear."""
+    admin = setup()
+
+    # Create incident but DON'T approve it (stays pending_approval)
+    iid = create_incident("medical", ["ambulance"])
+    # Don't approve
+
+    amb = login("amb-01")
+    # No dispatch should be created yet for unapproved incident
+
+    r = client.get("/api/v1/public/units")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["units"] == []
+
+
+def test_public_units_status_progression():
+    """Verify public status mapping as unit progresses through dispatch states."""
+    admin = setup()
+    iid = create_incident("medical", ["ambulance"])
+    client.post(f"/api/v1/incidents/{iid}/approve", headers=admin)
+
+    amb = login("amb-01")
+    did = client.get("/api/v1/dispatches/mine", headers=amb).json()["dispatches"][0]["dispatch_id"]
+
+    # accepted -> "help assigned"
+    client.post(f"/api/v1/dispatches/{did}/accept", headers=amb)
+    r = client.get("/api/v1/public/units").json()
+    assert r["units"][0]["status"] == "help assigned"
+
+    # en_route -> "help on the way"
+    client.post(f"/api/v1/dispatches/{did}/status", json={"status": "en_route"}, headers=amb)
+    r = client.get("/api/v1/public/units").json()
+    assert r["units"][0]["status"] == "help on the way"
+
+    # on_scene -> "help on scene"
+    client.post(f"/api/v1/dispatches/{did}/status", json={"status": "on_scene"}, headers=amb)
+    r = client.get("/api/v1/public/units").json()
+    assert r["units"][0]["status"] == "help on scene"
+
+    # completed -> unit no longer appears (per contract: only accepted/en_route/on_scene)
+    client.post(f"/api/v1/dispatches/{did}/status", json={"status": "completed"}, headers=amb)
+    r = client.get("/api/v1/public/units").json()
+    assert r["units"] == []
+
+
+def test_public_units_multiple_services():
+    """Test that different service types appear correctly."""
+    admin = setup()
+    iid = create_incident("accident", ["ambulance", "police", "fire"])
+    client.post(f"/api/v1/incidents/{iid}/approve", headers=admin)
+
+    # Accept all three dispatches
+    for user in ["amb-01", "police-01", "fire-01"]:
+        tok = login(user)
+        did = client.get("/api/v1/dispatches/mine", headers=tok).json()["dispatches"][0]["dispatch_id"]
+        client.post(f"/api/v1/dispatches/{did}/accept", headers=tok)
+
+    r = client.get("/api/v1/public/units")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["units"]) == 3
+
+    service_types = {u["service_type"] for u in data["units"]}
+    assert service_types == {"ambulance", "police", "fire"}
+
+    for unit in data["units"]:
+        assert unit["status"] == "help assigned"
+        assert unit["eta_minutes"] >= 1
+
+
 def test_incident_calls_endpoint_admin_sees_all_dispatches():
     admin = setup()
     incident_id = create_incident("medical", ["ambulance", "police"])

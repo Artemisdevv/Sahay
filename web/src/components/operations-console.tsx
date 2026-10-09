@@ -45,10 +45,12 @@ import {
   getAuditEntries,
   revealIncidentPii,
   verifyAuditChain,
+  getPublicUnits,
   type AuditEntry,
   type Dispatch,
   type IncidentPii,
   type IncidentSummary,
+  type PublicUnit,
 } from "@/lib/api";
 import { useDispatchWS, type WSEvent } from "@/hooks/use-dispatch-ws";
 
@@ -86,6 +88,8 @@ function getAuditCategory(action: string) {
 
 export function OperationsConsole({ serviceId }: { serviceId: string }) {
   const fire = serviceId.includes("fire");
+  const ambulance = serviceId.includes("ambulance");
+  const police = serviceId.includes("police");
   const [ack, setAck] = useState(false);
   const [rerouted, setRerouted] = useState(false);
   const [capacity, setCapacity] = useState(fire ? 4 : 8);
@@ -95,6 +99,9 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
+  const [updatingDispatchIds, setUpdatingDispatchIds] = useState<Set<string>>(new Set());
+  const [callCountdown, setCallCountdown] = useState<Record<string, { serviceType: string; candidates: Array<{ rank: number; unitId: string; name: string; distanceKm: number; etaMinutes: number; state: string }> }>>({});
+  const [publicUnits, setPublicUnits] = useState<PublicUnit[]>([]);
 
   const loadDispatches = useCallback(async () => {
     const session = getSession();
@@ -110,9 +117,19 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
     }
   }, []);
 
+  const loadPublicUnits = useCallback(async () => {
+    try {
+      const data = await getPublicUnits();
+      setPublicUnits(data.units);
+    } catch (e) {
+      console.error("Failed to load public units:", e);
+    }
+  }, []);
+
   useEffect(() => {
     loadDispatches();
-  }, [loadDispatches]);
+    loadPublicUnits();
+  }, [loadDispatches, loadPublicUnits]);
 
   const handleWsEvent = useCallback(
     (event: WSEvent) => {
@@ -120,6 +137,27 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
         toast.info(
           `Dispatch ${event.data.dispatch_id.slice(0, 8)}: ${getStatusLabel(event.data.status as Dispatch["status"])}`,
         );
+      }
+      if (event.type === "dispatch.called") {
+        const { incident_id, service_type, candidates } = event.data as {
+          incident_id: string;
+          service_type: string;
+          candidates: Array<{ rank: number; unit_id: string; name: string; distance_km: number; eta_minutes: number; state: string }>;
+        };
+        setCallCountdown((prev) => ({
+          ...prev,
+          [incident_id]: {
+            serviceType: service_type,
+            candidates: candidates.map((c) => ({
+              rank: c.rank,
+              unitId: c.unit_id,
+              name: c.name,
+              distanceKm: c.distance_km,
+              etaMinutes: c.eta_minutes,
+              state: c.state,
+            })),
+          },
+        }));
       }
       if (event.type !== "unit.moved") void loadDispatches();
     },
@@ -161,6 +199,8 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
   ) => {
     const session = getSession();
     if (!session?.token) return;
+    if (updatingDispatchIds.has(dispatchId)) return;
+    setUpdatingDispatchIds((prev) => new Set(prev).add(dispatchId));
     try {
       const updated = await updateDispatchStatus(
         dispatchId,
@@ -173,6 +213,12 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
       toast.success(`Status updated to ${getStatusLabel(status)}`);
     } catch (e) {
       toast.error("Failed to update status");
+    } finally {
+      setUpdatingDispatchIds((prev) => {
+        const next = new Set(prev);
+        next.delete(dispatchId);
+        return next;
+      });
     }
   };
 
@@ -185,24 +231,52 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
       d.status !== "completed",
   );
 
+  const serviceLabel = fire
+    ? "Fire & rescue"
+    : ambulance
+    ? "Ambulance"
+    : police
+    ? "Police"
+    : "Hospital";
+  const serviceIcon = fire ? Flame : ambulance ? HeartPulse : police ? ShieldCheck : BedDouble;
+  const serviceColor = fire ? "amber" : ambulance ? "hospital" : police ? "blue" : "hospital";
+  const stationName = fire
+    ? "Metro Fire Station 4"
+    : ambulance
+    ? "Ambulance Unit 1"
+    : police
+    ? "Police Unit 1"
+    : "City General Hospital";
+  const stationDetail = fire
+    ? "Station 04"
+    : ambulance
+    ? "EMS Station"
+    : police
+    ? "Precinct 1"
+    : "Hospital 01";
+
   return (
     <Shell
-      role={fire ? "fire" : "hospital"}
-      title={fire ? "Fire & rescue" : "Hospital console"}
+      role={fire ? "fire" : ambulance ? "ambulance" : police ? "police" : "hospital"}
+      title={serviceLabel}
     >
       <div className="page-heading">
         <div>
           <div className="eyebrow">
-            First responder workspace · {fire ? "Station 04" : "Hospital 01"}
+            First responder workspace · {stationDetail}
           </div>
-          <h1>{fire ? "Metro Fire Station 4" : "City General Hospital"}</h1>
+          <h1>{stationName}</h1>
           <p className="subtitle">
             {fire
               ? "Dispatch intelligence and field resource coordination."
+              : ambulance
+              ? "Emergency medical dispatch and patient transport coordination."
+              : police
+              ? "Law enforcement dispatch and field unit coordination."
               : "Emergency intake, patient context, and critical care coordination."}
           </p>
         </div>
-        <Badge tone={wsConnected ? "green" : fire ? "amber" : "sky"}>
+        <Badge tone={wsConnected ? "green" : serviceColor === "amber" ? "amber" : serviceColor === "blue" ? "blue" : "sky"}>
           <span className="dot" />
           {wsConnected ? "Live" : "Receiving dispatches"}
         </Badge>
@@ -210,18 +284,22 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
       <div className="metrics">
         {[
           {
-            label: fire ? "Active dispatches" : "Active patients",
+            label: fire ? "Active incidents" : ambulance ? "Active patients" : police ? "Active calls" : "Active patients",
             value: String(activeDispatches.length).padStart(2, "0"),
             note: loading ? "Loading..." : "From backend",
             icon: Activity,
           },
           {
-            label: fire ? "Available units" : "Available critical beds",
+            label: fire ? "Available units" : ambulance ? "Available ambulances" : police ? "Available units" : "Available critical beds",
             value: String(capacity).padStart(2, "0"),
             note: fire
               ? "Across Central District"
+              : ambulance
+              ? "Across EMS network"
+              : police
+              ? "Across precinct"
               : "24 total critical care beds",
-            icon: fire ? Flame : BedDouble,
+            icon: fire ? Flame : ambulance ? HeartPulse : police ? ShieldCheck : BedDouble,
           },
           {
             label: "Pending dispatches",
@@ -262,6 +340,19 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
           Update Capacity
         </Button>
       </div>
+      <section className="panel mb-6">
+        <div className="panel-head compact-head">
+          <h2>
+            <MapPin />
+            Response map · Assigned incidents
+          </h2>
+        </div>
+        <IncidentMap role="service" />
+        <div className="zone-meta">
+          <strong>Central District</strong>
+          <Badge tone="sky">Contract filtered</Badge>
+        </div>
+      </section>
       <div className="service-grid">
         <div>
           <section className="panel">
@@ -270,10 +361,20 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                 <h2>
                   {fire ? (
                     <Flame className="text-warning" />
+                  ) : ambulance ? (
+                    <HeartPulse className="text-hospital" />
+                  ) : police ? (
+                    <ShieldCheck className="text-blue" />
                   ) : (
                     <HeartPulse className="text-hospital" />
                   )}
-                  {fire ? "Pending dispatches" : "Incoming patient dispatches"}
+                  {fire
+                    ? "Pending dispatches"
+                    : ambulance
+                    ? "Incoming patient dispatches"
+                    : police
+                    ? "Incoming police dispatches"
+                    : "Incoming patient dispatches"}
                 </h2>
                 <p>
                   Real-time from backend · {proposedDispatches.length} awaiting
@@ -302,6 +403,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                     <h3>
                       {fire
                         ? `Fire: ${d.incident_id.slice(0, 8)}`
+                        : ambulance
+                        ? `EMS: ${d.incident_id.slice(0, 8)}`
+                        : police
+                        ? `Police: ${d.incident_id.slice(0, 8)}`
                         : `EMS: ${d.incident_id.slice(0, 8)}`}
                     </h3>
                     <Badge tone={getStatusBadgeTone(d.status)}>
@@ -347,63 +452,114 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                 <Badge tone="sky">{activeDispatches.length} in progress</Badge>
               </div>
               <div className="space-y-3">
-                {activeDispatches.map((d) => (
-                  <div key={d.dispatch_id} className="patient">
-                    <div className="patient-top">
-                      <h3>
-                        {fire
-                          ? `Fire: ${d.incident_id.slice(0, 8)}`
-                          : `EMS: ${d.incident_id.slice(0, 8)}`}
-                      </h3>
-                      <Badge tone={getStatusBadgeTone(d.status)}>
-                        {getStatusLabel(d.status)}
-                      </Badge>
+                {activeDispatches.map((d) => {
+                  const callInfo = callCountdown[d.incident_id];
+                  return (
+                    <div key={d.dispatch_id} className="patient">
+                      <div className="patient-top">
+                        <h3>
+                          {fire
+                            ? `Fire: ${d.incident_id.slice(0, 8)}`
+                            : ambulance
+                            ? `EMS: ${d.incident_id.slice(0, 8)}`
+                            : police
+                            ? `Police: ${d.incident_id.slice(0, 8)}`
+                            : `EMS: ${d.incident_id.slice(0, 8)}`}
+                        </h3>
+                        <Badge tone={getStatusBadgeTone(d.status)}>
+                          {getStatusLabel(d.status)}
+                        </Badge>
+                      </div>
+                      <p>
+                        Unit: {d.unit_id.slice(0, 8)} · Distance: {d.distance_km}{" "}
+                        km
+                      </p>
+                      {callInfo && callInfo.serviceType === d.service_type && (
+                        <div className="call-countdown mb-2 p-2 bg-muted rounded text-sm">
+                          <strong>Calling {callInfo.serviceType} units:</strong>
+                          {callInfo.candidates.map((c) => (
+                            <div key={c.unitId} className="flex items-center gap-2 text-[11px]">
+                              <span className="mono">#{c.rank}</span>
+                              <span>{c.name}</span>
+                              <span className="text-muted-foreground">
+                                {c.distanceKm} km · {c.etaMinutes} min
+                              </span>
+                              <Badge
+                                tone={
+                                  c.state === "calling"
+                                    ? "amber"
+                                    : c.state === "accepted"
+                                    ? "green"
+                                    : c.state === "declined"
+                                    ? "rose"
+                                    : "gray"
+                                }
+                              >
+                                {c.state}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="patient-meta">
+                        <span className="mono">{d.dispatch_id.slice(0, 12)}</span>
+                        <span>
+                          Updated: {new Date(d.updated_at).toLocaleTimeString()}
+                        </span>
+                        {d.status === "accepted" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              handleStatusUpdate(d.dispatch_id, "en_route")
+                            }
+                            disabled={updatingDispatchIds.has(d.dispatch_id)}
+                          >
+                            {updatingDispatchIds.has(d.dispatch_id) ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              "En route"
+                            )}
+                          </Button>
+                        )}
+                        {d.status === "en_route" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              handleStatusUpdate(d.dispatch_id, "on_scene")
+                            }
+                            disabled={updatingDispatchIds.has(d.dispatch_id)}
+                          >
+                            {updatingDispatchIds.has(d.dispatch_id) ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              "On scene"
+                            )}
+                          </Button>
+                        )}
+                        {d.status === "on_scene" && (
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              handleStatusUpdate(d.dispatch_id, "completed")
+                            }
+                            disabled={updatingDispatchIds.has(d.dispatch_id)}
+                          >
+                            {updatingDispatchIds.has(d.dispatch_id) ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <>
+                                <Check className="h-3 w-3" />
+                                Complete
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <p>
-                      Unit: {d.unit_id.slice(0, 8)} · Distance: {d.distance_km}{" "}
-                      km
-                    </p>
-                    <div className="patient-meta">
-                      <span className="mono">{d.dispatch_id.slice(0, 12)}</span>
-                      <span>
-                        Updated: {new Date(d.updated_at).toLocaleTimeString()}
-                      </span>
-                      {d.status === "accepted" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            handleStatusUpdate(d.dispatch_id, "en_route")
-                          }
-                        >
-                          En route
-                        </Button>
-                      )}
-                      {d.status === "en_route" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            handleStatusUpdate(d.dispatch_id, "on_scene")
-                          }
-                        >
-                          On scene
-                        </Button>
-                      )}
-                      {d.status === "on_scene" && (
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            handleStatusUpdate(d.dispatch_id, "completed")
-                          }
-                        >
-                          <Check className="h-3 w-3" />
-                          Complete
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           )}
@@ -413,6 +569,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                 <Database className="text-hospital" />
                 {fire
                   ? "Field agent incident briefing"
+                  : ambulance
+                  ? "EMS dispatch briefing"
+                  : police
+                  ? "Police dispatch briefing"
                   : "RAG-assisted trauma briefing"}
               </h2>
               <Badge tone="sky">Context retrieved</Badge>
@@ -421,6 +581,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
               <strong>RESOURCE MEMORY · FIELD AGENT CONTEXT</strong>
               {fire
                 ? "Market Street incident: residential structure, 4 floors. Entry from north gate; flammable materials reported. Rescue priority on floor 3. Joint EMS staging recommended on adjacent street."
+                : ambulance
+                ? "Patient context matches prior asthma history. Known allergy: Penicillin. Current medication: Albuterol inhaler. No implanted devices. Field triage suggests respiratory distress; respiratory team and critical care bed should be prepared."
+                : police
+                ? "Suspect vehicle last seen heading north on Main St. Registered to known associate. Caution advised. Backup units positioned at intersection of 5th and Oak."
                 : "Patient context matches prior asthma history. Known allergy: Penicillin. Current medication: Albuterol inhaler. No implanted devices. Field triage suggests respiratory distress; respiratory team and critical care bed should be prepared."}
               <p className="text-muted-foreground mt-3 text-[10px]">
                 Demonstration briefing · Human clinical / field review required
@@ -432,45 +596,59 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
           <section className="panel">
             <div className="panel-head compact-head">
               <h2>
-                {fire ? <Flame /> : <BedDouble />}
-                {fire ? "Unit availability" : "Critical care capacity"}
+                {fire ? <Flame /> : ambulance ? <HeartPulse /> : police ? <ShieldCheck /> : <BedDouble />}
+                {fire
+                  ? "Unit availability"
+                  : ambulance
+                  ? "Ambulance availability"
+                  : police
+                  ? "Unit availability"
+                  : "Critical care capacity"}
               </h2>
               <Badge tone="green">{capacity} available</Badge>
             </div>
-            {fire ? (
+            {fire || ambulance || police ? (
               <>
-                {[
-                  {
-                    name: "Engine 3",
-                    detail: "Structure fire · Market Street",
-                    status: "Dispatched",
-                  },
-                  {
-                    name: "Rescue 1",
-                    detail: "Technical rescue",
-                    status: "En route",
-                  },
-                  {
-                    name: "Hazmat 2",
-                    detail: "Specialized response",
-                    status: "Available",
-                  },
-                  {
-                    name: "Engine 5",
-                    detail: "Central District standby",
-                    status: "Available",
-                  },
-                ].map((u) => (
-                  <div className="unit-row" key={u.name}>
-                    <div>
-                      <strong>{u.name}</strong>
-                      <small>{u.detail}</small>
-                    </div>
-                    <Badge tone={u.status === "Available" ? "green" : "amber"}>
-                      {u.status}
-                    </Badge>
-                  </div>
-                ))}
+                {(() => {
+                  const filteredPublicUnits = publicUnits.filter((u) =>
+                    fire
+                      ? u.service_type === "fire"
+                      : ambulance
+                      ? u.service_type === "ambulance"
+                      : u.service_type === "police"
+                  );
+                  const serviceLabel = fire ? "Fire unit" : ambulance ? "Ambulance unit" : "Police unit";
+                  return (
+                    <>
+                      {filteredPublicUnits.map((u, idx) => (
+                        <div className="unit-row" key={`${u.service_type}-${idx}`}>
+                          <div>
+                            <strong>{serviceLabel}</strong>
+                            <small>{u.status.replace("_", " ")}</small>
+                          </div>
+                          <Badge
+                            tone={
+                              u.status === "available"
+                                ? "green"
+                                : u.status === "assigned"
+                                ? "amber"
+                                : u.status === "en_route"
+                                ? "sky"
+                                : u.status === "on_scene"
+                                ? "violet"
+                                : "gray"
+                            }
+                          >
+                            {u.status.replace("_", " ")}
+                          </Badge>
+                        </div>
+                      ))}
+                      {filteredPublicUnits.length === 0 && (
+                        <p className="text-muted-foreground text-center py-4">No units available</p>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             ) : (
               <div className="compact-body">
@@ -496,19 +674,6 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                 </div>
               </div>
             )}
-          </section>
-          <section className="panel">
-            <div className="panel-head compact-head">
-              <h2>
-                <MapPin />
-                Response map · Assigned incidents
-              </h2>
-            </div>
-            <IncidentMap role="service" />
-            <div className="zone-meta">
-              <strong>Central District</strong>
-              <Badge tone="sky">Contract filtered</Badge>
-            </div>
           </section>
           <section className="panel">
             <div className="panel-head compact-head">

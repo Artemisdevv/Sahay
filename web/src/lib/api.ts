@@ -213,6 +213,15 @@ export interface PublicIncident {
   reported_at: string;
 }
 
+export interface PublicUnit {
+  id: string;
+  service_type: "ambulance" | "police" | "fire" | "municipal";
+  status: string;
+  location: { lat: number; lng: number };
+  incident: string;
+  eta_minutes: number | null;
+}
+
 /** Open map feed: no login, coarse facts only (backend/app/public_routes.py). */
 export async function getPublicIncidents(): Promise<{
   incidents: PublicIncident[];
@@ -221,23 +230,12 @@ export async function getPublicIncidents(): Promise<{
   return request("/public/incidents");
 }
 
-export interface PublicUnit {
-  id: string;
-  service_type: Unit["service_type"];
-  status: string;
-  location: { lat: number; lng: number };
-  /** Opaque shared identifier matching `PublicIncident.id`. */
-  incident: string;
-  eta_minutes: number | null;
-}
-
+/** Public units feed: no login, coarse facts only (backend/app/main.py). */
 export async function getPublicUnits(): Promise<{
   units: PublicUnit[];
   generated_at: string;
 }> {
-  return request<{ units: PublicUnit[]; generated_at: string }>(
-    "/public/units",
-  );
+  return request("/public/units");
 }
 
 export { API_BASE };
