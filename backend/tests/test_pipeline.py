@@ -16,7 +16,8 @@ from app.agents.store import load_pii
 from app.agents.stt import MockTranscriber
 from app.database import Base
 from app.keyring import server_box_key
-from app.models import AgentTrace, AuditEntry, Dispatch, Incident, IncidentPrivate, Report, Unit
+from app.models import AgentTrace, AuditEntry, Dispatch, Incident, IncidentPII, Report, Unit
+from app.pii_crypto import decrypt_field
 
 SEED = [
     ("Ambulance 01", "ambulance", 9.9816, 76.2999),
@@ -141,8 +142,13 @@ def test_pii_is_sealed_and_never_in_traces_or_audit(db):
     assert stored["transcript"] == text
     assert stored["reporters"][0]["phone"] == "9876543210" and stored["emergency_contact"]["name"] == "Asha"
     assert {s["type"] for s in stored["pii_spans"]} >= {"phone", "name"}
-    raw = db.get(IncidentPrivate, res.incident.incident_id).sealed
-    assert b"9876543210" not in raw and b"Ravi" not in raw
+    rows = db.scalars(select(IncidentPII).where(IncidentPII.incident_id == res.incident.incident_id)).all()
+    assert len(rows) == 1
+    row = rows[0]
+    assert b"9876543210" not in row.reporter_phone_ciphertext
+    assert b"Ravi" not in row.reporter_name_ciphertext
+    assert decrypt_field(row.reporter_phone_ciphertext,
+                         f"{row.incident_id}:{row.report_id}:reporter_phone") == "9876543210"
     leaked = json.dumps([[t.summary, t.output] for t in traces(db, res.incident)]
                         + [[a.details, a.actor, a.target] for a in db.query(AuditEntry)], default=str)
     for secret in ("9876543210", "Ravi", "9123456780", "Asha"):

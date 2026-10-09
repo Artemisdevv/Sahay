@@ -162,8 +162,8 @@ Incident `status`: `new | processing | triaged | pending_approval | dispatched |
 
 | Method + path | Role | Description |
 |---|---|---|
-| `GET /incidents?status=&type=&limit=&cursor=` | admin, service | Admin gets all. Service gets only incidents with a dispatch to its unit. Redacted shape. |
-| `GET /incidents/{id}` | admin, service | Single `Incident` plus `dispatches[]`. |
+| `GET /incidents?status=&type=&limit=&cursor=` | admin, service | Admin gets all. Service gets only incidents with an approved-or-later dispatch to its unit (not proposed, declined or cancelled) and only the WebSocket `incident.updated` field subset. Redacted shape, `limit` 1–100, opaque `next_cursor`. |
+| `GET /incidents/{id}` | admin, service | Single `Incident` plus `dispatches[]`. Service sees only its own approved-or-later dispatches. |
 | `GET /incidents/{id}/trace` | admin | Agent trace (section 4). |
 | `POST /incidents/{id}/reveal` | admin | Body `{ "reason": "string (required)" }`. Returns `IncidentPII`, writes audit entry `pii.reveal`. |
 | `POST /incidents/{id}/approve` | admin | Approves proposed dispatches. |
@@ -176,7 +176,7 @@ Incident `status`: `new | processing | triaged | pending_approval | dispatched |
 {
   "incident_id": "uuid",
   "transcript": "full transcript text",
-  "reporters": [ { "report_id": "uuid", "name": "...", "phone": "...", "language": "ml" } ],
+  "reporters": [ { "report_id": "uuid", "name": "...", "phone": "...", "language": "ml", "emergency_contact": { "name": "...", "phone": "..." } } ],
   "pii_spans": [ { "type": "phone", "text": "98xxxx", "start": 10, "end": 20 } ],
   "audio_url": "/api/v1/media/<id>"
 }
@@ -272,7 +272,7 @@ Message shape:
 | `incident.created` | `Incident` | admin |
 | `incident.updated` | `Incident` | admin, service (own dispatches) |
 | `dispatch.proposed` | `Dispatch` | admin |
-| `dispatch.updated` | `Dispatch` | admin, service (own unit) |
+| `dispatch.updated` | `Dispatch` | admin, service (own unit; proposed dispatches are admin-only) |
 | `unit.moved` | `{ unit_id, location, status }` | admin |
 | `agent.trace` | `TraceStep` | admin |
 | `audit.appended` | `AuditEntry` | admin |

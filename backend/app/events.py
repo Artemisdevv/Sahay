@@ -88,7 +88,7 @@ class ConnectionManager:
         if role == "service" and event_type in SERVICE_EVENTS:
             unit_id = claims.get("unit_id")
             if event_type == "dispatch.updated":
-                return data.get("unit_id") == unit_id
+                return data.get("unit_id") == unit_id and data.get("status") != "proposed"
             return unit_id in (service_unit_ids or set())
         if role == "civilian" and event_type in CIVILIAN_EVENTS:
             return claims.get("device_id") == civilian_device_id
