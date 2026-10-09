@@ -77,7 +77,7 @@ Dependency rule: frontend and native work against the **contract and `/dev/*` mo
 
 **N-03 [Adnan] (M1) Relay protocol.** Implement contract section 5: hello/envelope/ack/receipt/status, TTL and hops, dedupe, store-and-forward queue in native storage, upload hand-off events to web layer.
 
-**N-04 [Adnan] (M1) Foreground service.** Keep advertise/discover alive with screen off (Android 14 service type, notification). Battery notes in docs.
+**N-04 [Adnan] (M1) Foreground service.** Keep advertise/discover alive with screen off (Android 14 service type, notification). Battery notes in `native/README.md`: measured drain per hour with the relay on and the screen off on both test phones, the foreground service type used, and the OEM battery-saver steps (Vivo/iQOO, Motorola) needed for the demo.
 
 **N-05 [Adnan] (M2) `SahaySms` plugin.** Silent SMS via `SmsManager`, runtime permission, `openDialer` (ACTION_DIAL only). Test with a real SIM.
 
