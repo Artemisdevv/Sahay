@@ -1,236 +1,241 @@
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
-  Shield,
   Building2,
   LayoutDashboard,
   HeartPulse,
   Flame,
   Network,
-  ChevronDown,
-  ChevronsUpDown,
   Bell,
   LogOut,
   MapPin,
-  Menu,
-  X,
   CircleHelp,
-  ArrowUpRight,
-  Radio,
   Activity,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { clearSession, getSession } from "@/lib/session";
+import { clearSession } from "@/lib/session";
 import { motion, useReducedMotion } from "framer-motion";
+
 export function Brand() {
   return (
     <div className="brand">
-      <div className="brand-mark">
-        <Shield size={21} strokeWidth={2} />
+      <div className="brand-title">
+        sahay<span className="text-primary">.</span>
       </div>
-      <div>
-        <div className="brand-title">
-          sahay<span className="text-primary">.</span>
-        </div>
-        <div className="brand-subtitle">Autonomous dispatch</div>
-      </div>
+      <div className="brand-subtitle">Help that finds a way</div>
     </div>
   );
 }
-export function Badge({ children, tone = "" }: { children: ReactNode; tone?: string }) {
+export function Badge({
+  children,
+  tone = "",
+}: {
+  children: ReactNode;
+  tone?: string;
+}) {
   return <span className={`badge ${tone}`}>{children}</span>;
 }
+
+export type ShellTab = { id: string; label: string; icon: LucideIcon };
+
+type Role = "citizen" | "hospital" | "fire" | "admin";
+
+function roleLink(role: Role) {
+  if (role === "hospital")
+    return {
+      label: "Hospital",
+      icon: HeartPulse,
+      to: "/service/$serviceId",
+      params: { serviceId: "city-general-hospital" },
+    };
+  if (role === "fire")
+    return {
+      label: "Fire and rescue",
+      icon: Flame,
+      to: "/service/$serviceId",
+      params: { serviceId: "metro-fire-station-4" },
+    };
+  return {
+    label: "Operations",
+    icon: Network,
+    to: "/admin/dashboard",
+    params: {},
+  };
+}
+
+const SUPPORT_TOAST = () =>
+  toast("In a real emergency, call 112", {
+    description: "This workspace uses simulated dispatches.",
+  });
+
+/**
+ * App frame. Wide screens: sidebar + top bar. Phones (<= 768px): content plus a bottom navigation bar.
+ * Citizen pages pass `tabs` so the same three destinations appear in the sidebar and the bottom bar.
+ */
 export function Shell({
   children,
   role = "citizen",
   title,
+  tabs,
+  activeTab,
+  onTab,
 }: {
   children: ReactNode;
-  role?: "citizen" | "hospital" | "fire" | "admin";
+  role?: Role;
   title: string;
+  tabs?: ShellTab[];
+  activeTab?: string;
+  onTab?: (id: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const reduced = useReducedMotion();
-  const session = getSession();
+  const staff = role !== "citizen";
+  const signOut = () => {
+    clearSession();
+    void navigate({ to: "/login" });
+  };
+  const link = staff ? roleLink(role) : null;
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${open ? "open" : ""}`}>
-        <div className="flex items-center justify-between">
-          <Brand />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="mobile-trigger"
-            aria-label="Close navigation"
-            onClick={() => setOpen(false)}
-          >
-            <X />
-          </Button>
-        </div>
+      <aside className="sidebar">
+        <Brand />
         <div className="workspace">
-          <div className="workspace-icon">
-            <Building2 size={15} />
-          </div>
+          <Building2 size={16} />
           <div>
             <strong>Kochi</strong>
             <small>City response network</small>
           </div>
-          <ChevronsUpDown size={12} className="ml-auto text-muted-foreground" />
         </div>
-        <div className="nav-label">Workspace</div>
-        <nav aria-label="Main navigation">
-          {role === "citizen" && (
+        <nav aria-label="Main navigation" className="side-nav">
+          {tabs?.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`nav-item ${activeTab === t.id ? "active" : ""}`}
+              aria-current={activeTab === t.id ? "page" : undefined}
+              onClick={() => onTab?.(t.id)}
+            >
+              <t.icon />
+              {t.label}
+            </button>
+          ))}
+          {!tabs && !staff && (
             <Link
               to="/user/$username"
-              params={{ username: "alex-morgan" }}
+              params={{ username: "civilian" }}
               className="nav-item active"
             >
               <LayoutDashboard />
-              Citizen portal
+              Home
             </Link>
           )}
-          {role === "hospital" && (
-            <Link
-              to="/service/$serviceId"
-              params={{ serviceId: "city-general-hospital" }}
-              className="nav-item active"
-            >
-              <HeartPulse />
-              Hospital console<span className="count">3</span>
-            </Link>
-          )}
-          {role === "fire" && (
-            <Link
-              to="/service/$serviceId"
-              params={{ serviceId: "metro-fire-station-4" }}
-              className="nav-item active"
-            >
-              <Flame />
-              Fire & rescue<span className="count">2</span>
-            </Link>
-          )}
-          {role === "admin" && (
-            <Link to="/admin/dashboard" className="nav-item active">
-              <Network />
-              Agent orchestration
+          {link && (
+            <Link to={link.to} params={link.params} className="nav-item active">
+              <link.icon />
+              {link.label}
             </Link>
           )}
         </nav>
-        <div className="nav-label mt-7">System</div>
-        <Button
-          variant="ghost"
-          className="nav-item w-full justify-start"
-          onClick={() =>
-            toast.success("All systems operational", {
-              description: "4 agents online · 99.98% network uptime · 24 ms latency",
-            })
-          }
-        >
-          <Activity />
-          Network status
-          <ArrowUpRight size={12} className="ml-auto" />
-        </Button>
-        <Button
-          variant="ghost"
-          className="nav-item w-full justify-start"
-          onClick={() =>
-            toast("Emergency support", {
-              description:
-                "For a real emergency, call 112 or 911. This workspace uses simulated dispatches.",
-            })
-          }
-        >
-          <CircleHelp />
-          Help & support
-        </Button>
         <div className="sidebar-bottom">
-          <div className="network-health">
-            <div className="flex items-center gap-2 text-[10px] font-medium">
-              <span className="dot pulse" />
-              All systems operational
-            </div>
-            <small>4 agents connected · 99.98% uptime</small>
-          </div>
-          <div className="account">
-            <div className="avatar">
-              {role === "citizen" ? "AM" : role === "admin" ? "SO" : "OP"}
-            </div>
-            <div>
-              <strong className="text-[11px]">
-                {role === "citizen"
-                  ? "Alex Morgan"
-                  : role === "admin"
-                    ? "System operator"
-                    : "Response operator"}
-              </strong>
-              <small>{role === "citizen" ? "Citizen account" : "Demo workspace"}</small>
-            </div>
-            <Button variant="ghost" size="icon" className="ml-auto" aria-label="Sign out" onClick={() => {
-              clearSession();
-              void navigate({ to: "/login" });
-            }}>
-                <LogOut size={14} />
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            className="nav-item w-full justify-start"
+            onClick={SUPPORT_TOAST}
+          >
+            <CircleHelp />
+            Help
+          </Button>
+          <Button
+            variant="ghost"
+            className="nav-item w-full justify-start"
+            onClick={signOut}
+          >
+            <LogOut />
+            Sign out
+          </Button>
         </div>
       </aside>
       <div className="main-shell">
         <header className="topbar">
-          <div className="breadcrumb">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="mobile-trigger"
-              aria-label="Open navigation"
-              onClick={() => setOpen(true)}
-            >
-              <Menu />
-            </Button>
-            <span>Workspace</span>
-            <span>/</span>
-            <strong>{title}</strong>
-            <ChevronDown size={11} />
-          </div>
+          <h2 className="topbar-title">{title}</h2>
           <div className="topbar-right">
             <span className="flex items-center gap-2 text-muted-foreground">
-              <MapPin size={12} />
+              <MapPin size={14} />
               Kochi, Kerala
             </span>
-            <Badge tone="amber">Demo environment</Badge>
+            <Badge tone="amber">Demo</Badge>
             <Button
               variant="ghost"
               size="icon"
               aria-label="Notifications"
-              onClick={() =>
-                toast("You’re up to date", { description: "No unread coordinator notifications." })
-              }
+              onClick={() => toast("No new notifications")}
             >
-              <Bell size={16} />
+              <Bell size={18} />
             </Button>
-            <div className="avatar">{role === "citizen" ? "AM" : "OP"}</div>
           </div>
         </header>
         <motion.main
           className="page"
-          initial={reduced ? false : { opacity: 0, y: 7 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
+          initial={reduced ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
         >
           {children}
-          <footer className="page-footer">
-            <span>
-              <Shield size={11} />
-              Secure by design. Coordinated by intelligence.
-            </span>
-            <span>
-              <Radio size={10} />
-              Sahay network <span className="mx-1">·</span> Simulation only
-            </span>
-          </footer>
         </motion.main>
       </div>
+      <nav className="bottom-nav" aria-label="Main navigation">
+        {tabs ? (
+          tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`bottom-nav-item ${activeTab === t.id ? "active" : ""}`}
+              aria-current={activeTab === t.id ? "page" : undefined}
+              onClick={() => onTab?.(t.id)}
+            >
+              <t.icon />
+              <span>{t.label}</span>
+            </button>
+          ))
+        ) : (
+          <>
+            {link && (
+              <Link
+                to={link.to}
+                params={link.params}
+                className="bottom-nav-item active"
+              >
+                <link.icon />
+                <span>{link.label}</span>
+              </Link>
+            )}
+            <button
+              type="button"
+              className="bottom-nav-item"
+              onClick={() => toast.success("All systems working")}
+            >
+              <Activity />
+              <span>Status</span>
+            </button>
+            <button
+              type="button"
+              className="bottom-nav-item"
+              onClick={SUPPORT_TOAST}
+            >
+              <CircleHelp />
+              <span>Help</span>
+            </button>
+          </>
+        )}
+        {(staff || !tabs) && (
+          <button type="button" className="bottom-nav-item" onClick={signOut}>
+            <LogOut />
+            <span>Sign out</span>
+          </button>
+        )}
+      </nav>
     </div>
   );
 }
