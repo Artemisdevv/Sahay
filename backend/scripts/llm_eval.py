@@ -30,6 +30,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-search", action="store_true", help="skip the Firecrawl lookup")
     ap.add_argument("--only", nargs="*", help="sample ids to run")
+    ap.add_argument("--delay", type=float, default=0.0, help="seconds to pause between samples (provider rate limits)")
     args = ap.parse_args()
 
     samples = json.loads((Path(__file__).with_name("llm_eval_samples.json")).read_text(encoding="utf-8"))
@@ -41,6 +42,8 @@ def main() -> int:
 
     failures = 0
     for s in samples:
+        if args.delay and s is not samples[0]:
+            time.sleep(args.delay)
         t0 = time.time()
         row = {"id": s["id"]}
         try:
@@ -60,7 +63,12 @@ def main() -> int:
             continue
 
         exp, problems = s.get("expect", {}), []
-        if "type" in exp and intake.incident_type != exp["type"]:
+        if "ignored" in exp:
+            ignored = (not intake.is_civic_report) and intake.civic_confidence >= 0.85
+            if ignored != exp["ignored"]:
+                problems.append(f"ignored={ignored}, expected {exp['ignored']} "
+                                f"(civic={intake.is_civic_report}, civic_conf={intake.civic_confidence})")
+        if "type" in exp and not exp.get("ignored") and intake.incident_type != exp["type"]:
             problems.append(f"type {intake.incident_type} != {exp['type']}")
         if intake.severity < exp.get("min_severity", 1):
             problems.append(f"severity {intake.severity} < {exp['min_severity']}")
@@ -80,7 +88,8 @@ def main() -> int:
         print(f"   masked text : {masked}")
         print(f"   pii tags    : {[(t.type, t.text) for t in tags]}")
         print(f"   intake      : {intake.incident_type} sev={intake.severity} people={intake.people_count} "
-              f"hazards={intake.hazards} conf={intake.confidence}")
+              f"hazards={intake.hazards} conf={intake.confidence} civic={intake.is_civic_report}/{intake.civic_confidence}"
+              + (f" ({intake.ignore_reason})" if intake.ignore_reason else ""))
         print(f"   summary     : {intake.summary}")
         print(f"   triage      : {triage.needed_services} urgency={triage.urgency_score} | {triage.reason}")
         if context:

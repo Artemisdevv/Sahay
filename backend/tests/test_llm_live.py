@@ -45,7 +45,7 @@ class Provider:
 
 
 def live(provider: Provider) -> LiveLLM:
-    return LiveLLM("test-key", "test-model", "https://llm.example/v1", client=provider.client())
+    return LiveLLM("test-key", "test-model", "https://llm.example/v1", client=provider.client(), sleep=lambda s: None)
 
 
 def test_intake_is_validated_and_request_is_well_formed():
@@ -69,7 +69,7 @@ def test_invalid_output_is_retried_once_then_fails():
 
 def test_http_and_transport_errors_raise_without_leaking_the_body():
     with pytest.raises(LLMError) as err:
-        live(Provider(intake=[429])).intake("crash", "accident", "en", "report")
+        live(Provider(intake=[429, 429])).intake("crash", "accident", "en", "report")
     assert "429" in str(err.value) and "secret echo" not in str(err.value)
 
     def offline(request):
@@ -78,6 +78,21 @@ def test_http_and_transport_errors_raise_without_leaking_the_body():
     client = httpx.Client(transport=httpx.MockTransport(offline))
     with pytest.raises(LLMError):
         LiveLLM("k", "m", "https://llm.example/v1", client=client).triage(IntakeResult(**INTAKE_JSON), None)
+
+
+def test_reasoning_effort_is_sent_only_when_configured():
+    p = Provider(intake=[json.dumps(INTAKE_JSON)] * 2)
+    LiveLLM("k", "m", "https://llm.example/v1", client=p.client(), reasoning_effort="low").intake("x", "other", "en", "report")
+    LiveLLM("k", "m", "https://llm.example/v1", client=p.client()).intake("x", "other", "en", "report")
+    assert p.requests[0]["body"]["reasoning_effort"] == "low" and "reasoning_effort" not in p.requests[1]["body"]
+
+
+def test_rate_limit_backs_off_once_then_succeeds():
+    waits = []
+    p = Provider(intake=[429, json.dumps(INTAKE_JSON)])
+    llm = LiveLLM("k", "m", "https://llm.example/v1", client=p.client(), sleep=waits.append)
+    assert llm.intake("crash", "accident", "en", "report").severity == 4
+    assert len(p.requests) == 2 and waits == [2.0]
 
 
 def test_triage_rejects_unknown_service():
@@ -187,3 +202,60 @@ def test_firecrawl_http_error_propagates_so_the_pipeline_can_ignore_it():
     s = FirecrawlSearch("k", client=httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(402))))
     with pytest.raises(httpx.HTTPStatusError):
         s.lookup("gas")
+
+
+# ---- ignoring irrelevant / gibberish reports ------------------------------------------------------
+
+from app.agents.llm import MockLLM  # noqa: E402
+from app.models import AuditEntry, Incident  # noqa: E402
+
+
+class _Judge(MockLLM):
+    """Rules for everything, but with a fixed verdict on whether the report is civic."""
+
+    def __init__(self, civic: bool, civic_confidence: float = 0.97):
+        self.civic, self.civic_confidence = civic, civic_confidence
+
+    def intake(self, transcript, category, language, kind):
+        out = super().intake(transcript, category, language, kind)
+        return out.model_copy(update={"is_civic_report": self.civic, "civic_confidence": self.civic_confidence,
+                                      "ignore_reason": None if self.civic else "personal food request"})
+
+
+def _run(db, llm, **report):
+    r = make_report(db, **report)
+    return r, run_pipeline(db, r.report_id, _agents(llm))
+
+
+def test_irrelevant_report_is_ignored_audited_and_creates_no_incident(db):  # noqa: F811
+    r, res = _run(db, _Judge(civic=False), text="I want to eat some biriyani", category="other")
+    assert res.skipped == "not a civic report" and res.incident is None
+    assert r.status == "rejected" and db.query(Incident).count() == 0
+    entry = db.query(AuditEntry).filter(AuditEntry.action == "report.ignored").one()
+    assert entry.target == {"type": "report", "id": r.report_id}
+    assert entry.details["reason"] == "personal food request" and "biriyani" not in json.dumps(entry.details)
+
+
+@pytest.mark.parametrize("override,civic_confidence", [
+    ({"kind": "sos"}, 0.99),                        # SOS is never dropped
+    ({"category": "accident"}, 0.99),               # the reporter chose a category: they meant it
+    ({}, 0.6),                                      # model unsure: a human should look
+])
+def test_ignore_rule_never_drops_sos_chosen_category_empty_text_or_unsure_model(db, override, civic_confidence):  # noqa: F811
+    report = {"text": "I want ice cream", "category": "other", **override}
+    r, res = _run(db, _Judge(civic=False, civic_confidence=civic_confidence), **report)
+    assert res.incident is not None and r.status != "rejected"
+
+
+def test_civic_report_is_kept(db):  # noqa: F811
+    _, res = _run(db, _Judge(civic=True), text="big pothole near the bus stop", category="other")
+    assert res.incident is not None
+
+
+def test_should_ignore_requires_text_to_judge():
+    from app.agents.pipeline import should_ignore
+
+    intake = IntakeResult(**INTAKE_JSON, is_civic_report=False, civic_confidence=0.99)
+    assert should_ignore(intake, "report", "other", "I want ice cream")
+    assert not should_ignore(intake, "report", "other", None)        # audio we could not transcribe
+    assert not should_ignore(intake, "report", "other", "   ")

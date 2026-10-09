@@ -5,7 +5,7 @@ import logging
 
 from fastapi.concurrency import run_in_threadpool
 
-from app.agents.pipeline import Result, run_pipeline
+from app.agents.pipeline import IGNORED, Result, run_pipeline
 from app.database import SessionLocal
 from app.dispatch.routes import broadcast, dispatch_json
 from app.events import manager
@@ -33,6 +33,14 @@ async def run_report_pipeline(report_id: str) -> Result | None:
                 db.commit()
         return None
 
+    if result.skipped == IGNORED:  # tell the reporter, who would otherwise wait on a report nobody will act on
+        from app.ingest.routes import STATUS_MESSAGES
+        await manager.publish(
+            "report.status",
+            {"report_id": result.report.report_id, "status": "rejected", "eta_minutes": None,
+             "message": STATUS_MESSAGES["rejected"]},
+            civilian_device_id=result.report.device_id,
+        )
     if result.incident is None or result.outcome is None:
         return result
     await manager.publish("incident.created", incident_json(result.incident))

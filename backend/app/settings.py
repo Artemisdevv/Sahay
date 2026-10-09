@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     llm_model: str = "openai/gpt-oss-120b"
     llm_base_url: str = ""  # empty = provider default
     llm_timeout_s: float = 15.0
+    llm_reasoning_effort: str = "low"  # for reasoning models (gpt-oss); set empty for providers that reject it
     sahay_search_mode: str = "mock"  # mock = canned hazard tips; live = Firecrawl web search
     sahay_web_search_key: str = ""
 

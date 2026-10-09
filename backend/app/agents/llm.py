@@ -122,5 +122,6 @@ def build_llm(mode: str) -> LLM:
         base_url = settings.llm_base_url or PROVIDER_URLS.get(settings.llm_provider.lower(), "")
         if not base_url:
             raise RuntimeError("Set LLM_PROVIDER=groq (or LLM_BASE_URL for another OpenAI-compatible provider)")
-        return LiveLLM(settings.llm_api_key, settings.llm_model, base_url, settings.llm_timeout_s)
+        return LiveLLM(settings.llm_api_key, settings.llm_model, base_url, settings.llm_timeout_s,
+                       reasoning_effort=settings.llm_reasoning_effort)
     raise RuntimeError(f"SAHAY_LLM_MODE={mode!r} is not 'mock' or 'live'")

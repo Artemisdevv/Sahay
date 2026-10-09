@@ -32,6 +32,8 @@ from app.settings import settings
 
 AUTO_APPROVE_MAX_SEVERITY = 3
 AUTO_APPROVE_MIN_CONFIDENCE = 0.7
+IGNORE_MIN_CONFIDENCE = 0.85
+IGNORED = "not a civic report"
 
 
 @dataclass
@@ -71,6 +73,21 @@ class _Steps:
     def add(self, step: str, agent: str, status: str, summary: str, started: datetime, output: dict | None = None) -> None:
         self.rows.append(dict(step=step, agent=agent, status=status, summary=summary[:250],
                               started_at=started, finished_at=_now(), output=output or {}))
+
+
+def should_ignore(intake: IntakeResult, kind: str, category: str, transcript: str | None) -> bool:
+    """Drop gibberish and irrelevant reports ("I want ice cream"), but never risk a real emergency.
+
+    Only a plain report with the "other" quick-tap category and actual text qualifies, and only when the model is
+    confident. SOS, a chosen category, audio we could not transcribe, or a model failure always keep the report.
+    """
+    return (
+        kind == "report"
+        and category == "other"
+        and bool(transcript and transcript.strip())
+        and not intake.is_civic_report
+        and intake.civic_confidence >= IGNORE_MIN_CONFIDENCE
+    )
 
 
 def needs_approval(intake: IntakeResult, kind: str) -> tuple[bool, str]:
@@ -163,6 +180,14 @@ def run_pipeline(db: Session, report_id: str, agents: Agents | None = None) -> R
               f"{intake.incident_type}, severity {intake.severity}" + (" (rules fallback)" if fallback else ""), t0,
               {"incident_type": intake.incident_type, "severity": intake.severity, "people_count": intake.people_count,
                "hazards": intake.hazards, "confidence": intake.confidence, "fallback": fallback})
+
+    if should_ignore(intake, payload["kind"], payload["category"], transcript):
+        report.status = "rejected"
+        report.updated_at = _now()
+        engine.audit(db, _agent_actor("intake_agent"), "report.ignored", {"type": "report", "id": report.report_id},
+                     {"reason": (intake.ignore_reason or "not a civic report")[:120], "confidence": intake.civic_confidence})
+        db.commit()
+        return Result(report=report, skipped=IGNORED)
 
     generic = f"{intake.incident_type.title()} incident reported."
     try:

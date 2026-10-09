@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -27,7 +28,11 @@ Return ONLY a JSON object with exactly these keys:
  "hazards": [short English words such as "smoke","gas","chemical","electric","water","traffic"],
  "location_hint": string or null (landmark or road mentioned, in English; no personal names),
  "summary": string, max 400 chars, English, factual, NO personal names, phone numbers or exact home addresses,
- "confidence": number 0-1 (how sure you are of type and severity)}
+ "confidence": number 0-1 (how sure you are of incident_type and severity),
+ "is_civic_report": boolean,
+ "civic_confidence": number 0-1 (how sure you are of is_civic_report ONLY; gibberish or "I want ice cream" is 0.95+),
+ "ignore_reason": string max 100 chars or null (why it is not a civic report; no personal details)}
+is_civic_report is TRUE for anything a public authority could act on: emergencies (accident, fire, medical, crime, flood, hazards, missing or endangered people) AND civic problems (road damage, power or water failure, fallen trees, garbage, noise, street lights). It is FALSE only for content that clearly has no such need: gibberish or random characters, test messages ("testing 1 2 3"), greetings or chit-chat, personal wants or errands ("I want ice cream", "I want to eat biryani"), advertisements, or jokes. When in doubt, even slightly, answer TRUE: ignoring a real emergency is far worse than reading an irrelevant report. Poor transcription or broken grammar is NOT a reason for FALSE.
 If a quick-tap category is supplied and the text is empty or unclear, trust the category."""
 
 PII_SYSTEM = """You find personal data in an emergency report (English, Malayalam, Hindi or Tamil). Placeholders like \
@@ -59,6 +64,8 @@ class LiveLLM:
         base_url: str,
         timeout_s: float = 15.0,
         client: httpx.Client | None = None,
+        sleep=time.sleep,
+        reasoning_effort: str = "",
     ) -> None:
         if not api_key:
             raise RuntimeError("LLM_API_KEY is required when SAHAY_LLM_MODE=live")
@@ -66,6 +73,8 @@ class LiveLLM:
         self._url = base_url.rstrip("/") + "/chat/completions"
         self._headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         self._client = client or httpx.Client(timeout=timeout_s)
+        self._sleep = sleep
+        self._reasoning_effort = reasoning_effort  # "low" for gpt-oss: far fewer tokens, so fewer 429s and faster
 
     # ---- protocol ---------------------------------------------------------------------------------
 
@@ -113,6 +122,12 @@ class LiveLLM:
                 ]
         raise LLMError(f"model output failed validation: {last_error}")
 
+    def _post(self, body: dict) -> httpx.Response:
+        try:
+            return self._client.post(self._url, headers=self._headers, json=body)
+        except httpx.HTTPError as exc:  # timeouts, DNS, connection refused: the offline case
+            raise LLMError(f"transport error: {type(exc).__name__}") from None
+
     def _chat(self, messages: list[dict]) -> str:
         body = {
             "model": self._model,
@@ -121,10 +136,16 @@ class LiveLLM:
             "max_tokens": 2000,
             "response_format": {"type": "json_object"},
         }
-        try:
-            res = self._client.post(self._url, headers=self._headers, json=body)
-        except httpx.HTTPError as exc:  # timeouts, DNS, connection refused: the offline case
-            raise LLMError(f"transport error: {type(exc).__name__}") from None
+        if self._reasoning_effort:
+            body["reasoning_effort"] = self._reasoning_effort
+        res = self._post(body)
+        if res.status_code in (429, 500, 502, 503, 504):  # rate limit or provider hiccup: back off once
+            try:
+                wait = min(float(res.headers.get("retry-after", 2)), 8.0)
+            except ValueError:
+                wait = 2.0
+            self._sleep(wait)
+            res = self._post(body)
         if res.status_code != 200:
             raise LLMError(f"provider returned HTTP {res.status_code}")  # never include the body: may echo the prompt
         try:

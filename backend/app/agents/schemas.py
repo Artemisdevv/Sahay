@@ -18,6 +18,11 @@ class IntakeResult(BaseModel):
     location_hint: str | None = None
     summary: str = Field(max_length=500)
     confidence: float = Field(ge=0, le=1)
+    # False for chit-chat, gibberish, tests and personal wants ("I want ice cream"). The pipeline only acts on it
+    # under strict conditions (see pipeline.should_ignore); default True so rules and old payloads keep working.
+    is_civic_report: bool = True
+    civic_confidence: float = Field(ge=0, le=1, default=1.0)  # certainty about is_civic_report only
+    ignore_reason: str | None = Field(default=None, max_length=120)
 
 
 class PiiTag(BaseModel):
