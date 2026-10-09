@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Paperclip,
   Mic,
+  Camera,
   Plus,
   Code2,
   LockKeyhole,
@@ -73,6 +74,7 @@ const profileFields = [
   ["mobility", "Mobility issues"],
 ] as const;
 type Media = { name: string; url: string; type: string };
+type RecordedAudio = { file: File; url: string };
 export function CitizenPortal() {
   const [type, setType] = useState<IncidentType>("medical");
   const [description, setDescription] = useState("");
@@ -86,6 +88,11 @@ export function CitizenPortal() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [media, setMedia] = useState<Media[]>([]);
+  const [photoChoiceOpen, setPhotoChoiceOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioPreview, setAudioPreview] = useState<RecordedAudio | null>(null);
+  const [audioPreviewOpen, setAudioPreviewOpen] = useState(false);
   const [step, setStep] = useState(-1);
   const [error, setError] = useState("");
   const [dispatchedPayload, setDispatchedPayload] = useState<ReturnType<
@@ -110,13 +117,29 @@ export function CitizenPortal() {
     },
   ]);
   const fileRef = useRef<HTMLInputElement>(null);
-  const audioRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLVideoElement>(null);
+  const cameraStream = useRef<MediaStream | null>(null);
+  const recorderStream = useRef<MediaStream | null>(null);
+  const recorder = useRef<MediaRecorder | null>(null);
+  const audioChunks = useRef<Blob[]>([]);
+  const recordingFailed = useRef(false);
   const urls = useRef<string[]>([]);
+  const canUseCamera =
+    typeof navigator !== "undefined" &&
+    typeof navigator.mediaDevices?.getUserMedia === "function";
   useEffect(() => {
     return () => {
       urls.current.forEach((url) => URL.revokeObjectURL(url));
+      cameraStream.current?.getTracks().forEach((track) => track.stop());
+      recorderStream.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
+  useEffect(() => {
+    if (cameraOpen && cameraRef.current && cameraStream.current) {
+      cameraRef.current.srcObject = cameraStream.current;
+      void cameraRef.current.play().catch(() => undefined);
+    }
+  }, [cameraOpen]);
   useEffect(() => {
     if (step < 0 || step >= 3) return;
     const timer = setTimeout(() => setStep((s) => s + 1), 1500);
@@ -133,7 +156,12 @@ export function CitizenPortal() {
     media: media.map((m) => m.name),
   });
   async function saveProfile() {
-    if (!draft.fullName.trim() || !draft.age || Number(draft.age) < 1 || Number(draft.age) > 120) {
+    if (
+      !draft.fullName.trim() ||
+      !draft.age ||
+      Number(draft.age) < 1 ||
+      Number(draft.age) > 120
+    ) {
       toast.error("Enter a name and a valid age (1–120).");
       return;
     }
@@ -148,10 +176,10 @@ export function CitizenPortal() {
     setConsent(value);
     toast(value ? "Consent enabled for this report" : "Consent disabled");
   }
-  function attach(files: FileList | null) {
+  function attach(files: Iterable<File> | null) {
     if (!files) return;
     const next: Media[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       if (!/^(image|audio)\//.test(file.type) || file.size > 10 * 1024 * 1024) {
         toast.error("Use an image or audio file smaller than 10 MB.");
         continue;
@@ -161,6 +189,168 @@ export function CitizenPortal() {
       next.push({ name: file.name, url, type: file.type });
     }
     setMedia((previous) => [...previous, ...next].slice(0, 3));
+  }
+  async function startAudioRecording() {
+    if (
+      !navigator.mediaDevices?.getUserMedia ||
+      typeof MediaRecorder === "undefined"
+    ) {
+      toast.error(
+        "Audio recording isn’t available in this browser. Try a supported browser or attach an image instead.",
+      );
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recorderStream.current = stream;
+      const supportedType = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+      ].find((mime) => MediaRecorder.isTypeSupported(mime));
+      const activeRecorder = supportedType
+        ? new MediaRecorder(stream, { mimeType: supportedType })
+        : new MediaRecorder(stream);
+      recorder.current = activeRecorder;
+      audioChunks.current = [];
+      recordingFailed.current = false;
+      activeRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunks.current.push(event.data);
+      };
+      activeRecorder.onerror = () => {
+        recordingFailed.current = true;
+        stream.getTracks().forEach((track) => track.stop());
+        recorderStream.current = null;
+        recorder.current = null;
+        setIsRecording(false);
+        toast.error(
+          "The audio recording stopped unexpectedly. Please try again.",
+        );
+      };
+      activeRecorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        recorderStream.current = null;
+        recorder.current = null;
+        setIsRecording(false);
+        if (recordingFailed.current) return;
+        const blob = new Blob(audioChunks.current, {
+          type: activeRecorder.mimeType || "audio/webm",
+        });
+        if (blob.size === 0) {
+          toast.error("No audio was captured. Please record the note again.");
+          return;
+        }
+        if (blob.size > 10 * 1024 * 1024) {
+          toast.error(
+            "That recording is over the 10 MB attachment limit. Please record a shorter note.",
+          );
+          return;
+        }
+        const extension = blob.type.includes("mp4") ? "m4a" : "webm";
+        const file = new File([blob], `audio-note-${Date.now()}.${extension}`, {
+          type: blob.type,
+        });
+        const url = URL.createObjectURL(file);
+        urls.current.push(url);
+        setAudioPreview({ file, url });
+        setAudioPreviewOpen(true);
+      };
+      activeRecorder.start();
+      setIsRecording(true);
+      toast.success("Recording started. Stop when your audio note is ready.");
+    } catch (error) {
+      recorderStream.current?.getTracks().forEach((track) => track.stop());
+      recorderStream.current = null;
+      recorder.current = null;
+      setIsRecording(false);
+      const name = error instanceof DOMException ? error.name : "";
+      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        toast.error(
+          "Microphone access was denied. Allow microphone access in your browser settings, then try again.",
+        );
+      } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        toast.error("No microphone is available on this device.");
+      } else {
+        toast.error(
+          "Couldn’t start audio recording. Check microphone access and try again.",
+        );
+      }
+    }
+  }
+  function stopAudioRecording() {
+    if (recorder.current?.state === "recording") recorder.current.stop();
+  }
+  async function openCamera() {
+    if (!canUseCamera) {
+      toast.error(
+        "Camera capture isn’t available here. Choose image upload to attach a photo.",
+      );
+      return;
+    }
+    try {
+      cameraStream.current = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      setPhotoChoiceOpen(false);
+      setCameraOpen(true);
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : "";
+      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        toast.error(
+          "Camera access was denied. You can still upload an image instead.",
+        );
+      } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        toast.error(
+          "No camera is available on this device. You can still upload an image.",
+        );
+      } else {
+        toast.error(
+          "Couldn’t open the camera. You can still upload an image instead.",
+        );
+      }
+      cameraStream.current?.getTracks().forEach((track) => track.stop());
+      cameraStream.current = null;
+    }
+  }
+  function closeCamera() {
+    cameraStream.current?.getTracks().forEach((track) => track.stop());
+    cameraStream.current = null;
+    setCameraOpen(false);
+  }
+  function capturePhoto() {
+    const video = cameraRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      toast.error("Camera is still starting. Please try again in a moment.");
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      toast.error(
+        "Couldn’t capture the photo. Please upload an image instead.",
+      );
+      return;
+    }
+    context.drawImage(video, 0, 0);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          toast.error(
+            "Couldn’t capture the photo. Please try again or upload an image.",
+          );
+          return;
+        }
+        attach([
+          new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" }),
+        ]);
+        closeCamera();
+      },
+      "image/jpeg",
+      0.9,
+    );
   }
   function submit() {
     if (description.trim().length < 10) {
@@ -196,7 +386,9 @@ export function CitizenPortal() {
     }
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        setLocation(`${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}`);
+        setLocation(
+          `${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}`,
+        );
         toast.success("Current GPS location applied");
       },
       () => toast.error("Location access denied. Enter your address manually."),
@@ -229,7 +421,9 @@ export function CitizenPortal() {
           <span className="emergency-number">112</span>
           <ArrowUpRight size={20} />
         </a>
-        <p className="emergency-call-hint">Connects directly to emergency services</p>
+        <p className="emergency-call-hint">
+          Connects directly to emergency services
+        </p>
       </div>
       <div className="status-strip">
         <div className="status-cell">
@@ -247,7 +441,8 @@ export function CitizenPortal() {
             Coordinator agents
           </div>
           <div className="status-value">
-            <span className="dot" />4 agents online<small>All operational</small>
+            <span className="dot" />4 agents online
+            <small>All operational</small>
           </div>
         </div>
         <div className="status-cell">
@@ -301,7 +496,8 @@ export function CitizenPortal() {
                 <div className="panel-body">
                   <div className="section-label">
                     <span>
-                      What type of help do you need? <span className="required">*</span>
+                      What type of help do you need?{" "}
+                      <span className="required">*</span>
                     </span>
                   </div>
                   <div className="incident-types">
@@ -342,7 +538,9 @@ export function CitizenPortal() {
                         maxLength={300}
                       />
                       <Badge tone="green">
-                        {location.startsWith("124") ? "Demo address" : "Location set"}
+                        {location.startsWith("124")
+                          ? "Demo address"
+                          : "Location set"}
                       </Badge>
                     </span>
                   </label>
@@ -358,7 +556,8 @@ export function CitizenPortal() {
                   <label className="field">
                     <span className="section-label mb-0">
                       <span>
-                        Tell us what’s happening <span className="required">*</span>
+                        Tell us what’s happening{" "}
+                        <span className="required">*</span>
                       </span>
                       {priority !== "Pending assessment" ? (
                         <Badge
@@ -384,23 +583,28 @@ export function CitizenPortal() {
                     />
                   </label>
                   <div className="quick-chips">
-                    {["Unconscious", "Severe Bleeding", "Smoke Visible", "Trapped Inside"].map(
-                      (chip) => (
-                        <Button
-                          key={chip}
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setDescription((d) =>
-                              d ? `${d}. ${chip}` : `${chip} at the incident location.`,
-                            )
-                          }
-                        >
-                          <Plus size={10} />
-                          {chip}
-                        </Button>
-                      ),
-                    )}
+                    {[
+                      "Unconscious",
+                      "Severe Bleeding",
+                      "Smoke Visible",
+                      "Trapped Inside",
+                    ].map((chip) => (
+                      <Button
+                        key={chip}
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setDescription((d) =>
+                            d
+                              ? `${d}. ${chip}`
+                              : `${chip} at the incident location.`,
+                          )
+                        }
+                      >
+                        <Plus size={10} />
+                        {chip}
+                      </Button>
+                    ))}
                   </div>
                   <div className="field-row wide">
                     <label className="field">
@@ -420,7 +624,9 @@ export function CitizenPortal() {
                         max={999}
                         value={people}
                         onChange={(e) =>
-                          setPeople(Math.min(999, Math.max(1, Number(e.target.value))))
+                          setPeople(
+                            Math.min(999, Math.max(1, Number(e.target.value))),
+                          )
                         }
                       />
                     </label>
@@ -435,11 +641,17 @@ export function CitizenPortal() {
                       <p>Add context for the response team</p>
                     </div>
                     <div className="attachment-actions">
-                      <Button variant="outline" onClick={() => fileRef.current?.click()}>
+                      <Button
+                        variant="outline"
+                        onClick={() => setPhotoChoiceOpen(true)}
+                      >
                         <Plus size={12} />
                         Add photo
                       </Button>
-                      <Button variant="outline" onClick={() => audioRef.current?.click()}>
+                      <Button
+                        variant="outline"
+                        onClick={() => void startAudioRecording()}
+                      >
                         <Mic size={12} />
                         Audio note
                       </Button>
@@ -451,13 +663,6 @@ export function CitizenPortal() {
                       className="hidden"
                       onChange={(e) => attach(e.target.files)}
                     />
-                    <input
-                      ref={audioRef}
-                      type="file"
-                      accept="audio/*"
-                      className="hidden"
-                      onChange={(e) => attach(e.target.files)}
-                    />
                   </div>
                   {media.map((m, i) => (
                     <div className="attachment-preview" key={m.url}>
@@ -466,7 +671,9 @@ export function CitizenPortal() {
                       ) : (
                         <FileAudio size={20} />
                       )}
-                      <span className="text-[10px] truncate flex-1">{m.name}</span>
+                      <span className="text-[10px] truncate flex-1">
+                        {m.name}
+                      </span>
                       {m.type.startsWith("audio") && (
                         <audio controls src={m.url} className="w-40 h-8" />
                       )}
@@ -474,7 +681,9 @@ export function CitizenPortal() {
                         variant="ghost"
                         size="icon"
                         aria-label={`Remove ${m.name}`}
-                        onClick={() => setMedia((ms) => ms.filter((_, index) => index !== i))}
+                        onClick={() =>
+                          setMedia((ms) => ms.filter((_, index) => index !== i))
+                        }
                       >
                         <X size={12} />
                       </Button>
@@ -516,10 +725,14 @@ export function CitizenPortal() {
                 <div className="telemetry-intro">
                   <ShieldCheck />
                   <div>
-                    <h3>{step === 3 ? "Response team assigned" : "Coordinating your response"}</h3>
+                    <h3>
+                      {step === 3
+                        ? "Response team assigned"
+                        : "Coordinating your response"}
+                    </h3>
                     <p>
-                      Request received · {dispatchedPayload?.incident.priority} priority · Demo
-                      dispatch
+                      Request received · {dispatchedPayload?.incident.priority}{" "}
+                      priority · Demo dispatch
                     </p>
                   </div>
                 </div>
@@ -771,7 +984,11 @@ export function CitizenPortal() {
                   detail: "Context retrieval & medical memory",
                   icon: Database,
                 },
-                { name: "NotificationBot", detail: "Real-time updates & coordination", icon: Bot },
+                {
+                  name: "NotificationBot",
+                  detail: "Real-time updates & coordination",
+                  icon: Bot,
+                },
               ].map((a) => (
                 <div className="agent-row" key={a.name}>
                   <div className="agent-icon">
@@ -814,7 +1031,8 @@ export function CitizenPortal() {
           <DialogHeader>
             <DialogTitle>Medical & Emergency Profile</DialogTitle>
             <DialogDescription>
-              Private medical and access information. Shared with agents only with your consent.
+              Private medical and access information. Shared with agents only
+              with your consent.
             </DialogDescription>
           </DialogHeader>
           <div className="dialog-form">
@@ -829,7 +1047,9 @@ export function CitizenPortal() {
                     type={key === "age" ? "number" : "text"}
                     min={key === "age" ? 1 : undefined}
                     max={key === "age" ? 120 : undefined}
-                    onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, [key]: e.target.value }))
+                    }
                   />
                 </label>
               ))}
@@ -840,7 +1060,137 @@ export function CitizenPortal() {
               Demo changes last this visit; accounts save privately.
             </span>
             <Button onClick={saveProfile} disabled={saving}>
-              {saving ? <LoaderCircle className="animate-spin" /> : <Check />}Save profile
+              {saving ? <LoaderCircle className="animate-spin" /> : <Check />}
+              Save profile
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={photoChoiceOpen} onOpenChange={setPhotoChoiceOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Add a scene photo</DialogTitle>
+            <DialogDescription>
+              Take a photo now or choose an image from this device.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="outline"
+              onClick={() => void openCamera()}
+              disabled={!canUseCamera}
+            >
+              <Camera size={16} /> Take photo
+            </Button>
+            {!canUseCamera && (
+              <p className="text-xs text-muted-foreground">
+                Camera capture isn’t available in this browser. Image upload is
+                still available.
+              </p>
+            )}
+            <Button
+              onClick={() => {
+                setPhotoChoiceOpen(false);
+                fileRef.current?.click();
+              }}
+            >
+              <Paperclip size={16} /> Upload image
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={cameraOpen}
+        onOpenChange={(open) => {
+          if (!open) closeCamera();
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Take a scene photo</DialogTitle>
+            <DialogDescription>
+              Position the camera, then capture to add the photo to your report.
+            </DialogDescription>
+          </DialogHeader>
+          <video
+            ref={cameraRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full rounded-md bg-black"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeCamera}>
+              Cancel
+            </Button>
+            <Button onClick={capturePhoto}>
+              <Camera size={16} /> Capture photo
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={isRecording}
+        onOpenChange={(open) => {
+          if (!open) stopAudioRecording();
+        }}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Recording audio note</DialogTitle>
+            <DialogDescription>
+              Speak clearly. Stop the recording when your note is complete.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="dot pulse" />
+            Recording from your microphone
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={stopAudioRecording}>
+              <Mic size={16} /> Stop and preview
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={audioPreviewOpen}
+        onOpenChange={(open) => {
+          if (!open && audioPreview) {
+            URL.revokeObjectURL(audioPreview.url);
+            urls.current = urls.current.filter(
+              (url) => url !== audioPreview.url,
+            );
+            setAudioPreview(null);
+          }
+          setAudioPreviewOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Preview audio note</DialogTitle>
+            <DialogDescription>
+              Listen before attaching this recording to your report.
+            </DialogDescription>
+          </DialogHeader>
+          {audioPreview && (
+            <audio controls src={audioPreview.url} className="w-full" />
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setAudioPreviewOpen(false)}
+            >
+              Discard
+            </Button>
+            <Button
+              onClick={() => {
+                if (audioPreview) attach([audioPreview.file]);
+                setAudioPreviewOpen(false);
+                setAudioPreview(null);
+              }}
+            >
+              <Check size={16} /> Attach recording
             </Button>
           </div>
         </DialogContent>
