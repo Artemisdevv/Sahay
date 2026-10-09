@@ -10,6 +10,7 @@ venv/
 backend/sahay.db
 backend/*.db-shm
 backend/*.db-wal
+backend/.sahay-server-key
 
 # Editors
 .vscode/

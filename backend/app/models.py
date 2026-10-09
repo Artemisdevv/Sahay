@@ -25,10 +25,20 @@ class Unit(Base):
 class DemoUser(Base):
     __tablename__ = "demo_users"
     username: Mapped[str] = mapped_column(String(40), primary_key=True)
-    password: Mapped[str] = mapped_column(String(120))
+    password_hash: Mapped[str] = mapped_column("password", String(120))
     role: Mapped[str] = mapped_column(String(16))
     display_name: Mapped[str] = mapped_column(String(80))
     unit_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
+
+class Device(Base):
+    __tablename__ = "devices"
+    device_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    ed25519_public_key: Mapped[str] = mapped_column(String(128))
+    language: Mapped[str] = mapped_column(String(12), default="en")
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    disabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class Incident(Base):
