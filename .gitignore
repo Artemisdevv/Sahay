@@ -1,0 +1,45 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.pem
+serviceAccount*.json
+google-services.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+coverage/
+
+# Android / Capacitor
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/src/main/assets/public/
+*.apk
+*.aab
+.idea/
+*.iml
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+
+# Docs kept outside the repo on purpose
+solution.md
+vague_idea.txt
