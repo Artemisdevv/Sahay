@@ -159,3 +159,14 @@ def test_stored_row_holds_only_ciphertext_not_plaintext():
         row = db.get(Report, env["report_id"])
         assert b"collided" not in row.ciphertext
         assert row.category == "accident" and row.kind == "report"
+
+
+def test_chunked_oversize_body_is_413_without_content_length():
+    d = Dev()
+
+    def gen():
+        for _ in range(8):
+            yield b"x" * (100 * 1024)
+
+    r = client.post("/api/v1/reports", content=gen(), headers={**d.auth, "Content-Type": "application/json"})
+    assert r.status_code == 413
