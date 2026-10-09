@@ -591,7 +591,7 @@ export function CitizenPortal() {
             Confirmed incidents near you, by area. No names or messages are
             shown.
           </p>
-          <IncidentMap role="public" className="admin-map" />
+          <IncidentMap role="civilian" className="admin-map" />
         </section>
       )}
 

@@ -47,8 +47,14 @@ export type UnitMovedEvent = {
   ts: string;
   data: {
     unit_id: string;
+    name?: string | null;
+    service_type?: "ambulance" | "police" | "fire" | "municipal" | null;
     location: { lat: number; lng: number };
     status: string;
+    incident_id?: string | null;
+    heading_deg?: number | null;
+    speed_kmh?: number | null;
+    eta_seconds?: number | null;
   };
 };
 
