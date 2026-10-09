@@ -1421,16 +1421,38 @@ h1 {
   }
 }
 @media (max-width: 600px) {
-  .login-live > div { flex-wrap: wrap; line-height: 1.7; }
-  .login-live .dot { flex-shrink: 0; }
-  .disclaimer { flex-wrap: wrap; line-height: 1.7; }
-  .field-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
-  .field { min-width: 0; }
-  .breadcrumb > span:first-of-type { display: none; }
-  .topbar-right .avatar { display: none; }
-  .panel-head h2 { flex-wrap: wrap; }
-  .profile-summary strong { overflow-wrap: anywhere; }
-  .attachment-actions { flex-wrap: wrap; }
+  .login-live > div {
+    flex-wrap: wrap;
+    line-height: 1.7;
+  }
+  .login-live .dot {
+    flex-shrink: 0;
+  }
+  .disclaimer {
+    flex-wrap: wrap;
+    line-height: 1.7;
+  }
+  .field-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .field {
+    min-width: 0;
+  }
+  .breadcrumb > span:first-of-type {
+    display: none;
+  }
+  .topbar-right .avatar {
+    display: none;
+  }
+  .panel-head h2 {
+    flex-wrap: wrap;
+  }
+  .profile-summary strong {
+    overflow-wrap: anywhere;
+  }
+  .attachment-actions {
+    flex-wrap: wrap;
+  }
   .app-shell {
     display: block;
   }
@@ -1700,7 +1722,8 @@ h1 {
 }
 .cz-mic.recording {
   background: var(--destructive);
-  box-shadow: 0 0 0 10px color-mix(in oklch, var(--destructive) 22%, var(--background));
+  box-shadow: 0 0 0 10px
+    color-mix(in oklch, var(--destructive) 22%, var(--background));
 }
 .cz-mic-label {
   margin: 18px 0 0;
@@ -1723,6 +1746,40 @@ h1 {
 .cz-clip audio {
   width: 100%;
   margin-bottom: 10px;
+}
+.cz-photo-actions {
+  margin-top: 12px;
+}
+.cz-photo-actions > button {
+  width: 100%;
+}
+.cz-photo-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+.cz-photo-item {
+  position: relative;
+  width: 88px;
+  height: 72px;
+}
+.cz-photo-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.cz-photo-item button {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 26px;
+  height: 26px;
+  padding: 4px;
+  color: white;
+  background: color-mix(in oklch, black 68%, transparent);
+  border-radius: 50%;
 }
 .cz-warn {
   color: var(--destructive);
