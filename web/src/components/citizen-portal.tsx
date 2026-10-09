@@ -54,6 +54,7 @@ import {
   type RelayState,
 } from "@/lib/report/relay";
 import type { QueueItem } from "@/lib/report/queue";
+import { secureStorage } from "@/native/secure-storage";
 
 const tabs: ShellTab[] = [
   { id: "help", label: "Get help", icon: Mic },
@@ -86,6 +87,27 @@ const profileFields = [
   ["access", "How to get in (gate, floor)"],
   ["mobility", "Trouble walking or moving"],
 ] as const;
+const PROFILE_STORAGE_KEY = "civilian.profile";
+
+async function readStoredProfile(): Promise<EmergencyProfile | null> {
+  try {
+    const raw = await secureStorage.get(PROFILE_STORAGE_KEY);
+    if (!raw) return null;
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return null;
+    const fields = value as Record<string, unknown>;
+    if (
+      !Object.keys(defaultProfile).every(
+        (key) => typeof fields[key] === "string",
+      )
+    )
+      return null;
+    return { ...defaultProfile, ...fields } as EmergencyProfile;
+  } catch {
+    return null;
+  }
+}
 
 const CATEGORY_FOR: Record<IncidentType, Category> = {
   medical: "medical",
@@ -140,6 +162,7 @@ export function CitizenPortal() {
   const [location, setLocation] = useState("Kochi, Kerala");
   const [profile, setProfile] = useState<EmergencyProfile>(defaultProfile);
   const [draft, setDraft] = useState<EmergencyProfile>(defaultProfile);
+  const [profileReady, setProfileReady] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [consent, setConsent] = useState(true);
   const [reports, setReports] = useState<QueueItem[]>([]);
@@ -157,6 +180,21 @@ export function CitizenPortal() {
     return watchRelay(setRelay);
   }, []);
   const voice = useVoiceCapture();
+  useEffect(() => {
+    let active = true;
+    void readStoredProfile()
+      .then((savedProfile) => {
+        if (!active || !savedProfile) return;
+        setProfile(savedProfile);
+        setDraft(savedProfile);
+      })
+      .finally(() => {
+        if (active) setProfileReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   // Follow the position while this screen is open so sending does not wait for a GPS fix.
   useEffect(() => warmLocation(), []);
   const [canUseCamera, setCanUseCamera] = useState(false);
@@ -388,7 +426,8 @@ export function CitizenPortal() {
     photos.forEach(removePhoto);
   }
 
-  function saveProfile() {
+  async function saveProfile() {
+    if (!profileReady) return;
     if (
       !draft.fullName.trim() ||
       !draft.age ||
@@ -398,9 +437,15 @@ export function CitizenPortal() {
       toast.error("Enter your name and your age (1 to 120).");
       return;
     }
+    try {
+      await secureStorage.set(PROFILE_STORAGE_KEY, JSON.stringify(draft));
+    } catch {
+      toast.error("Could not save your details on this device.");
+      return;
+    }
     setProfile(draft);
     setProfileOpen(false);
-    toast.success("Details saved on this phone");
+    toast.success("Details saved on this device");
   }
 
   return (
@@ -648,6 +693,7 @@ export function CitizenPortal() {
           <Button
             variant="outline"
             className="cz-secondary"
+            disabled={!profileReady}
             onClick={() => {
               setDraft(profile);
               setProfileOpen(true);
@@ -698,7 +744,10 @@ export function CitizenPortal() {
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>My details</DialogTitle>
-            <DialogDescription>Saved on this phone only.</DialogDescription>
+            <DialogDescription>
+              Saved on this device. Your details are not sent to the server and
+              remain until this app’s data is cleared.
+            </DialogDescription>
           </DialogHeader>
           <div className="cz-form">
             {profileFields.map(([key, label]) => (
@@ -715,7 +764,11 @@ export function CitizenPortal() {
               </label>
             ))}
           </div>
-          <Button className="cz-send" onClick={saveProfile}>
+          <Button
+            className="cz-send"
+            onClick={saveProfile}
+            disabled={!profileReady}
+          >
             Save
           </Button>
         </DialogContent>
