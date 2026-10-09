@@ -1,0 +1,14 @@
+{
+  "type": "agent.trace",
+  "ts": "2026-10-09T10:15:00Z",
+  "data": {
+    "incident_id": "22222222-2222-4222-8222-222222222222",
+    "step": "triage",
+    "agent": "triage_agent",
+    "status": "done",
+    "started_at": "2026-10-09T10:15:00Z",
+    "finished_at": "2026-10-09T10:15:01Z",
+    "summary": "Needs ambulance and police, severity 4.",
+    "output": {"needed_services": ["ambulance", "police"], "severity": 4}
+  }
+}
