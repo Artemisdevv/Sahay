@@ -16,10 +16,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.audit_chain import append_audit_entry
 from app.database import get_db
 from app.ingest import crypto
 from app.keyring import server_box_key, server_signing_key
-from app.models import AuditEntry, Device, Report
+from app.models import Device, Report
 from app.settings import settings
 
 MAX_BODY_BYTES = 600 * 1024
@@ -128,15 +129,14 @@ def install(app: FastAPI, current_user: Callable) -> None:
             receipt_signature=receipt["signature"],
         )
         db.add(report)
-        db.add(
-            AuditEntry(
-                actor={"type": "device", "id": env["device_id"]},
-                action="report.received",
-                target={"type": "report", "id": env["report_id"]},
-                details={"relayed_by": user.get("device_id") if user.get("device_id") != env["device_id"] else None, "kind": report.kind},
-            )
-        )
         try:
+            append_audit_entry(
+                db,
+                {"type": "device", "id": env["device_id"]},
+                "report.received",
+                {"type": "report", "id": env["report_id"]},
+                {"relayed_by": user.get("device_id") if user.get("device_id") != env["device_id"] else None, "kind": report.kind},
+            )
             db.commit()
         except IntegrityError:
             # Lost a race with a concurrent upload of the same report_id: treat as replay.

@@ -16,7 +16,8 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import AuditEntry, Dispatch, Incident, Report, Unit
+from app.audit_chain import append_audit_entry
+from app.models import Dispatch, Incident, Report, Unit
 
 EARTH_RADIUS_KM = 6371.0088
 URBAN_SPEED_KMH = 30.0
@@ -123,8 +124,8 @@ def _now() -> datetime:
 
 
 def audit(db: Session, actor: dict, action: str, target: dict, details: dict | None = None) -> None:
-    """Single audit write point for this module; B-09 will chain hashes behind it."""
-    db.add(AuditEntry(actor=actor, action=action, target=target, details=details or {}))
+    """Append an audit entry to the authenticated hash chain."""
+    append_audit_entry(db, actor, action, target, details)
 
 
 def _incident(db: Session, incident_id: str) -> Incident:

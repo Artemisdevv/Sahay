@@ -238,12 +238,12 @@ Dispatch `status`: `proposed | approved | accepted | declined | en_route | on_sc
   "hash": "hex"
 }
 ```
-`hash = SHA-256( seq | ts | actor | action | target | canonical_json(details) | prev_hash )`, fields joined with `|`, details serialized as sorted-key compact JSON. The first entry has `prev_hash = "0"*64`.
+`hash = SHA-256( seq | ts | canonical_json(actor) | action | canonical_json(target) | canonical_json(details) | prev_hash )`, fields joined with `|`; objects use sorted-key compact JSON, and `ts` is UTC ISO-8601. The first entry has `prev_hash = "0"*64`.
 
 Actions (not exhaustive): `report.received`, `agent.intake`, `agent.pii`, `agent.triage`, `dispatch.propose`, `dispatch.approve`, `dispatch.accept`, `dispatch.decline`, `dispatch.status`, `incident.resolve`, `pii.reveal`, `auth.login`.
 
-- `GET /audit?limit=&after_seq=` (admin) returns `{ "entries": [AuditEntry] }`
-- `GET /audit/verify` (admin) returns `{ "valid": true, "checked": 120, "first_bad_seq": null }`
+- `GET /audit?limit=&after_seq=` (admin) returns `{ "entries": [AuditEntry] }` in ascending `seq` order; `after_seq` is exclusive and `limit` is 1–100.
+- `GET /audit/verify` (admin) checks the full chain and stored tail, returning `{ "valid": true, "checked": 120, "first_bad_seq": null }` or the first invalid sequence.
 
 ### 2.6 Dev and demo helpers (enabled only when `SAHAY_DEV=1`)
 

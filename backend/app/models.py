@@ -87,6 +87,15 @@ class AuditEntry(Base):
     hash: Mapped[str] = mapped_column(String(64), default="0" * 64)
 
 
+class AuditChainHead(Base):
+    """Transactional chain tip, used to serialize audit appends and detect tail deletion."""
+
+    __tablename__ = "audit_chain_head"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    last_seq: Mapped[int] = mapped_column(Integer, default=0)
+    last_hash: Mapped[str] = mapped_column(String(64), default="0" * 64)
+
+
 class AgentTrace(Base):
     __tablename__ = "agent_traces"
     trace_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))

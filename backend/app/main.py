@@ -15,10 +15,12 @@ from app.database import Base, engine, get_db
 from app.dispatch.routes import install as install_dispatch
 from app.events import manager, websocket_loop
 from app.agents.store import store_pii
+from app.audit_chain import append_audit_entry, initialize_audit_chain
+from app.audit_routes import install as install_audit_routes
 from app.incident_routes import install as install_incident_routes
 from app.ingest.routes import install as install_ingest
 from app.keyring import server_public_key_response
-from app.models import AgentTrace, AuditEntry, DemoUser, Device, Dispatch, Incident, IncidentPII, Report, Unit
+from app.models import AgentTrace, AuditChainHead, AuditEntry, DemoUser, Device, Dispatch, Incident, IncidentPII, Report, Unit
 from app.pii_crypto import ensure_pii_encryption_key
 from app.rate_limit import rate_limiter
 from app.schemas import DeviceRegistrationRequest, LoginRequest, MockReportRequest
@@ -34,6 +36,7 @@ if not settings.sahay_dev:
 JWT_SECRET = settings.sahay_jwt_secret or "sahay-insecure-local-dev-only"
 JWT_ISSUER = "sahay"
 Base.metadata.create_all(bind=engine)
+initialize_audit_chain(engine)
 app = FastAPI(title="Sahay API", version="1.0.0", description="Civic incident reporting and dispatch API")
 app.add_middleware(
     CORSMiddleware,
@@ -164,6 +167,7 @@ def trace_json(trace: AgentTrace) -> dict:
 
 
 install_incident_routes(app, current_user, require_admin, incident_json, trace_json, utc_iso)
+install_audit_routes(app, require_admin, utc_iso)
 
 
 def distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -241,6 +245,13 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     demo_user = db.get(DemoUser, body.username)
     if demo_user is None or not verify_password(body.password, demo_user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
+    append_audit_entry(
+        db,
+        {"type": demo_user.role, "id": demo_user.username},
+        "auth.login",
+        {"type": "user", "id": demo_user.username},
+    )
+    db.commit()
     now = datetime.now(timezone.utc)
     claims = {
         "sub": demo_user.username,
@@ -269,6 +280,10 @@ def dev_seed(db: Session = Depends(get_db)):
     require_dev()
     for model in (AgentTrace, IncidentPII, AuditEntry, Dispatch, Incident, Report):
         db.execute(delete(model))
+    chain_head = db.get(AuditChainHead, 1)
+    if chain_head is not None:
+        chain_head.last_seq = 0
+        chain_head.last_hash = "0" * 64
     seed_demo(db)
     return {"status": "seeded", "units": db.query(Unit).count()}
 
@@ -278,6 +293,10 @@ def dev_reset(db: Session = Depends(get_db)):
     require_dev()
     for model in (AgentTrace, IncidentPII, AuditEntry, Dispatch, Incident, Report):
         db.execute(delete(model))
+    chain_head = db.get(AuditChainHead, 1)
+    if chain_head is not None:
+        chain_head.last_seq = 0
+        chain_head.last_hash = "0" * 64
     db.commit()
     return {"status": "reset"}
 
@@ -372,7 +391,13 @@ async def mock_report(body: MockReportRequest, db: Session = Depends(get_db)):
             "created_at": utc_iso(dispatch.created_at),
             "updated_at": utc_iso(dispatch.updated_at),
         })
-    db.add(AuditEntry(actor={"type": "system", "id": "dev_mock"}, action="report.received", target={"type": "incident", "id": incident.incident_id}, details={"report_id": report_id, "mock": True}))
+    append_audit_entry(
+        db,
+        {"type": "system", "id": "dev_mock"},
+        "report.received",
+        {"type": "incident", "id": incident.incident_id},
+        {"report_id": report_id, "mock": True},
+    )
     db.commit()
     db.refresh(incident)
     await manager.publish("incident.created", incident_json(incident))
