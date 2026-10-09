@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Callable
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -20,6 +20,7 @@ from app.database import get_db
 from app.ingest import crypto
 from app.keyring import server_box_key, server_signing_key
 from app.models import AuditEntry, Device, Report
+from app.settings import settings
 
 MAX_BODY_BYTES = 600 * 1024
 STATUS_MESSAGES = {
@@ -82,7 +83,10 @@ def install(app: FastAPI, current_user: Callable) -> None:
         return user
 
     @router.post("/reports", status_code=202)
-    async def post_report(request: Request, response: Response, user: dict = Depends(civilian), db: Session = Depends(get_db)):
+    async def post_report(
+        request: Request, response: Response, background: BackgroundTasks,
+        user: dict = Depends(civilian), db: Session = Depends(get_db),
+    ):
         declared = request.headers.get("content-length")
         if declared and declared.isdigit() and int(declared) > MAX_BODY_BYTES:
             raise crypto.IngestError(413, "too_large", "request body too large")
@@ -141,7 +145,24 @@ def install(app: FastAPI, current_user: Callable) -> None:
             if winner is None:
                 raise
             return _replay(winner, env, ciphertext, response)
-        return {"report_id": report.report_id, "status": report.status, "receipt": _receipt(report)}
+        if settings.sahay_pipeline_autorun:
+            from app.agents.runner import run_report_pipeline  # lazy: runner imports app.main
+
+            background.add_task(run_report_pipeline, report.report_id)
+        return {"report_id": report.report_id, "status": "received", "receipt": _receipt(report)}
+
+    @router.post("/dev/process/{report_id}")
+    async def dev_process(report_id: str):
+        """Dev only: (re)run the agent pipeline for a stored report."""
+        if not settings.sahay_dev:
+            raise HTTPException(status_code=404, detail="Not found")
+        from app.agents.runner import run_report_pipeline
+
+        result = await run_report_pipeline(report_id)
+        if result is None:
+            raise HTTPException(status_code=500, detail="Pipeline failed; see server log")
+        return {"report_id": report_id, "skipped": result.skipped,
+                "incident_id": result.incident.incident_id if result.incident else None}
 
     def _replay(existing: Report, env: dict, ciphertext: bytes, response: Response) -> dict:
         if not _same_submission(existing, env, ciphertext):

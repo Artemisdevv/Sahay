@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     sahay_server_key_file: str = ".sahay-server-key"
     sahay_server_ed25519_secret_key: str = ""
     sahay_server_signing_key_file: str = ".sahay-server-ed25519-key"
+    sahay_pipeline_autorun: bool = True  # run the agent pipeline after each accepted report
+    sahay_llm_mode: str = "mock"  # mock = deterministic rules, no network
+    sahay_stt_mode: str = "mock"  # mock = no audio model; text payloads still work
 
     @property
     def cors_origins(self) -> list[str]:
