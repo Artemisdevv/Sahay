@@ -82,8 +82,15 @@ Relays append `hops` (integer, starts 0, +1 per relay) outside the signed part. 
 
 **`GET /config/server-key`** (public)
 ```json
-{ "key_id": "k1", "x25519_public_key": "<base64>" }
+{
+  "key_id": "k1",
+  "x25519_public_key": "<base64>",
+  "ed25519_public_key": "<base64>"
+}
 ```
+
+`ed25519_public_key` verifies the server signatures on report receipts. It is
+the verify key corresponding to the server signing key used by `POST /reports`.
 
 **`POST /auth/register-device`** (public, rate-limited)
 ```json

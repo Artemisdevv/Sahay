@@ -21,6 +21,8 @@ venv/
 backend/sahay.db
 backend/*.db-shm
 backend/*.db-wal
+backend/.sahay-server-key
+backend/.sahay-server-ed25519-key
 
 # Node
 node_modules/

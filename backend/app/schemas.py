@@ -1,7 +1,10 @@
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
+import base64
+import binascii
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class Location(BaseModel):
@@ -44,5 +47,22 @@ class MockReportRequest(ReportPayload):
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=40)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class DeviceRegistrationRequest(BaseModel):
+    device_id: UUID
+    ed25519_public_key: str
+    language: str = Field(default="en", min_length=2, max_length=12)
+
+    @field_validator("ed25519_public_key")
+    @classmethod
+    def validate_public_key(cls, value: str) -> str:
+        try:
+            decoded = base64.b64decode(value, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("ed25519_public_key must be standard base64") from exc
+        if len(decoded) != 32:
+            raise ValueError("ed25519_public_key must decode to 32 bytes")
+        return value
