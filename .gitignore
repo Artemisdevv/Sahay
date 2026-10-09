@@ -10,12 +10,17 @@ google-services.json
 
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
 venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Local demo database
+backend/sahay.db
+backend/*.db-shm
+backend/*.db-wal
 
 # Node
 node_modules/
@@ -23,20 +28,21 @@ dist/
 .vite/
 coverage/
 
+# Gradle (any module)
+.gradle/
+build/
+local.properties
+
 # Android / Capacitor
-android/.gradle/
-android/build/
-android/app/build/
-android/local.properties
 android/app/src/main/assets/public/
 *.apk
 *.aab
-.idea/
 *.iml
 
 # OS / editor
 .DS_Store
 Thumbs.db
+.idea/
 .vscode/*
 !.vscode/extensions.json
 

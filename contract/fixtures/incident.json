@@ -1,0 +1,17 @@
+{
+  "incident_id": "22222222-2222-4222-8222-222222222222",
+  "status": "pending_approval",
+  "incident_type": "accident",
+  "severity": 4,
+  "urgency_score": 0.82,
+  "location": {"lat": 9.9312, "lng": 76.2673},
+  "summary_redacted": "Two-vehicle collision at a junction, two injured, one unresponsive.",
+  "people_count": 2,
+  "hazards": ["traffic"],
+  "needed_services": ["ambulance", "police"],
+  "report_count": 1,
+  "report_ids": ["a1b2c3d4-1234-4234-8234-123456789abc"],
+  "reason": "High severity and reported injuries; administrator approval required.",
+  "created_at": "2026-10-09T10:15:00Z",
+  "updated_at": "2026-10-09T10:15:00Z"
+}

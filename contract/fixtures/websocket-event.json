@@ -1,0 +1,5 @@
+{
+  "type": "incident.created",
+  "ts": "2026-10-09T10:15:00Z",
+  "data": {"incident_id": "22222222-2222-4222-8222-222222222222", "status": "pending_approval"}
+}
