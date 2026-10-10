@@ -41,8 +41,15 @@ enum class Mode { ADVERTISE, DISCOVER, BOTH }
 class NearbyTransport(
     private val context: Context,
     private val deviceId: String,
+    /**
+     * TEST HOOK (chain test): device ids this phone may link with. Empty = everyone, which is the normal case.
+     * Lets three phones in one room behave as a chain A - B - C where A and C cannot see each other.
+     */
+    private val allowedPeers: () -> Set<String> = { emptySet() },
     private val log: (String) -> Unit = { Log.i(TAG, it) },
 ) : Transport {
+    private fun allowed(remoteDeviceId: String) = allowedPeers().let { it.isEmpty() || remoteDeviceId in it }
+
     lateinit var engine: RelayEngine
 
     private val client by lazy { Nearby.getConnectionsClient(context) }
@@ -95,6 +102,7 @@ class NearbyTransport(
         override fun onEndpointFound(id: String, info: DiscoveredEndpointInfo) {
             if (info.serviceId != SERVICE_ID) return
             val remote = info.endpointName
+            if (!allowed(remote)) return
             if (mode == Mode.BOTH && deviceId > remote) return   // the other side initiates
             synchronized(this@NearbyTransport) { if (id in connected || !requested.add(id)) return }
             client.requestConnection(deviceId, id, lifecycle).addOnFailureListener {
@@ -107,7 +115,10 @@ class NearbyTransport(
     }
 
     private val lifecycle = object : ConnectionLifecycleCallback() {
-        override fun onConnectionInitiated(id: String, info: ConnectionInfo) { client.acceptConnection(id, payloads) }
+        override fun onConnectionInitiated(id: String, info: ConnectionInfo) {
+            if (allowed(info.endpointName)) client.acceptConnection(id, payloads)
+            else { log("refusing ${info.endpointName} (not on the allow list)"); client.rejectConnection(id) }
+        }
 
         override fun onConnectionResult(id: String, result: ConnectionResolution) {
             if (result.status.statusCode == ConnectionsStatusCodes.STATUS_OK) {
