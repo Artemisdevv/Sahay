@@ -1,7 +1,10 @@
 {
   "name": "sahay-web",
   "private": true,
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/lib/i18n.ts",
+    "*.css"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite dev",
