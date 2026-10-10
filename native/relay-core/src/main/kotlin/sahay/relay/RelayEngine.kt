@@ -206,6 +206,10 @@ class RelayEngine(
     @Synchronized
     fun pendingForUpload(): List<JsonObject> = records.values.filter { !it.delivered }.map { it.envelope }
 
+    /** Envelopes carried for other phones and not yet delivered (what the native uploader sends when it has internet). */
+    @Synchronized
+    fun pendingCarried(): List<JsonObject> = records.values.filter { !it.origin && !it.delivered }.map { it.envelope }
+
     /** Reports we carry for other people. The UI shows only this count, never contents. */
     @Synchronized
     fun carryingCount(): Int = records.values.count { !it.origin && !it.delivered }

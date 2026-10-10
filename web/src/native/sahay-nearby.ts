@@ -26,6 +26,8 @@ export interface SahayNearbyPlugin {
     deviceId: string;
     mode: RelayMode;
     serverVerifyKey: string;
+    /** Base URL of the API (`.../api/v1`). The native layer uploads carried reports there while the screen is off. */
+    apiBase?: string;
   }): Promise<void>;
   stop(): Promise<void>;
   /** Hand our own new report to the native queue so it is forwarded to nearby phones. */
