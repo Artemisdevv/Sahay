@@ -979,7 +979,10 @@ function Progress({
   onDone: () => void;
   onRetry: () => void;
 }) {
-  const failed = item.state === "failed";
+  const serverStatus = status ?? item.relay_status ?? null;
+  // The server read the report and decided nobody can act on it (not an emergency or civic problem).
+  const declined = serverStatus?.status === "rejected";
+  const failed = item.state === "failed" || declined;
   // k = number of finished steps: 1 saved, 2 sent, 3 a team is arranged
   const k =
     item.state === "sent"
@@ -988,20 +991,23 @@ function Progress({
         ? 3
         : 2
       : 1;
-  const title = failed
-    ? "We could not send this"
+  const title = declined
+    ? "We could not act on this"
+    : failed
+      ? "We could not send this"
     : k === 3
       ? "Help is on the way"
       : item.state === "sent"
         ? "Your request was sent"
         : "Saved on your phone";
-  const serverStatus = status ?? item.relay_status ?? null;
   const viaRelay = item.via === "relay";
   const acceptedService = responseCalls.find((service) =>
     service.candidates.some((candidate) => candidate.state === "accepted"),
   );
   const arrived = ["on_scene", "resolved"].includes(serverStatus?.status ?? "");
-  const lead = failed
+  const lead = declined
+    ? "The response centre could not act on this message. If someone is in danger, call 112 now, or record or type what is happening and send it again."
+    : failed
     ? "The response centre did not accept this report. Call 112 now."
     : arrived
       ? "Help has arrived."
@@ -1060,7 +1066,7 @@ function Progress({
           <ResponseTimeline lists={responseCalls} civilian />
         </section>
       )}
-      {failed && (
+      {failed && !declined && (
         <Button variant="outline" className="cz-secondary" onClick={onRetry}>
           Try sending again
         </Button>
