@@ -109,6 +109,20 @@ class AgentTrace(Base):
     output: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class IncidentAudio(Base):
+    """The caller's original voice message, encrypted at rest like the other PII. One row per report.
+    Only the admin can play it, only after a logged reveal, and every play is audited (app/incident_routes.py)."""
+
+    __tablename__ = "incident_audio"
+    __table_args__ = (UniqueConstraint("incident_id", "report_id", name="uq_incident_audio_report"),)
+    audio_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    incident_id: Mapped[str] = mapped_column(String(36), index=True)
+    report_id: Mapped[str] = mapped_column(String(64), index=True)
+    mime: Mapped[str] = mapped_column(String(80), default="audio/webm")
+    audio_ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class IncidentPII(Base):
     """Per-field authenticated ciphertext for sensitive incident details."""
 

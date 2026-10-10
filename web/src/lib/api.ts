@@ -263,6 +263,29 @@ export interface IncidentPii {
   }>;
   pii_spans: Array<{ type: string; text: string; start: number; end: number }>;
   audio_url: string | null;
+  /** Original voice messages of this incident (admin only, after a logged reveal). */
+  audio?: Array<{ report_id: string; mime: string; url: string }>;
+}
+
+/** Download one original voice message. The server needs a recent reveal of the incident and audits every play. */
+export async function fetchIncidentAudio(
+  url: string,
+  token: string,
+): Promise<Blob> {
+  const response = await fetch(`${API_BASE}${url.replace(/^\/api\/v1/, "")}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    let message = `Could not load the audio (${response.status})`;
+    try {
+      const body = (await response.json()) as ApiError;
+      message = body.error?.message || message;
+    } catch {
+      /* keep the status message */
+    }
+    throw new Error(message);
+  }
+  return response.blob();
 }
 
 export async function revealIncidentPii(
