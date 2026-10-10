@@ -84,3 +84,44 @@ def load_pii(db: Session, incident_id: str) -> dict | None:
         "pii_spans": value(first, "pii_spans") or [],
         "audio_url": value(first, "audio_url"),
     }
+
+
+# The MIME type comes from the reporter's payload, so it is untrusted: only these are ever stored or served.
+ALLOWED_AUDIO_MIME = {"audio/webm", "audio/ogg", "audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav", "audio/aac", "audio/flac"}
+
+
+def safe_audio_mime(mime: str | None) -> str:
+    """Keep the codec parameters out (`audio/webm;codecs=opus` -> `audio/webm`) and refuse anything that is not audio."""
+    base = (mime or "").split(";")[0].strip().lower()
+    return base if base in ALLOWED_AUDIO_MIME else "audio/webm"
+
+
+def store_audio(db: Session, incident_id: str, report_id: str, mime: str, data_b64: str) -> None:
+    """Keep the original voice message, encrypted (the same authenticated box as the other PII fields)."""
+    from app.models import IncidentAudio
+
+    existing = db.scalar(select(IncidentAudio).where(IncidentAudio.incident_id == incident_id, IncidentAudio.report_id == report_id))
+    cipher = encrypt_field(data_b64, f"audio:{report_id}")
+    if existing is None:
+        db.add(IncidentAudio(incident_id=incident_id, report_id=report_id, mime=safe_audio_mime(mime), audio_ciphertext=cipher))
+    else:
+        existing.mime, existing.audio_ciphertext = safe_audio_mime(mime), cipher
+
+
+def load_audio(db: Session, incident_id: str, report_id: str) -> tuple[str, bytes] | None:
+    import base64
+
+    from app.models import IncidentAudio
+
+    row = db.scalar(select(IncidentAudio).where(IncidentAudio.incident_id == incident_id, IncidentAudio.report_id == report_id))
+    if row is None:
+        return None
+    return safe_audio_mime(row.mime), base64.b64decode(str(decrypt_field(row.audio_ciphertext, f"audio:{report_id}")))
+
+
+def list_audio(db: Session, incident_id: str) -> list[tuple[str, str]]:
+    """(report_id, mime) of every stored voice message of an incident."""
+    from app.models import IncidentAudio
+
+    rows = db.scalars(select(IncidentAudio).where(IncidentAudio.incident_id == incident_id).order_by(IncidentAudio.created_at)).all()
+    return [(r.report_id, r.mime) for r in rows]

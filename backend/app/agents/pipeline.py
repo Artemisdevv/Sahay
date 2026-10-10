@@ -22,7 +22,7 @@ from app.agents import pii as pii_agent
 from app.agents.llm import LLM, MockLLM, build_llm
 from app.agents.schemas import IntakeResult, PiiTag, TriageResult
 from app.agents.search import WebSearch, build_search
-from app.agents.store import store_pii
+from app.agents.store import store_pii, store_audio
 from app.agents.stt import Transcriber, build_transcriber
 from app.dispatch import engine
 from app.ingest import crypto
@@ -241,6 +241,12 @@ def run_pipeline(db: Session, report_id: str, agents: Agents | None = None) -> R
         "emergency_contact": contact or None,
         "pii_spans": [t.model_dump() for t in tags],
     })
+    if payload.get("audio"):
+        try:
+            base64.b64decode(payload["audio"]["data"], validate=True)
+            store_audio(db, incident.incident_id, report.report_id, payload["audio"].get("mime", ""), payload["audio"]["data"])
+        except (binascii.Error, ValueError, KeyError, TypeError):
+            pass  # unreadable audio was already reported by the transcribe step; the report itself is kept
     report.incident_id = incident.incident_id
     for action, agent_name, detail in (
         ("agent.intake", "intake_agent", {"incident_type": intake.incident_type, "severity": intake.severity, "fallback": fallback}),

@@ -52,6 +52,7 @@ import {
   reassignIncident,
   getAuditEntries,
   revealIncidentPii,
+  fetchIncidentAudio,
   verifyAuditChain,
   getPublicUnits,
   type AuditEntry,
@@ -66,6 +67,7 @@ import {
   type Unit,
 } from "@/lib/api";
 import { useDispatchWS, type WSEvent } from "@/hooks/use-dispatch-ws";
+import { useTranslation } from "react-i18next";
 
 function getStatusBadgeTone(status: Dispatch["status"]) {
   switch (status) {
@@ -122,6 +124,8 @@ function formatTraceTime(value: string | null) {
 }
 
 export function OperationsConsole({ serviceId }: { serviceId: string }) {
+  const { t: tService } = useTranslation("serviceConsole");
+  const { t: tShell } = useTranslation("shell");
   const fire = serviceId.includes("fire");
   const ambulance = serviceId.includes("ambulance");
   const police = serviceId.includes("police");
@@ -291,12 +295,12 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
   );
 
   const serviceLabel = fire
-    ? "Fire & rescue"
+    ? tService("fire_rescue")
     : ambulance
-    ? "Ambulance"
-    : police
-    ? "Police"
-    : "Hospital";
+      ? tService("ambulance_service")
+      : police
+        ? tService("police_service")
+        : tService("hospital_console");
   const serviceIcon = fire
     ? Flame
     : ambulance
@@ -312,19 +316,19 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
         ? "blue"
         : "hospital";
   const stationName = fire
-    ? "Metro Fire Station 4"
+    ? tService("station_04")
     : ambulance
-    ? "Ambulance Unit 1"
-    : police
-    ? "Police Unit 1"
-    : "City General Hospital";
+      ? tService("ems_station")
+      : police
+        ? tService("precinct_1")
+        : tService("hospital_01");
   const stationDetail = fire
-    ? "Station 04"
+    ? tService("station_04")
     : ambulance
-    ? "EMS Station"
-    : police
-    ? "Precinct 1"
-    : "Hospital 01";
+      ? tService("ems_station")
+      : police
+        ? tService("precinct_1")
+        : tService("hospital_01");
 
   return (
     <Shell
@@ -336,17 +340,17 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
       <div className="page-heading">
         <div>
           <div className="eyebrow">
-            First responder workspace · {stationDetail}
+            {tService("first_responder_workspace")} · {stationDetail}
           </div>
           <h1>{stationName}</h1>
           <p className="subtitle">
             {fire
-              ? "Dispatch intelligence and field resource coordination."
+              ? tService("dispatch_intelligence")
               : ambulance
-              ? "Emergency medical dispatch and patient transport coordination."
-              : police
-              ? "Law enforcement dispatch and field unit coordination."
-              : "Emergency intake, patient context, and critical care coordination."}
+                ? tService("emergency_intake")
+                : police
+                  ? "Law enforcement dispatch and field unit coordination."
+                  : tService("emergency_intake")}
           </p>
         </div>
         <Badge
@@ -361,39 +365,27 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
           }
         >
           <span className="dot" />
-          {wsConnected ? "Live" : "Receiving dispatches"}
+          {wsConnected ? tService("live") : tService("receiving_dispatches")}
         </Badge>
       </div>
       <div className="metrics">
         {[
           {
-            label: fire
-              ? "Active incidents"
-              : ambulance
-                ? "Active patients"
-                : police
-                  ? "Active calls"
-                  : "Active patients",
+            label: fire ? tService("active_dispatches") : ambulance ? tService("active_patients") : police ? tService("active_calls") : tService("active_patients"),
             value: String(activeDispatches.length).padStart(2, "0"),
-            note: loading ? "Loading..." : "From backend",
+            note: loading ? tService("realtime_backend") : tService("realtime_backend"),
             icon: Activity,
           },
           {
-            label: fire
-              ? "Available units"
-              : ambulance
-                ? "Available ambulances"
-                : police
-                  ? "Available units"
-                  : "Available critical beds",
+            label: fire ? tService("available_units_label") : ambulance ? tService("available_ambulances") : police ? tService("available_units") : tService("available_critical_beds"),
             value: String(capacity).padStart(2, "0"),
             note: fire
-              ? "Across Central District"
+              ? tService("across_central_district")
               : ambulance
-              ? "Across EMS network"
-              : police
-              ? "Across precinct"
-              : "24 total critical care beds",
+                ? tService("across_ems_network")
+                : police
+                  ? tService("across_precinct")
+                  : tService("critical_beds_total"),
             icon: fire
               ? Flame
               : ambulance
@@ -403,15 +395,15 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                   : BedDouble,
           },
           {
-            label: "Pending dispatches",
+            label: tService("pending_dispatches"),
             value: String(proposedDispatches.length).padStart(2, "0"),
-            note: "Awaiting response",
+            note: tService("awaiting_response"),
             icon: Clock3,
           },
           {
-            label: "Agent coordination",
-            value: wsConnected ? "Online" : "Connecting...",
-            note: wsConnected ? "WebSocket connected" : "Reconnecting...",
+            label: tService("agent_coordination"),
+            value: wsConnected ? tService("websocket_connected") : tService("reconnecting"),
+            note: wsConnected ? tService("websocket_connected") : tService("reconnecting"),
             icon: Network,
           },
         ].map((m) => (
@@ -438,7 +430,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
           }}
         >
           <SlidersHorizontal />
-          Update Capacity
+          {tService("update_capacity")}
         </Button>
       </div>
       <section className="panel mb-6">
@@ -470,23 +462,22 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                     <HeartPulse className="text-hospital" />
                   )}
                   {fire
-                    ? "Pending dispatches"
+                    ? tService("pending_dispatches_title")
                     : ambulance
-                    ? "Incoming patient dispatches"
-                    : police
-                    ? "Incoming police dispatches"
-                    : "Incoming patient dispatches"}
+                      ? tService("incoming_patient_dispatches")
+                      : police
+                        ? tService("incoming_police_dispatches")
+                        : tService("incoming_patient_dispatches")}
                 </h2>
                 <p>
-                  Real-time from backend · {proposedDispatches.length} awaiting
-                  response
+                  {tService("real_time_backend")} · {proposedDispatches.length} {tService("awaiting_response")}
                 </p>
               </div>
               <Badge tone={proposedDispatches.length > 0 ? "rose" : "green"}>
                 <span className="dot" />
                 {proposedDispatches.length > 0
-                  ? "Action required"
-                  : "All clear"}
+                  ? tService("action_required")
+                  : tService("all_clear")}
               </Badge>
             </div>
             {loading ? (
@@ -495,7 +486,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
               </div>
             ) : proposedDispatches.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">
-                No pending dispatches
+                {tService("no_pending_dispatches")}
               </p>
             ) : (
               proposedDispatches.map((d) => (
@@ -503,31 +494,31 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                   <div className="patient-top">
                     <h3>
                       {fire
-                        ? `Fire: ${d.incident_id.slice(0, 8)}`
+                        ? `${tService("fire_rescue")}: ${d.incident_id.slice(0, 8)}`
                         : ambulance
-                        ? `EMS: ${d.incident_id.slice(0, 8)}`
-                        : police
-                        ? `Police: ${d.incident_id.slice(0, 8)}`
-                        : `EMS: ${d.incident_id.slice(0, 8)}`}
+                          ? `${tService("ambulance_service")}: ${d.incident_id.slice(0, 8)}`
+                          : police
+                            ? `${tService("police_service")}: ${d.incident_id.slice(0, 8)}`
+                            : `${tService("ambulance_service")}: ${d.incident_id.slice(0, 8)}`}
                     </h3>
                     <Badge tone={getStatusBadgeTone(d.status)}>
                       {getStatusLabel(d.status)}
                     </Badge>
                   </div>
                   <p>
-                    Distance: {d.distance_km} km · ETA: {d.eta_minutes} min ·
-                    Type: {d.service_type}
+                    {tService("distance")}: {d.distance_km} {tService("distance_km")} · {tService("eta")}: {d.eta_minutes} {tService("eta_min")} ·
+                    {tService("type")}: {d.service_type}
                   </p>
                   <div className="patient-meta">
                     <span className="mono">{d.dispatch_id.slice(0, 12)}</span>
-                    <span>Proposed by: {d.proposed_by}</span>
+                    <span>{tService("proposed_by")}: {d.proposed_by}</span>
                     <div className="flex gap-2 ml-auto">
                       <Button
                         size="sm"
                         onClick={() => handleAccept(d.dispatch_id)}
                       >
                         <Check className="h-3 w-3" />
-                        Accept
+                        {tService("accept")}
                       </Button>
                       <Button
                         size="sm"
@@ -535,7 +526,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                         onClick={() => handleDecline(d.dispatch_id)}
                       >
                         <X className="h-3 w-3" />
-                        Decline
+                        {tService("decline")}
                       </Button>
                     </div>
                   </div>
@@ -548,9 +539,9 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
               <div className="panel-head compact-head">
                 <h2>
                   <Database className="text-hospital" />
-                  Active dispatches
+                  {tService("active_dispatches_title")}
                 </h2>
-                <Badge tone="sky">{activeDispatches.length} in progress</Badge>
+                <Badge tone="sky">{activeDispatches.length} {tService("in_progress")}</Badge>
               </div>
               <div className="space-y-3">
                 {activeDispatches.map((d) => {
@@ -560,24 +551,23 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                       <div className="patient-top">
                         <h3>
                           {fire
-                            ? `Fire: ${d.incident_id.slice(0, 8)}`
+                            ? `${tService("fire_rescue")}: ${d.incident_id.slice(0, 8)}`
                             : ambulance
-                            ? `EMS: ${d.incident_id.slice(0, 8)}`
-                            : police
-                            ? `Police: ${d.incident_id.slice(0, 8)}`
-                            : `EMS: ${d.incident_id.slice(0, 8)}`}
+                              ? `${tService("ambulance_service")}: ${d.incident_id.slice(0, 8)}`
+                              : police
+                                ? `${tService("police_service")}: ${d.incident_id.slice(0, 8)}`
+                                : `${tService("ambulance_service")}: ${d.incident_id.slice(0, 8)}`}
                         </h3>
                         <Badge tone={getStatusBadgeTone(d.status)}>
                           {getStatusLabel(d.status)}
                         </Badge>
                       </div>
                       <p>
-                        Unit: {d.unit_id.slice(0, 8)} · Distance:{" "}
-                        {d.distance_km} km
+                        {tService("unit")}: {d.unit_id.slice(0, 8)} · {tService("distance")}: {d.distance_km} {tService("distance_km")}
                       </p>
                       {callInfo && callInfo.serviceType === d.service_type && (
                         <div className="call-countdown mb-2 p-2 bg-muted rounded text-sm">
-                          <strong>Calling {callInfo.serviceType} units:</strong>
+                          <strong>{tService("calling_units")} {callInfo.serviceType} {tService("units")}:</strong>
                           {callInfo.candidates.map((c) => (
                             <div
                               key={c.unitId}
@@ -586,17 +576,17 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                               <span className="mono">#{c.rank}</span>
                               <span>{c.name}</span>
                               <span className="text-muted-foreground">
-                                {c.distanceKm} km · {c.etaMinutes} min
+                                {c.distanceKm} {tService("distance_km")} · {c.etaMinutes} {tService("eta_min")}
                               </span>
                               <Badge
                                 tone={
                                   c.state === "calling"
                                     ? "amber"
                                     : c.state === "accepted"
-                                    ? "green"
-                                    : c.state === "declined"
-                                    ? "rose"
-                                    : "gray"
+                                      ? "green"
+                                      : c.state === "declined"
+                                        ? "rose"
+                                        : "gray"
                                 }
                               >
                                 {c.state}
@@ -610,7 +600,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                           {d.dispatch_id.slice(0, 12)}
                         </span>
                         <span>
-                          Updated: {new Date(d.updated_at).toLocaleTimeString()}
+                          {tService("updated")}: {new Date(d.updated_at).toLocaleTimeString()}
                         </span>
                         {d.status === "accepted" && (
                           <Button
@@ -624,7 +614,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                             {updatingDispatchIds.has(d.dispatch_id) ? (
                               <Loader2 className="h-3 w-3 animate-spin" />
                             ) : (
-                              "En route"
+                              tService("en_route")
                             )}
                           </Button>
                         )}
@@ -640,7 +630,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                             {updatingDispatchIds.has(d.dispatch_id) ? (
                               <Loader2 className="h-3 w-3 animate-spin" />
                             ) : (
-                              "On scene"
+                              tService("on_scene")
                             )}
                           </Button>
                         )}
@@ -657,7 +647,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                             ) : (
                               <>
                                 <Check className="h-3 w-3" />
-                                Complete
+                                {tService("complete")}
                               </>
                             )}
                           </Button>
@@ -674,24 +664,24 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
               <h2>
                 <Database className="text-hospital" />
                 {fire
-                  ? "Field agent incident briefing"
+                  ? tService("field_agent_briefing")
                   : ambulance
-                  ? "EMS dispatch briefing"
-                  : police
-                  ? "Police dispatch briefing"
-                  : "RAG-assisted trauma briefing"}
+                    ? tService("ems_dispatch_briefing")
+                    : police
+                      ? tService("police_dispatch_briefing")
+                      : tService("rag_trauma_briefing")}
               </h2>
-              <Badge tone="sky">Context retrieved</Badge>
+              <Badge tone="sky">{tService("context_retrieved")}</Badge>
             </div>
             <div className="briefing">
               <strong>RESOURCE MEMORY · FIELD AGENT CONTEXT</strong>
               {fire
                 ? "Market Street incident: residential structure, 4 floors. Entry from north gate; flammable materials reported. Rescue priority on floor 3. Joint EMS staging recommended on adjacent street."
                 : ambulance
-                ? "Patient context matches prior asthma history. Known allergy: Penicillin. Current medication: Albuterol inhaler. No implanted devices. Field triage suggests respiratory distress; respiratory team and critical care bed should be prepared."
-                : police
-                ? "Suspect vehicle last seen heading north on Main St. Registered to known associate. Caution advised. Backup units positioned at intersection of 5th and Oak."
-                : "Patient context matches prior asthma history. Known allergy: Penicillin. Current medication: Albuterol inhaler. No implanted devices. Field triage suggests respiratory distress; respiratory team and critical care bed should be prepared."}
+                  ? "Patient context matches prior asthma history. Known allergy: Penicillin. Current medication: Albuterol inhaler. No implanted devices. Field triage suggests respiratory distress; respiratory team and critical care bed should be prepared."
+                  : police
+                    ? "Suspect vehicle last seen heading north on Main St. Registered to known associate. Caution advised. Backup units positioned at intersection of 5th and Oak."
+                    : "Patient context matches prior asthma history. Known allergy: Penicillin. Current medication: Albuterol inhaler. No implanted devices. Field triage suggests respiratory distress; respiratory team and critical care bed should be prepared."}
               <p className="text-muted-foreground mt-3 text-[10px]">
                 Demonstration briefing · Human clinical / field review required
               </p>
@@ -712,14 +702,14 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                   <BedDouble />
                 )}
                 {fire
-                  ? "Unit availability"
+                  ? tService("unit_availability")
                   : ambulance
-                  ? "Ambulance availability"
-                  : police
-                  ? "Unit availability"
-                  : "Critical care capacity"}
+                    ? tService("unit_availability")
+                    : police
+                      ? tService("unit_availability")
+                      : tService("critical_care_capacity")}
               </h2>
-              <Badge tone="green">{capacity} available</Badge>
+              <Badge tone="green">{capacity} {tService("available")}</Badge>
             </div>
             {fire || ambulance || police ? (
               <>
@@ -728,14 +718,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                     fire
                       ? u.service_type === "fire"
                       : ambulance
-                      ? u.service_type === "ambulance"
+                        ? u.service_type === "ambulance"
                         : u.service_type === "police",
                   );
-                  const serviceLabel = fire
-                    ? "Fire unit"
-                    : ambulance
-                      ? "Ambulance unit"
-                      : "Police unit";
+                  const serviceLabel = fire ? tService("fire_rescue") + " " + tService("unit") : ambulance ? tService("ambulance_service") + " " + tService("unit") : tService("police_service") + " " + tService("unit");
                   return (
                     <>
                       {filteredPublicUnits.map((u, idx) => (
@@ -752,12 +738,12 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                               u.status === "available"
                                 ? "green"
                                 : u.status === "assigned"
-                                ? "amber"
-                                : u.status === "en_route"
-                                ? "sky"
-                                : u.status === "on_scene"
-                                ? "violet"
-                                : "gray"
+                                  ? "amber"
+                                  : u.status === "en_route"
+                                    ? "sky"
+                                    : u.status === "on_scene"
+                                      ? "violet"
+                                      : "gray"
                             }
                           >
                             {u.status.replace("_", " ")}
@@ -776,9 +762,9 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
             ) : (
               <div className="compact-body">
                 <div className="flex justify-between text-[11px]">
-                  <strong>{24 - capacity} / 24 beds occupied</strong>
+                  <strong>{24 - capacity} / 24 {tService("beds_occupied")}</strong>
                   <span className="text-muted-foreground">
-                    {Math.round(((24 - capacity) / 24) * 100)}% occupancy
+                    {Math.round(((24 - capacity) / 24) * 100)}% {tService("occupancy")}
                   </span>
                 </div>
                 <div className="capacity">
@@ -802,7 +788,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
             <div className="panel-head compact-head">
               <h2>
                 <Terminal />
-                Autonomous Agent Logs
+                {tService("autonomous_agent_logs")}
               </h2>
               <Button
                 variant="ghost"
@@ -816,29 +802,28 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
             {logs && (
               <div className="logs">
                 <p>
-                  <span>07:06:12</span> Context lookup complete
+                  <span>07:06:12</span> {tService("context_lookup")}
                 </p>
                 <p>
-                  <span>07:06:13</span> TriageAgent: priority P1
+                  <span>07:06:13</span> {tService("triage_priority")}
                 </p>
                 <p>
-                  <span>07:06:14</span> Route availability resolved
+                  <span>07:06:14</span> {tService("route_resolved")}
                 </p>
                 <p>
-                  <span>07:06:15</span> {fire ? "Engine 3" : "Ambulance #12"}{" "}
-                  assigned
+                  <span>07:06:15</span> {fire ? tService("engine_assigned") : tService("ambulance_assigned")}
                 </p>
                 <p>
-                  <span>07:06:16</span> Facility alert delivered
+                  <span>07:06:16</span> {tService("facility_alert")}
                 </p>
                 {ack && (
                   <p>
-                    <span>07:06:18</span> Operator acknowledged
+                    <span>07:06:18</span> {tService("operator_acknowledged")}
                   </p>
                 )}
                 {rerouted && (
                   <p>
-                    <span>07:06:20</span> Fleet route updated
+                    <span>07:06:20</span> {tService("fleet_route_updated")}
                   </p>
                 )}
               </div>
@@ -849,13 +834,13 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
       <Dialog open={capacityOpen} onOpenChange={setCapacityOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Update {fire ? "unit" : "bed"} capacity</DialogTitle>
+            <DialogTitle>{tService("update_unit_capacity")}</DialogTitle>
             <DialogDescription>
               Update available resources in this simulation.
             </DialogDescription>
           </DialogHeader>
           <label className="field">
-            Available {fire ? "units" : "critical care beds"}
+            Available {fire ? tService("units") : tService("critical_care_beds")}
             <input
               type="number"
               min={0}
@@ -872,7 +857,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
             onClick={() => {
               setCapacity(nextCapacity);
               setCapacityOpen(false);
-              toast.success("Demo capacity updated");
+              toast.success(tService("demo_capacity_updated"));
             }}
           >
             <Check />
@@ -884,6 +869,8 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
   );
 }
 export function AdminDashboard() {
+  const { t: tAdmin } = useTranslation("admin");
+  const { t: tShell } = useTranslation("shell");
   const [intervene, setIntervene] = useState(false);
   const [auditFilter, setAuditFilter] = useState("All");
   const [selected, setSelected] = useState<string | null>(null);
@@ -983,25 +970,25 @@ export function AdminDashboard() {
       getUnits(session.token),
     ]).then(
       ([incidentResult, auditResult, verificationResult, unitsResult]) => {
-      if (cancelled) return;
-      if (incidentResult.status === "fulfilled") {
-        setIncidents(incidentResult.value.incidents);
-      } else {
-        setIncidentLoadError("Incident data could not be loaded.");
-        toast.error("Failed to load incidents");
-      }
-      if (auditResult.status === "fulfilled") {
-        setAudit(auditResult.value.entries);
-      } else {
-        toast.error("Failed to load audit entries");
-      }
-      if (verificationResult.status === "fulfilled") {
-        setAuditVerified(verificationResult.value.valid);
-      }
+        if (cancelled) return;
+        if (incidentResult.status === "fulfilled") {
+          setIncidents(incidentResult.value.incidents);
+        } else {
+          setIncidentLoadError("Incident data could not be loaded.");
+          toast.error("Failed to load incidents");
+        }
+        if (auditResult.status === "fulfilled") {
+          setAudit(auditResult.value.entries);
+        } else {
+          toast.error("Failed to load audit entries");
+        }
+        if (verificationResult.status === "fulfilled") {
+          setAuditVerified(verificationResult.value.valid);
+        }
         if (unitsResult.status === "fulfilled") {
           setAdminUnits(unitsResult.value.units);
         }
-      setAdminDataLoading(false);
+        setAdminDataLoading(false);
       },
     );
 
@@ -1366,9 +1353,9 @@ export function AdminDashboard() {
               <div>
                 <h2>
                   <Terminal />
-                  System audit stream
+                  {tAdmin("system_audit_stream")}
                 </h2>
-                <p>Autonomous decisions & network events</p>
+                <p>{tAdmin("autonomous_decisions")}</p>
               </div>
               <Badge
                 tone={
@@ -1380,12 +1367,12 @@ export function AdminDashboard() {
                 }
               >
                 {auditVerified === true
-                  ? "Chain verified"
+                  ? tAdmin("chain_verified")
                   : auditVerified === false
-                    ? "Chain invalid"
+                    ? tAdmin("chain_invalid")
                     : adminDataLoading
-                      ? "Verifying chain…"
-                      : "Chain unverified"}
+                      ? tAdmin("verifying_chain")
+                      : tAdmin("chain_unverified")}
               </Badge>
               <div className="audit-filters">
                 {["All", "Auth", "Dispatch", "PII", "Other"].map((s) => (
@@ -1395,7 +1382,7 @@ export function AdminDashboard() {
                     aria-pressed={auditFilter === s}
                     onClick={() => setAuditFilter(s)}
                   >
-                    {s}
+                    {tAdmin(`audit_categories.${s.toLowerCase()}`) || s}
                   </Button>
                 ))}
               </div>
@@ -1405,15 +1392,14 @@ export function AdminDashboard() {
                 <span className="mono">Now</span>
                 <Badge tone="amber">Override</Badge>
                 <span>
-                  Human review activated. New autonomous dispatches paused in
-                  demo.
+                  {tAdmin("override_active")}
                 </span>
               </div>
             )}
             {adminDataLoading ? (
-              <div className="audit-row">Loading audit entries…</div>
+              <div className="audit-row">{tAdmin("loading_audit")}</div>
             ) : audit.length === 0 ? (
-              <div className="audit-row">No audit entries yet.</div>
+              <div className="audit-row">{tAdmin("no_audit_entries")}</div>
             ) : (
               audit
                 .slice()
@@ -1457,20 +1443,19 @@ export function AdminDashboard() {
               <div>
                 <h2>
                   <ShieldCheck className="text-primary" />
-                  Incident response
+                  {tAdmin("pii_reveal_audit")}
                 </h2>
                 <p>
-                  Review agent traces and proposed dispatches. Revealing report
-                  details remains an audited admin action.
+                  {tAdmin("decrypt_incident_pii")}
                 </p>
               </div>
-              <Badge tone="amber">Admin only</Badge>
+              <Badge tone="amber">{tAdmin("admin_only")}</Badge>
             </div>
             <div className="space-y-3">
               {adminDataLoading ? (
-                <p className="text-muted-foreground">Loading incidents…</p>
+                <p className="text-muted-foreground">{tAdmin("loading_incidents")}</p>
               ) : incidents.length === 0 ? (
-                <p className="text-muted-foreground">No incidents available.</p>
+                <p className="text-muted-foreground">{tAdmin("no_incidents")}</p>
               ) : (
                 incidents.map((inc) => {
                   const panel = incidentPanelData[inc.incident_id];
@@ -1485,24 +1470,24 @@ export function AdminDashboard() {
                   );
                   const isExpanded = expandedIncidentId === inc.incident_id;
                   return (
-                  <div key={inc.incident_id} className="patient">
-                    <div className="patient-top">
-                      <h3>{inc.summary_redacted || inc.incident_type}</h3>
-                      <Badge
-                        tone={
-                          inc.status === "resolved" ||
-                          inc.status === "completed"
-                            ? "green"
-                            : inc.status === "dispatched"
-                              ? "blue"
-                              : "rose"
-                        }
-                      >
-                        {inc.status}
-                      </Badge>
-                    </div>
-                    <p className="mono text-xs">{inc.incident_id}</p>
-                    <div className="patient-meta">
+                    <div key={inc.incident_id} className="patient">
+                      <div className="patient-top">
+                        <h3>{inc.summary_redacted || inc.incident_type}</h3>
+                        <Badge
+                          tone={
+                            inc.status === "resolved" ||
+                            inc.status === "completed"
+                              ? "green"
+                              : inc.status === "dispatched"
+                                ? "blue"
+                                : "rose"
+                          }
+                        >
+                          {inc.status}
+                        </Badge>
+                      </div>
+                      <p className="mono text-xs">{inc.incident_id}</p>
+                      <div className="patient-meta">
                         <Button
                           size="sm"
                           variant="secondary"
@@ -1512,20 +1497,20 @@ export function AdminDashboard() {
                         >
                           {isExpanded ? "Hide response" : "Review response"}
                         </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => handleRevealPii(inc.incident_id)}
-                        disabled={piiLoading}
-                      >
+                        <Button
+                          size="sm"
+                          onClick={() => handleRevealPii(inc.incident_id)}
+                          disabled={piiLoading}
+                        >
                           {piiLoading &&
                           selectedIncident === inc.incident_id ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <ShieldCheck className="h-3 w-3" />
-                        )}
-                        Reveal PII
-                      </Button>
-                    </div>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <ShieldCheck className="h-3 w-3" />
+                          )}
+                          {tAdmin("reveal_pii")}
+                        </Button>
+                      </div>
                       {isExpanded && (
                         <div className="incident-workflow">
                           {incidentPanelLoading === inc.incident_id ? (
@@ -1570,10 +1555,14 @@ export function AdminDashboard() {
                                         </div>
                                       );
                                     })}
-                  </div>
+                                  </div>
                                 )}
-                                <h4 className="mt-4">Calling nearby services</h4>
-                                <ResponseTimeline lists={panel?.callLists ?? []} />
+                                <h4 className="mt-4">
+                                  Calling nearby services
+                                </h4>
+                                <ResponseTimeline
+                                  lists={panel?.callLists ?? []}
+                                />
                                 <div className="incident-response-controls">
                                   <Button
                                     size="sm"
@@ -1745,28 +1734,28 @@ export function AdminDashboard() {
             <div className="panel-head compact-head">
               <h2>
                 <Activity className="text-orchestrator" />
-                Pipeline health
+                {tAdmin("pipeline_health")}
               </h2>
               <Badge tone="green">Healthy</Badge>
             </div>
             <div className="compact-body">
               <div className="section-label">
-                RAG retrieval latency <strong className="mono">18 ms</strong>
+                {tAdmin("rag_latency")} <strong className="mono">18 ms</strong>
               </div>
               <div className="progress-track">
                 <div className="progress-fill" />
               </div>
               <div className="section-label">
-                Context window utilization<strong className="mono">42%</strong>
+                {tAdmin("context_utilization")}<strong className="mono">42%</strong>
               </div>
               <div className="progress-track">
                 <div className="progress-fill violet" />
               </div>
               <div className="section-label">
-                Queue depth<strong className="mono">03 tasks</strong>
+                {tAdmin("queue_depth")}<strong className="mono">03 tasks</strong>
               </div>
               <div className="section-label mt-5">
-                Error rate<strong className="text-primary mono">0.02%</strong>
+                {tAdmin("error_rate")}<strong className="text-primary mono">0.02%</strong>
               </div>
             </div>
           </section>
@@ -1774,32 +1763,32 @@ export function AdminDashboard() {
             <div className="panel-head compact-head">
               <h2>
                 <Database />
-                Vector store status
+                {tAdmin("vector_store_status")}
               </h2>
               <span className="dot" />
             </div>
             <div className="compact-body">
               <div className="profile-summary">
                 <div>
-                  <small>CONTEXT RECORDS</small>
+                  <small>{tAdmin("context_records")}</small>
                   <strong>24,816</strong>
                 </div>
                 <div>
-                  <small>DIMENSIONS</small>
+                  <small>{tAdmin("dimensions")}</small>
                   <strong>1,536</strong>
                 </div>
                 <div>
-                  <small>INDEX HEALTH</small>
-                  <strong className="text-primary">Optimal</strong>
+                  <small>{tAdmin("index_health")}</small>
+                  <strong className="text-primary">{tAdmin("optimal")}</strong>
                 </div>
                 <div>
-                  <small>LAST SYNC</small>
-                  <strong>12 seconds ago</strong>
+                  <small>{tAdmin("last_sync")}</small>
+                  <strong>12 {tAdmin("seconds_ago")}</strong>
                 </div>
               </div>
               <Badge tone="green">
                 <ShieldCheck size={11} />
-                Consent-controlled retrieval
+                {tAdmin("consent_controlled")}
               </Badge>
             </div>
           </section>
@@ -1807,13 +1796,13 @@ export function AdminDashboard() {
             <div className="panel-head compact-head">
               <h2>
                 <Users />
-                Human-in-the-loop
+                {tAdmin("human_in_the_loop")}
               </h2>
             </div>
             <div className="compact-body">
               <div className="flex justify-between items-center gap-3">
                 <strong className="text-[11px]">
-                  Human-in-the-Loop Intervene
+                  {tAdmin("human_intervene")}
                 </strong>
                 <Switch
                   checked={intervene}
@@ -1821,8 +1810,8 @@ export function AdminDashboard() {
                     setIntervene(v);
                     toast(
                       v
-                        ? "Human review activated in demo"
-                        : "Autonomous review resumed in demo",
+                        ? tAdmin("human_review_activated")
+                        : tAdmin("autonomous_resumed"),
                     );
                   }}
                   aria-label="Human-in-the-Loop Intervene"
@@ -1830,11 +1819,11 @@ export function AdminDashboard() {
               </div>
               <p className="subtitle text-[10px]">
                 {intervene
-                  ? "Human review required. Simulated autonomous dispatch is paused."
-                  : "Autonomous decisions monitored. Human oversight on standby."}
+                  ? tAdmin("human_review_required")
+                  : tAdmin("autonomous_monitored")}
               </p>
               <Badge tone={intervene ? "amber" : "green"}>
-                {intervene ? "Manual review active" : "Autonomous mode"}
+                {intervene ? tAdmin("manual_review_active") : tAdmin("autonomous_mode")}
               </Badge>
             </div>
           </section>
@@ -1850,7 +1839,7 @@ export function AdminDashboard() {
           <DialogHeader>
             <DialogTitle>{selected}</DialogTitle>
             <DialogDescription>
-              Agent operational detail · Demonstration data
+              {tAdmin("agent_detail")}
             </DialogDescription>
           </DialogHeader>
           {agents
@@ -1860,20 +1849,20 @@ export function AdminDashboard() {
                 <Badge tone="green">Operational</Badge>
                 <div className="profile-summary mt-6">
                   <div>
-                    <small>RESPONSIBILITY</small>
+                    <small>{tAdmin("responsibility")}</small>
                     <strong>{a.role}</strong>
                   </div>
                   <div>
-                    <small>LATENCY</small>
+                    <small>{tAdmin("latency")}</small>
                     <strong>{a.latency}</strong>
                   </div>
                   <div>
-                    <small>WORKFLOWS COMPLETED</small>
+                    <small>{tAdmin("workflows_completed")}</small>
                     <strong>{a.work}</strong>
                   </div>
                   <div>
-                    <small>OVERSIGHT</small>
-                    <strong>{intervene ? "Human review" : "Autonomous"}</strong>
+                    <small>{tAdmin("oversight")}</small>
+                    <strong>{intervene ? tAdmin("human_review") : tAdmin("autonomous_mode")}</strong>
                   </div>
                 </div>
               </div>
@@ -1884,12 +1873,12 @@ export function AdminDashboard() {
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              PII Reveal · {selectedIncident?.slice(0, 12)}
+              {tAdmin("pII_reveal")} · {selectedIncident?.slice(0, 12)}
             </DialogTitle>
             <DialogDescription>
               {piiData
-                ? "Access was recorded in the audit chain."
-                : "Enter the required reason to record and reveal incident PII."}
+                ? tAdmin("access_recorded")
+                : tAdmin("enter_reason")}
             </DialogDescription>
           </DialogHeader>
           {piiLoading ? (
@@ -1909,10 +1898,10 @@ export function AdminDashboard() {
                   }
                 >
                   {auditVerified === null
-                    ? "Not verified"
+                    ? tAdmin("not_verified")
                     : auditVerified
-                      ? "Chain valid ✓"
-                      : "Chain INVALID ✗"}
+                      ? tAdmin("chain_valid")
+                      : tAdmin("chain_invalid_symbol")}
                 </Badge>
                 <Button
                   size="sm"
@@ -1925,35 +1914,35 @@ export function AdminDashboard() {
                   ) : (
                     <ShieldCheck className="h-3 w-3" />
                   )}
-                  Verify Audit Chain
+                  {tAdmin("verify_audit_chain")}
                 </Button>
               </div>
               <div className="border rounded p-4 bg-muted/30 max-h-96 overflow-y-auto">
                 <div className="space-y-3 text-sm">
                   <div>
-                    <strong>Transcript:</strong>
+                    <strong>{tAdmin("transcript")}</strong>
                     <p className="mt-1 font-mono text-xs whitespace-pre-wrap">
                       {piiData.transcript}
                     </p>
                   </div>
                   <div>
-                    <strong>Reporters:</strong>
+                    <strong>{tAdmin("reporters")}</strong>
                     <ul className="mt-1 space-y-1">
                       {piiData.reporters.map((r) => (
                         <li key={r.report_id} className="font-mono text-xs">
-                          {r.name || "Name not provided"} ·{" "}
+                          {r.name || tAdmin("name_not_provided")} ·{" "}
                           {formatPhone(r.phone)} · {r.language}
                           <br />
-                          Emergency:{" "}
+                          {tAdmin("emergency_contact")}:{" "}
                           {r.emergency_contact?.name ||
-                            "Name not provided"} ·{" "}
+                            tAdmin("name_not_provided")} ·{" "}
                           {formatPhone(r.emergency_contact?.phone ?? null)}
                         </li>
                       ))}
                     </ul>
                   </div>
                   <div>
-                    <strong>PII Spans:</strong>
+                    <strong>{tAdmin("pii_spans")}</strong>
                     <ul className="mt-1 space-y-1">
                       {piiData.pii_spans.map((s, i) => (
                         <li key={i} className="font-mono text-xs">
@@ -1963,16 +1952,25 @@ export function AdminDashboard() {
                     </ul>
                   </div>
                   <div>
-                    <strong>Audio:</strong>
-                    <p className="mt-1 font-mono text-xs">
-                      {piiData.audio_url || "Not provided"}
-                    </p>
+                    <strong>{tAdmin("audio")}</strong>
+                    {piiData.audio && piiData.audio.length > 0 ? (
+                      <div className="mt-1 space-y-2">
+                        {piiData.audio.map((a, i) => (
+                          <OriginalAudio
+                            key={a.report_id}
+                            url={a.url}
+                            label={`Original voice message ${piiData.audio!.length > 1 ? i + 1 : ""}`.trim()}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1 font-mono text-xs">{tAdmin("not_provided")}</p>
+                    )}
                   </div>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                This action has been logged to the audit chain. PII access
-                requires admin role.
+                {tAdmin("logged_to_audit")}
               </p>
             </div>
           ) : (
@@ -1981,14 +1979,14 @@ export function AdminDashboard() {
                 className="block space-y-2 text-sm"
                 htmlFor="pii-reveal-reason"
               >
-                Reason for access (required)
+                {tAdmin("reason_required")}
                 <Input
                   id="pii-reveal-reason"
                   value={revealReason}
                   onChange={(event) => setRevealReason(event.target.value)}
                   maxLength={250}
                   autoComplete="off"
-                  placeholder="Explain why this incident’s PII is needed"
+                  placeholder={tAdmin("explain_why")}
                   disabled={piiLoading}
                 />
               </label>
@@ -2001,12 +1999,63 @@ export function AdminDashboard() {
                 onClick={submitPiiReveal}
                 disabled={piiLoading || !revealReason.trim()}
               >
-                Reveal PII and record access
+                {tAdmin("reveal_pii_record")}
               </Button>
             </div>
           )}
         </DialogContent>
       </Dialog>
     </Shell>
+  );
+}
+
+/** Loads one original voice message on demand (the server checks the reveal and audits the play) and plays it. */
+function OriginalAudio({ url, label }: { url: string; label: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const [message, setMessage] = useState("");
+  useEffect(() => () => void (src && URL.revokeObjectURL(src)), [src]);
+  async function load() {
+    const session = getSession();
+    if (!session?.token) return;
+    setState("loading");
+    try {
+      const blob = await fetchIncidentAudio(url, session.token);
+      setSrc(URL.createObjectURL(blob));
+      setState("idle");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not load the audio");
+      setState("error");
+    }
+  }
+  return (
+    <div>
+      {src ? (
+        <audio
+          controls
+          autoPlay
+          src={src}
+          className="w-full"
+          aria-label={label}
+        />
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void load()}
+          disabled={state === "loading"}
+        >
+          {state === "loading" ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : null}
+          Play {label.toLowerCase()}
+        </Button>
+      )}
+      {state === "error" && (
+        <p className="mt-1 text-xs text-destructive" role="alert">
+          {message}
+        </p>
+      )}
+    </div>
   );
 }

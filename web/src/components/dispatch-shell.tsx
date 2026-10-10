@@ -18,14 +18,17 @@ import { toast } from "sonner";
 import { clearSession } from "@/lib/session";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { IncidentMap } from "./incident-map";
+import { LanguageSelector } from "./language-selector";
+import { useTranslation } from "react-i18next";
 
 export function Brand() {
+  const { t } = useTranslation("shell");
   return (
     <div className="brand">
       <div className="brand-title">
         sahay<span className="text-primary">.</span>
       </div>
-      <div className="brand-subtitle">Help that finds a way</div>
+      <div className="brand-subtitle">{t("brand_subtitle")}</div>
     </div>
   );
 }
@@ -93,6 +96,7 @@ export function Shell({
   const navigate = useNavigate();
   const reduced = useReducedMotion();
   const staff = role !== "citizen";
+  const { t } = useTranslation("shell");
   const signOut = () => {
     clearSession();
     void navigate({ to: "/login" });
@@ -203,7 +207,7 @@ export function Shell({
           <Building2 size={16} />
           <div>
             <strong>Kochi</strong>
-            <small>City response network</small>
+            <small>{t("workspace")}</small>
           </div>
         </div>
         <nav aria-label="Main navigation" className="side-nav">
@@ -243,7 +247,7 @@ export function Shell({
             onClick={SUPPORT_TOAST}
           >
             <CircleHelp />
-            Help
+            {t("help")}
           </Button>
           <Button
             variant="ghost"
@@ -251,7 +255,7 @@ export function Shell({
             onClick={signOut}
           >
             <LogOut />
-            Sign out
+            {t("sign_out")}
           </Button>
         </div>
       </aside>
@@ -264,11 +268,12 @@ export function Shell({
               Kochi, Kerala
             </span>
             <Badge tone="amber">Demo</Badge>
+            <LanguageSelector />
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Notifications"
-              onClick={() => toast("No new notifications")}
+              aria-label={t("notifications", { defaultValue: "Notifications" })}
+              onClick={() => toast(t("no_new_notifications", { defaultValue: "No new notifications" }))}
             >
               <Bell size={18} />
             </Button>
