@@ -1134,28 +1134,28 @@ export function AdminDashboard() {
 
   const agents = [
     {
-      name: "TriageAgent-01",
+      name: "Triage Agent - 01",
       role: i18n.t("ops.roleTriage"),
       icon: HeartPulse,
       latency: "42 ms",
       work: "1,842",
     },
     {
-      name: "DispatchRouter-v2",
+      name: "Dispatch Router v2",
       role: i18n.t("ops.roleDispatch"),
       icon: Network,
       latency: "28 ms",
       work: "1,796",
     },
     {
-      name: "ResourceMemory-RAG",
+      name: "Resource Memory - RAG",
       role: i18n.t("ops.roleMemory"),
       icon: Database,
       latency: "18 ms",
       work: "3,104",
     },
     {
-      name: "NotificationBot",
+      name: "Notification Bot",
       role: "Cross-channel delivery",
       icon: Bot,
       latency: "12 ms",
