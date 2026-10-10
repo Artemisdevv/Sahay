@@ -999,7 +999,7 @@ function Progress({
       ? "Help is on the way"
       : item.state === "sent"
         ? "Your request was sent"
-        : "Saved on your phone";
+        : "Saved on your device";
   const viaRelay = item.via === "relay";
   const acceptedService = responseCalls.find((service) =>
     service.candidates.some((candidate) => candidate.state === "accepted"),
@@ -1025,7 +1025,7 @@ function Progress({
                 ? "A nearby phone can pass it on. You do not need to do anything."
                 : "It will be sent as soon as there is a connection or a nearby phone. You do not need to do anything.";
   const labels = [
-    "Saved on your phone",
+    "Saved on your device",
     viaRelay
       ? "Delivered through a nearby phone"
       : "Sent to the response centre",
