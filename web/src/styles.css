@@ -2262,6 +2262,8 @@ h1 {
   gap: 12px;
 }
 .cz-choice {
+  --choice-color: var(--primary);
+  --choice-fill: var(--card);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2277,15 +2279,68 @@ h1 {
   font-weight: 700;
   color: var(--foreground);
   text-align: center;
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--choice-color) 8%, transparent);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.cz-choice--medical {
+  --choice-color: oklch(0.62 0.2 25);
+  --choice-fill: oklch(0.965 0.025 25);
+}
+.cz-choice--fire {
+  --choice-color: oklch(0.7 0.18 55);
+  --choice-fill: oklch(0.97 0.035 55);
+}
+.cz-choice--rescue {
+  --choice-color: oklch(0.58 0.14 150);
+  --choice-fill: oklch(0.965 0.03 150);
+}
+.cz-choice--other {
+  --choice-color: oklch(0.58 0.16 250);
+  --choice-fill: oklch(0.965 0.035 250);
+}
+.cz-choice {
+  --choice-hover-border: color-mix(in oklch, var(--choice-color) 36%, var(--border));
+  --choice-hover-shadow: color-mix(in oklch, var(--choice-hover-border) 48%, transparent);
+}
+.cz-choice.selected,
+.cz-choice:active {
+  border-color: var(--choice-hover-border);
+  background: var(--choice-fill);
+  box-shadow:
+    0 5px 16px var(--choice-hover-shadow);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cz-choice:hover {
+    border-color: var(--choice-hover-border);
+    background: var(--choice-fill);
+    box-shadow:
+      0 5px 16px var(--choice-hover-shadow);
+    transform: translateY(-2px);
+  }
+}
+.cz-choice.cz-choice--medical.selected,
+.cz-choice.cz-choice--medical:active,
+.cz-choice.cz-choice--fire.selected,
+.cz-choice.cz-choice--fire:active,
+.cz-choice.cz-choice--rescue.selected,
+.cz-choice.cz-choice--rescue:active,
+.cz-choice.cz-choice--other.selected,
+.cz-choice.cz-choice--other:active {
+  background: var(--choice-fill);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cz-choice { transition: none; }
 }
 .cz-choice svg {
   width: 30px;
   height: 30px;
 }
 .cz-choice.selected {
-  border-color: var(--primary);
-  background: var(--accent);
-  color: var(--primary);
+  color: color-mix(in oklch, var(--choice-color) 82%, var(--foreground));
 }
 .cz-type {
   margin-top: 18px;

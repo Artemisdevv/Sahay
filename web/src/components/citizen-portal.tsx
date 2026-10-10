@@ -210,6 +210,7 @@ export function CitizenPortal() {
     return watchRelay(setRelay);
   }, []);
   const voice = useVoiceCapture();
+  const wasRecording = useRef(false);
   // The viewer's latest position, shared with the map tab so it can show "You are here" and follow Update.
   const [myPos, setMyPos] = useState<CapturedLocation | null>(null);
   const [recenter, setRecenter] = useState(0);
@@ -313,8 +314,19 @@ export function CitizenPortal() {
     }
     setLocation(`${fix.lat.toFixed(4)}, ${fix.lng.toFixed(4)}`);
     setRecenter((n) => n + 1); // the map jumps to the new position
-    toast.success(t("toast.locationUpdated"));
+    toast.success(t("toast.locationUpdated"), { duration: 1800 });
   }
+
+  useEffect(() => {
+    if (voice.state === "recording") {
+      wasRecording.current = true;
+      return;
+    }
+    if (wasRecording.current && voice.state === "ready") {
+      wasRecording.current = false;
+      void updateLocation();
+    }
+  }, [voice.state]);
 
   function attachPhotos(files: Iterable<File> | null) {
     if (!files) return;
@@ -592,7 +604,7 @@ export function CitizenPortal() {
               <button
                 key={c.id}
                 type="button"
-                className={`cz-choice ${picked === c.id ? "selected" : ""}`}
+                className={`cz-choice cz-choice--${c.id} ${picked === c.id ? "selected" : ""}`}
                 aria-pressed={picked === c.id}
                 onClick={() => setPicked(picked === c.id ? null : c.id)}
               >
