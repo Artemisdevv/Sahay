@@ -180,14 +180,6 @@ const HELP_ARRANGED = new Set([
   "on_scene",
   "resolved",
 ]);
-const NICE_CATEGORY: Record<string, string> = {
-  medical: "Medical",
-  fire: "Fire or smoke",
-  accident: "Accident or trapped",
-  crime: "Crime",
-  flood: "Flood",
-  other: "Something else",
-};
 const whenText = (iso: string) =>
   new Date(iso).toLocaleString("en-IN", {
     day: "numeric",
@@ -534,7 +526,7 @@ export function CitizenPortal() {
           {relaySupported() && relayOn && (
             <p className="cz-hint cz-nearby" role="status">
               {relay.nearby > 0
-                ? `${relay.nearby} ${t(relay.nearby === 1 ? "help.nearbyPhone" : "help.nearbyPhones")} ${t("help.canRelay")}`
+                ? t("help.canRelay", { count: relay.nearby })
                 : relay.running
                   ? t("help.lookingForPhones")
                   : t("help.nearbyStarting")}
@@ -690,7 +682,7 @@ export function CitizenPortal() {
               {reports.map((r) => (
                 <li key={r.report_id}>
                   <div>
-                    <strong>{t("category." + r.category) ?? "Report"}</strong>
+                    <strong>{t(`category.${r.category}`, { defaultValue: t("category.report") })}</strong>
                     <small>{whenText(r.created_at)}</small>
                   </div>
                   <span
@@ -713,7 +705,12 @@ export function CitizenPortal() {
         <section className="cz-page" aria-labelledby="map-title">
           <h1 id="map-title">{t("map.title")}</h1>
           <p className="cz-lead">{t("map.lead")}</p>
-          <IncidentMap role="civilian" className="admin-map" />
+          <IncidentMap
+            role="civilian"
+            className="admin-map"
+            userLocation={myPos}
+            recenterKey={recenter}
+          />
         </section>
       )}
 

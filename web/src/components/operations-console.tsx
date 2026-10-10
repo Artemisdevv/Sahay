@@ -347,7 +347,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
             {fire
               ? tService("dispatch_intelligence")
               : ambulance
-                ? tService("emergency_intake")
+                ? tService("ambulance_subtitle")
                 : police
                   ? "Law enforcement dispatch and field unit coordination."
                   : tService("emergency_intake")}
@@ -371,9 +371,9 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
       <div className="metrics">
         {[
           {
-            label: fire ? tService("active_dispatches") : ambulance ? tService("active_patients") : police ? tService("active_calls") : tService("active_patients"),
+            label: fire ? tService("active_incidents") : ambulance ? tService("active_patients") : police ? tService("active_calls") : tService("active_patients"),
             value: String(activeDispatches.length).padStart(2, "0"),
-            note: loading ? tService("realtime_backend") : tService("realtime_backend"),
+            note: loading ? tService("loading") : tService("from_backend"),
             icon: Activity,
           },
           {
@@ -402,7 +402,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
           },
           {
             label: tService("agent_coordination"),
-            value: wsConnected ? tService("websocket_connected") : tService("reconnecting"),
+            value: wsConnected ? tService("online") : tService("connecting"),
             note: wsConnected ? tService("websocket_connected") : tService("reconnecting"),
             icon: Network,
           },
@@ -702,7 +702,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                   <BedDouble />
                 )}
                 {fire
-                  ? tService("unit_availability")
+                  ? tService("ambulance_availability")
                   : ambulance
                     ? tService("unit_availability")
                     : police
@@ -1862,7 +1862,7 @@ export function AdminDashboard() {
                   </div>
                   <div>
                     <small>{tAdmin("oversight")}</small>
-                    <strong>{intervene ? tAdmin("human_review") : tAdmin("autonomous_mode")}</strong>
+                    <strong>{intervene ? tAdmin("human_review") : tAdmin("autonomous")}</strong>
                   </div>
                 </div>
               </div>

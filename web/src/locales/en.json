@@ -257,8 +257,8 @@
     "override_active": "Human review activated. New autonomous dispatches paused in demo.",
     "loading_audit": "Loading audit entries…",
     "no_audit_entries": "No audit entries yet.",
-    "pii_reveal_audit": "PII Reveal & Audit Verification",
-    "decrypt_incident_pii": "Decrypt incident PII (admin only) and verify hash-chained audit log integrity",
+    "pii_reveal_audit": "Incident response",
+    "decrypt_incident_pii": "Review agent traces and proposed dispatches. Revealing report details remains an audited admin action.",
     "admin_only": "Admin only",
     "loading_incidents": "Loading incidents…",
     "no_incidents": "No incidents available.",
@@ -314,7 +314,8 @@
       "dispatch": "Dispatch",
       "pii": "PII",
       "other": "Other"
-    }
+    },
+    "autonomous": "Autonomous"
   },
   "service": {
     "fire_rescue": "Fire & rescue",
@@ -485,7 +486,17 @@
     "state": "State",
     "calling": "calling",
     "accepted": "accepted",
-    "declined": "declined"
+    "declined": "declined",
+    "realtime_backend": "Real-time from backend",
+    "in_progress": "in progress",
+    "critical_care_beds": "critical care beds",
+    "ambulance_subtitle": "Emergency medical dispatch and patient transport coordination.",
+    "loading": "Loading...",
+    "from_backend": "From backend",
+    "active_incidents": "Active incidents",
+    "online": "Online",
+    "connecting": "Connecting...",
+    "ambulance_availability": "Ambulance availability"
   },
   "shell": {
     "brand_subtitle": "Help that finds a way",
@@ -496,5 +507,100 @@
     "all_systems_working": "All systems working",
     "notifications": "Notifications",
     "no_new_notifications": "No new notifications"
+  },
+  "tabs": {
+    "help": "Help",
+    "reports": "Reports",
+    "map": "Map",
+    "details": "My details"
+  },
+  "incidentTypes": {
+    "medical": "Medical",
+    "fire": "Fire",
+    "rescue": "Rescue",
+    "other": "Other"
+  },
+  "category": {
+    "medical": "Medical",
+    "fire": "Fire or smoke",
+    "accident": "Accident or trapped",
+    "crime": "Crime",
+    "flood": "Flood",
+    "other": "Something else",
+    "report": "Report"
+  },
+  "profileFields": {
+    "fullName": "Full name",
+    "age": "Age",
+    "bloodGroup": "Blood group",
+    "language": "Language you speak",
+    "contactName": "Emergency contact name",
+    "phone": "Emergency contact phone",
+    "conditions": "Health conditions",
+    "allergies": "Allergies",
+    "medications": "Medicines you take",
+    "address": "Home address",
+    "access": "How to get in (gate, floor)",
+    "mobility": "Trouble walking or moving"
+  },
+  "help": {
+    "needHelp": "Do you need help?",
+    "holdButton": "Hold the button and say what happened.",
+    "canRelay_one": "{{count}} nearby phone can pass your message on.",
+    "canRelay_other": "{{count}} nearby phones can pass your message on.",
+    "lookingForPhones": "Looking for nearby phones.",
+    "nearbyStarting": "Nearby sharing is starting.",
+    "addPhoto": "Add a photo (optional)",
+    "photoAttachments": "Photo attachments",
+    "attachedScene": "Attached scene",
+    "remove": "Remove",
+    "yourMessage": "Your message",
+    "yourMessageClip": "Your message ({{time}})",
+    "recordAgain": "Record again",
+    "micBlocked": "The microphone is blocked. Allow it for Sahay in your phone or browser settings, or choose what is happening below.",
+    "micUnsupported": "This phone cannot record here. Choose what is happening below.",
+    "micUnavailable": "No microphone is available. Connect or enable a microphone, or choose what is happening below.",
+    "whatHappening": "What is happening? (optional)",
+    "typeInstead": "Type a message instead",
+    "placeholder": "Say what happened and where you are",
+    "yourLocation": "Your location",
+    "update": "Update",
+    "saving": "Saving...",
+    "sendRequest": "Send help request",
+    "recordOrType": "Record a message or type one to send.",
+    "sosHint": "Cannot talk or type? Hold SOS for 2 seconds. Your location goes to the response centre.",
+    "call112": "Call 112 now",
+    "callFirst": "In danger? Call first. This demo does not contact real services.",
+    "photoDescription": "Take a photo now or upload an image from this device.",
+    "takePhoto": "Take photo",
+    "cameraUnavailable": "Camera capture isn’t available in this browser. Image upload is still available.",
+    "uploadImage": "Upload image",
+    "cameraDescription": "Position the camera, then capture to add the photo to your report.",
+    "cancel": "Cancel",
+    "capturePhoto": "Capture photo"
+  },
+  "reports": {
+    "title": "My reports",
+    "empty": "Nothing yet. When you ask for help, it will show here.",
+    "sent": "Sent",
+    "notAccepted": "Not accepted",
+    "waiting": "Waiting to send"
+  },
+  "map": {
+    "title": "Response map",
+    "lead": "Confirmed incidents near you, by area. No names or messages are shown."
+  },
+  "details": {
+    "title": "My details",
+    "lead": "Kept on this phone. Shared with the response team only if you allow it.",
+    "changeDetails": "Change my details",
+    "shareHealth": "Share my health details with the response team",
+    "shareOn": "On. They can see them when you ask for help.",
+    "shareOff": "Off. They will not see them.",
+    "helpRelay": "Help nearby phones pass on messages",
+    "relayOn": "On. Your phone can carry sealed messages for others when they have no signal. You cannot read them.",
+    "relayOff": "Off. Your own message can only be sent when you have signal.",
+    "savedLocal": "Saved on this device. Your details are not sent to the server and remain until this app’s data is cleared.",
+    "save": "Save"
   }
 }
