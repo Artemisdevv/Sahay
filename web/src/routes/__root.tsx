@@ -9,9 +9,12 @@ import {
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import * as React from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
+import "@/lib/i18n";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { registerSW } from "@/lib/sw-register";
 import { startDeviceBootstrap } from "@/lib/device-bootstrap";
@@ -141,8 +144,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 );
 
 function RootShell({ children }: { children: ReactNode }) {
+  const { i18n } = useTranslation();
+  const [dir, setDir] = React.useState("ltr");
+
+  React.useEffect(() => {
+    const handleLanguageChange = (lng: string) => {
+      // RTL languages: Arabic (ar), Hebrew (he), Persian/Farsi (fa), Urdu (ur)
+      // Hindi (hi) uses Devanagari script but is LEFT-TO-RIGHT, not RTL
+      const rtlLanguages = ["ar", "he", "fa", "ur"];
+      setDir(rtlLanguages.includes(lng) ? "rtl" : "ltr");
+    };
+    handleLanguageChange(i18n.language);
+    i18n.on("languageChanged", handleLanguageChange);
+    return () => i18n.off("languageChanged", handleLanguageChange);
+  }, [i18n]);
+
   return (
-    <html lang="en">
+    <html lang={i18n.language} dir={dir}>
       <head>
         <HeadContent />
       </head>
