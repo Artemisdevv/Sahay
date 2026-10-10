@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import i18n from "@/lib/i18n";
 import {
   HeartPulse,
   Flame,
@@ -69,12 +70,6 @@ import { secureStorage } from "@/native/secure-storage";
 import { clearSession } from "@/lib/session";
 import { ResponseTimeline, serviceLabel } from "./response-timeline";
 
-const tabs: ShellTab[] = [
-  { id: "help", label: "Get help", icon: Mic },
-  { id: "reports", label: "My reports", icon: ClipboardList },
-  { id: "map", label: "Map", icon: MapPin },
-  { id: "details", label: "My details", icon: UserRound },
-];
 
 const choices: { id: IncidentType; label: string; icon: typeof HeartPulse }[] =
   [
@@ -86,20 +81,6 @@ const choices: { id: IncidentType; label: string; icon: typeof HeartPulse }[] =
 const choiceLabel = (id: IncidentType) =>
   choices.find((c) => c.id === id)?.label ?? "Help";
 
-const profileFields = [
-  ["fullName", "Full name"],
-  ["age", "Age"],
-  ["bloodGroup", "Blood group"],
-  ["language", "Language you speak"],
-  ["contactName", "Emergency contact name"],
-  ["phone", "Emergency contact phone"],
-  ["conditions", "Health conditions"],
-  ["allergies", "Allergies"],
-  ["medications", "Medicines you take"],
-  ["address", "Home address"],
-  ["access", "How to get in (gate, floor)"],
-  ["mobility", "Trouble walking or moving"],
-] as const;
 const PROFILE_STORAGE_KEY = "civilian.profile";
 
 async function readStoredProfile(): Promise<EmergencyProfile | null> {
@@ -199,7 +180,7 @@ const fmt = (s: number) =>
 
 export function CitizenPortal() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [tab, setTab] = useState("help");
   const [current, setCurrent] = useState<QueueItem | null>(null);
   const [status, setStatus] = useState<ReportStatus | null>(null);
@@ -208,7 +189,7 @@ export function CitizenPortal() {
   const [approx, setApprox] = useState(false);
   const [picked, setPicked] = useState<IncidentType | null>(null);
   const [note, setNote] = useState("");
-  const [location, setLocation] = useState("Kochi, Kerala");
+  const [location, setLocation] = useState(() => i18n.t("city", { ns: "shell" }));
   const [profile, setProfile] = useState<EmergencyProfile>(defaultProfile);
   const [draft, setDraft] = useState<EmergencyProfile>(defaultProfile);
   const [profileReady, setProfileReady] = useState(false);
@@ -332,7 +313,7 @@ export function CitizenPortal() {
     }
     setLocation(`${fix.lat.toFixed(4)}, ${fix.lng.toFixed(4)}`);
     setRecenter((n) => n + 1); // the map jumps to the new position
-    toast.success("Location updated");
+    toast.success(t("toast.locationUpdated"));
   }
 
   function attachPhotos(files: Iterable<File> | null) {
@@ -440,7 +421,9 @@ export function CitizenPortal() {
     setSending(true);
     try {
       const language =
-        LANGUAGE_CODES[profile.language.trim().toLowerCase()] ?? "en";
+        LANGUAGE_CODES[profile.language.trim().toLowerCase()] ??
+        // No language in "My details": use the language the app is shown in.
+        (["ml", "hi", "en"].includes(i18n.language) ? i18n.language : "en");
       const { item, approximateLocation } = await submitReport({
         kind,
         category: CATEGORY_FOR[picked ?? "other"],
@@ -502,12 +485,12 @@ export function CitizenPortal() {
     try {
       await secureStorage.set(PROFILE_STORAGE_KEY, JSON.stringify(draft));
     } catch {
-      toast.error("Could not save your details on this device.");
+      toast.error(t("toast.detailsFailed"));
       return;
     }
     setProfile(draft);
     setProfileOpen(false);
-    toast.success("Details saved on this device");
+    toast.success(t("toast.detailsSaved"));
   }
 
   return (
@@ -898,6 +881,7 @@ export function CitizenPortal() {
  * (some people cannot hold a button steady). Keyboard: Space or Enter toggles.
  */
 function MicButton({ voice }: { voice: ReturnType<typeof useVoiceCapture> }) {
+  const { t } = useTranslation();
   const downAt = useRef(0);
   const sticky = useRef(false);
   const recording = voice.state === "recording";
@@ -938,9 +922,7 @@ function MicButton({ voice }: { voice: ReturnType<typeof useVoiceCapture> }) {
         type="button"
         className={`cz-mic ${recording ? "recording" : ""}`}
         aria-label={
-          recording
-            ? "Stop recording"
-            : "Record a message. Hold, or tap to start and tap to stop"
+          recording ? t("voice.stopRecording") : t("voice.recordLabel")
         }
         disabled={disabled}
         onPointerDown={onDown}
@@ -953,10 +935,10 @@ function MicButton({ voice }: { voice: ReturnType<typeof useVoiceCapture> }) {
       </button>
       <p className="cz-mic-label" aria-live="polite">
         {recording
-          ? `Recording ${fmt(voice.seconds)}. Let go, or tap, to stop.`
+          ? t("voice.recording", { time: fmt(voice.seconds) })
           : voice.state === "ready"
-            ? "Message saved. Check it below."
-            : "Hold to talk"}
+            ? t("voice.saved")
+            : t("voice.holdToTalk")}
       </p>
     </div>
   );
@@ -979,6 +961,7 @@ function Progress({
   onDone: () => void;
   onRetry: () => void;
 }) {
+  const { t } = useTranslation();
   const serverStatus = status ?? item.relay_status ?? null;
   // The server read the report and decided nobody can act on it (not an emergency or civic problem).
   const declined = serverStatus?.status === "rejected";
@@ -992,44 +975,45 @@ function Progress({
         : 2
       : 1;
   const title = declined
-    ? "We could not act on this"
+    ? t("status.declinedTitle")
     : failed
-      ? "We could not send this"
-    : k === 3
-      ? "Help is on the way"
-      : item.state === "sent"
-        ? "Your request was sent"
-        : "Saved on your device";
+      ? t("status.failedTitle")
+      : k === 3
+        ? t("status.onTheWay")
+        : item.state === "sent"
+          ? t("status.sentTitle")
+          : t("status.savedTitle");
   const viaRelay = item.via === "relay";
   const acceptedService = responseCalls.find((service) =>
     service.candidates.some((candidate) => candidate.state === "accepted"),
   );
   const arrived = ["on_scene", "resolved"].includes(serverStatus?.status ?? "");
   const lead = declined
-    ? "The response centre could not act on this message. If someone is in danger, call 112 now, or record or type what is happening and send it again."
+    ? t("status.declinedLead")
     : failed
-    ? "The response centre did not accept this report. Call 112 now."
+    ? t("status.failedLead")
     : arrived
-      ? "Help has arrived."
+      ? t("status.arrived")
       : acceptedService && status?.eta_minutes != null
-        ? `${serviceLabel(acceptedService.service_type)} accepted, about ${status.eta_minutes} ${status.eta_minutes === 1 ? "minute" : "minutes"} away.`
+        ? t("status.acceptedEta", {
+            service: serviceLabel(acceptedService.service_type),
+            count: status.eta_minutes,
+          })
         : acceptedService
-          ? `${serviceLabel(acceptedService.service_type)} accepted and is on the way.`
+          ? t("status.acceptedOnWay", { service: serviceLabel(acceptedService.service_type) })
           : serverStatus?.message
             ? serverStatus.message
             : item.state === "sent"
               ? viaRelay
-                ? "A nearby phone passed it on and the response centre has it. A team is being arranged."
-                : "The response centre has it. A team is being arranged."
+                ? t("status.viaRelayLead")
+                : t("status.sentLead")
               : nearby > 0
-                ? "A nearby phone can pass it on. You do not need to do anything."
-                : "It will be sent as soon as there is a connection or a nearby phone. You do not need to do anything.";
+                ? t("status.nearbyLead")
+                : t("status.queuedLead");
   const labels = [
-    "Saved on your device",
-    viaRelay
-      ? "Delivered through a nearby phone"
-      : "Sent to the response centre",
-    k === 3 ? "A team is on the way" : "A team is being arranged",
+    t("status.savedTitle"),
+    viaRelay ? t("status.stepRelay") : t("status.stepSent"),
+    k === 3 ? t("status.stepOnWay") : t("status.stepArranging"),
   ];
   return (
     <section className="cz-help" aria-live="polite">
@@ -1037,8 +1021,7 @@ function Progress({
       <p className="cz-lead">{lead}</p>
       {approximate && !failed && (
         <p className="cz-warn" role="status">
-          We could not find your exact position. Tell the team where you are if
-          they call.
+          {t("status.approximate")}
         </p>
       )}
       {!failed && (
@@ -1060,15 +1043,15 @@ function Progress({
       {item.state === "sent" && (
         <section
           className="cz-response-status"
-          aria-label="Response team updates"
+          aria-label={t("status.updatesAria")}
         >
-          <h2>Calling nearby services</h2>
+          <h2>{t("status.calling")}</h2>
           <ResponseTimeline lists={responseCalls} civilian />
         </section>
       )}
       {failed && !declined && (
         <Button variant="outline" className="cz-secondary" onClick={onRetry}>
-          Try sending again
+          {t("status.retry")}
         </Button>
       )}
       <a href="tel:112" className="cz-call">
@@ -1076,7 +1059,7 @@ function Progress({
         Call 112 now
       </a>
       <Button variant="outline" className="cz-secondary" onClick={onDone}>
-        Done
+        {t("common.done")}
       </Button>
     </section>
   );
@@ -1084,6 +1067,7 @@ function Progress({
 
 /** Play button for the recorded message. The native audio bar shows a nonsense length for browser recordings (no duration header). */
 function ClipPlayer({ url }: { url: string }) {
+  const { t } = useTranslation();
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   return (
@@ -1109,7 +1093,7 @@ function ClipPlayer({ url }: { url: string }) {
           }
         }}
       >
-        {playing ? "Stop playing" : "Play my message"}
+        {playing ? t("voice.stopPlaying") : t("voice.play")}
       </Button>
     </>
   );
@@ -1126,6 +1110,7 @@ export function SosButton({
   disabled: boolean;
   onTrigger: () => void;
 }) {
+  const { t } = useTranslation();
   const [progress, setProgress] = useState(0);
   const timer = useRef<number | null>(null);
   const startedAt = useRef(0);
@@ -1158,7 +1143,7 @@ export function SosButton({
       type="button"
       className="cz-sos"
       disabled={disabled}
-      aria-label="SOS. Hold for 2 seconds to send your location to the response centre"
+      aria-label={t("help.sosAria")}
       style={{ ["--sos-progress" as string]: `${Math.round(progress * 100)}%` }}
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);

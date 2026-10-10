@@ -506,7 +506,17 @@
     "status": "Status",
     "all_systems_working": "All systems working",
     "notifications": "Notifications",
-    "no_new_notifications": "No new notifications"
+    "no_new_notifications": "No new notifications",
+    "role_hospital": "Hospital",
+    "role_fire": "Fire and rescue",
+    "role_operations": "Operations",
+    "support_title": "In a real emergency, call 112",
+    "support_description": "This workspace uses simulated dispatches.",
+    "all_systems": "All systems working",
+    "main_navigation": "Main navigation",
+    "home": "Home",
+    "demo": "Demo",
+    "city": "Kochi, Kerala"
   },
   "tabs": {
     "help": "Help",
@@ -577,7 +587,8 @@
     "uploadImage": "Upload image",
     "cameraDescription": "Position the camera, then capture to add the photo to your report.",
     "cancel": "Cancel",
-    "capturePhoto": "Capture photo"
+    "capturePhoto": "Capture photo",
+    "sosAria": "SOS. Hold for 2 seconds to send your location to the response centre"
   },
   "reports": {
     "title": "My reports",
@@ -588,7 +599,26 @@
   },
   "map": {
     "title": "Response map",
-    "lead": "Confirmed incidents near you, by area. No names or messages are shown."
+    "lead": "Confirmed incidents near you, by area. No names or messages are shown.",
+    "loading": "Loading map…",
+    "onScene": "On scene",
+    "enRoute": "En route",
+    "assigned": "Assigned",
+    "errRefresh": "Map data could not be refreshed.",
+    "errUnits": "Response unit locations are temporarily unavailable.",
+    "errRetry": "The map could not be refreshed. Retrying.",
+    "errSignIn": "Sign in to load permitted map data.",
+    "errLoad": "Map data could not be loaded.",
+    "youAreHere": "You are here",
+    "noConfirmed": "No confirmed incidents right now.",
+    "noIncidents": "No incidents available in this view.",
+    "noSummary": "No incident summary available.",
+    "ariaMap": "Incident and response unit map",
+    "details": "Incident details",
+    "closeDetails": "Close incident details",
+    "approxArea": "The marker shows an approximate area.",
+    "fire": "Fire",
+    "incidents": "Incidents"
   },
   "details": {
     "title": "My details",
@@ -602,5 +632,95 @@
     "relayOff": "Off. Your own message can only be sent when you have signal.",
     "savedLocal": "Saved on this device. Your details are not sent to the server and remain until this app’s data is cleared.",
     "save": "Save"
+  },
+  "voice": {
+    "stopRecording": "Stop recording",
+    "recordLabel": "Record a message. Hold, or tap to start and tap to stop",
+    "recording": "Recording {{time}}. Let go, or tap, to stop.",
+    "saved": "Message saved. Check it below.",
+    "holdToTalk": "Hold to talk",
+    "stopPlaying": "Stop playing",
+    "play": "Play my message"
+  },
+  "toast": {
+    "locationUpdated": "Location updated",
+    "detailsFailed": "Could not save your details on this device.",
+    "detailsSaved": "Details saved on this device"
+  },
+  "status": {
+    "declinedTitle": "We could not act on this",
+    "failedTitle": "We could not send this",
+    "onTheWay": "Help is on the way",
+    "sentTitle": "Your request was sent",
+    "savedTitle": "Saved on your device",
+    "declinedLead": "The response centre could not act on this message. If someone is in danger, call 112 now, or record or type what is happening and send it again.",
+    "failedLead": "The response centre did not accept this report. Call 112 now.",
+    "arrived": "Help has arrived.",
+    "acceptedEta_one": "{{service}} accepted, about {{count}} minute away.",
+    "acceptedEta_other": "{{service}} accepted, about {{count}} minutes away.",
+    "acceptedOnWay": "{{service}} accepted and is on the way.",
+    "viaRelayLead": "A nearby phone passed it on and the response centre has it. A team is being arranged.",
+    "sentLead": "The response centre has it. A team is being arranged.",
+    "nearbyLead": "A nearby phone can pass it on. You do not need to do anything.",
+    "queuedLead": "It will be sent as soon as there is a connection or a nearby phone. You do not need to do anything.",
+    "stepRelay": "Delivered through a nearby phone",
+    "stepSent": "Sent to the response centre",
+    "stepOnWay": "A team is on the way",
+    "stepArranging": "A team is being arranged",
+    "approximate": "We could not find your exact position. Tell the team where you are if they call.",
+    "updatesAria": "Response team updates",
+    "calling": "Calling nearby services",
+    "retry": "Try sending again"
+  },
+  "timeline": {
+    "service": {
+      "ambulance": "Ambulance",
+      "police": "Police",
+      "fire": "Fire and rescue",
+      "municipal": "City services"
+    },
+    "state": {
+      "calling": "Being called",
+      "accepted": "Accepted",
+      "declined": "Could not respond",
+      "no_answer": "No answer",
+      "standby": "Not called yet"
+    },
+    "civilianEmpty": "Help is being arranged. Service updates will appear here.",
+    "staffEmpty": "No nearby services have been called yet.",
+    "distance": "{{km}} km · about {{min}} min"
+  },
+  "login": {
+    "roleService": "Service unit",
+    "roleAdmin": "Administrator",
+    "wrongRole": "This account has the {{role}} role. Select that workspace to continue.",
+    "failed": "Unable to sign in. Please try again.",
+    "headline1": "Every second matters.",
+    "headline2": "Every responder connected.",
+    "subtitle": "One coordinated network for civilians, first responders, and the intelligence that connects them.",
+    "network": "Sahay response network",
+    "secure": "Secure network access",
+    "welcome": "Welcome to Sahay",
+    "intro": "Sign in to a service or administrator workspace.",
+    "selectWorkspace": "Select your workspace",
+    "username": "Username",
+    "usernamePlaceholder": "e.g. amb-01",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "signingIn": "Signing in…",
+    "signIn": "Sign in",
+    "civiliansNote": "Civilians can report without signing in",
+    "civilianReport": "Civilian report",
+    "emergency": "For emergencies, call 112.",
+    "agentTriage": "Assess · Prioritize",
+    "agentDispatch": "Route · Coordinate",
+    "agentMemory": "Retrieve · Contextualize",
+    "agentNotify": "Notify · Synchronize",
+    "city": "Kochi · Kerala"
+  },
+  "publicMap": {
+    "title": "Sahay public map",
+    "lead": "Confirmed incidents, by area. No names, messages or exact addresses are shown. In an emergency call 112.",
+    "signIn": "Sign in"
   }
 }

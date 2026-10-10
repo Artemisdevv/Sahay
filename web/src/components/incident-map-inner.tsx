@@ -12,6 +12,8 @@ import {
   type PublicUnit,
   type Unit,
 } from "@/lib/api";
+import { useTranslation } from "react-i18next";
+import i18n from "@/lib/i18n";
 import { getSession } from "@/lib/session";
 import { useDispatchWS, type WSEvent } from "@/hooks/use-dispatch-ws";
 
@@ -79,15 +81,15 @@ function isArrivedStatus(status: string): boolean {
 }
 
 function etaChip(unit: MapUnit): string {
-  if (isArrivedStatus(unit.status)) return "On scene";
+  if (isArrivedStatus(unit.status)) return i18n.t("map.onScene");
   const etaSeconds =
     unit.eta_seconds ??
     (unit.eta_minutes === null || unit.eta_minutes === undefined
       ? null
       : unit.eta_minutes * 60);
   if (etaSeconds !== null && Number.isFinite(etaSeconds))
-    return etaSeconds <= 0 ? "On scene" : `~${Math.ceil(etaSeconds / 60)} min`;
-  return isMovingStatus(unit.status) ? "En route" : "Assigned";
+    return etaSeconds <= 0 ? i18n.t("map.onScene") : `~${Math.ceil(etaSeconds / 60)} min`;
+  return isMovingStatus(unit.status) ? i18n.t("map.enRoute") : i18n.t("map.assigned");
 }
 
 function unitIcon(unit: MapUnit): L.DivIcon {
@@ -133,6 +135,7 @@ export function IncidentMap({
   /** Change this number to centre the map on `userLocation` again (the Update button). */
   recenterKey?: number;
 }) {
+  const { t } = useTranslation();
   const mapElement = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const incidentMarkers = useRef<L.LayerGroup | null>(null);
@@ -185,7 +188,7 @@ export function IncidentMap({
             setError(
               refreshError instanceof Error
                 ? refreshError.message
-                : "Map data could not be refreshed.",
+                : i18n.t("map.errRefresh"),
             );
           });
       }
@@ -212,7 +215,7 @@ export function IncidentMap({
         setError(
           unitResult
             ? null
-            : "Response unit locations are temporarily unavailable.",
+            : i18n.t("map.errUnits"),
         );
         timer = window.setTimeout(
           () => void load(),
@@ -220,7 +223,7 @@ export function IncidentMap({
         );
       } catch {
         if (!active) return;
-        setError("The map could not be refreshed. Retrying.");
+        setError(i18n.t("map.errRetry"));
         timer = window.setTimeout(() => void load(), 10_000);
       } finally {
         if (active) setLoading(false);
@@ -238,7 +241,7 @@ export function IncidentMap({
     let active = true;
     const session = getSession();
     if (!session?.token) {
-      setError("Sign in to load permitted map data.");
+      setError(i18n.t("map.errSignIn"));
       setLoading(false);
       return;
     }
@@ -261,7 +264,7 @@ export function IncidentMap({
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Map data could not be loaded.",
+            : i18n.t("map.errLoad"),
         );
       })
       .finally(() => {
@@ -453,7 +456,7 @@ export function IncidentMap({
     });
   }, [units, incidents]);
 
-  // "You are here": a dot with an accuracy circle, redrawn whenever the position changes.
+  // i18n.t("map.youAreHere"): a dot with an accuracy circle, redrawn whenever the position changes.
   useEffect(() => {
     const group = youLayer.current;
     if (!group) return;
@@ -477,7 +480,7 @@ export function IncidentMap({
       fillColor: "#2563eb",
       fillOpacity: 1,
     })
-      .bindTooltip("You are here", { direction: "top", offset: [0, -8] })
+      .bindTooltip(i18n.t("map.youAreHere"), { direction: "top", offset: [0, -8] })
       .addTo(group);
   }, [userLocation]);
 
@@ -499,7 +502,7 @@ export function IncidentMap({
         ref={mapElement}
         className="incident-map-canvas"
         role="application"
-        aria-label="Incident and response unit map"
+        aria-label={t("map.ariaMap")}
       />
       {loading && (
         <div className="map-state">
@@ -516,15 +519,15 @@ export function IncidentMap({
         <div className="map-state">
           <MapPin size={15} />{" "}
           {role === "public" || role === "civilian"
-            ? "No confirmed incidents right now."
-            : "No incidents available in this view."}
+            ? t("map.noConfirmed")
+            : t("map.noIncidents")}
         </div>
       )}
       {selected && (role === "public" || role === "civilian") && (
-        <aside className="incident-map-detail" aria-label="Incident details">
+        <aside className="incident-map-detail" aria-label={t("map.details")}>
           <button
             type="button"
-            aria-label="Close incident details"
+            aria-label={t("map.closeDetails")}
             onClick={() => setSelected(null)}
           >
             <X size={15} />
@@ -545,14 +548,14 @@ export function IncidentMap({
               ]
             }
           </small>
-          <small>The marker shows an approximate area.</small>
+          <small>{t("map.approxArea")}</small>
         </aside>
       )}
       {selected && role !== "public" && role !== "civilian" && (
-        <aside className="incident-map-detail" aria-label="Incident details">
+        <aside className="incident-map-detail" aria-label={t("map.details")}>
           <button
             type="button"
-            aria-label="Close incident details"
+            aria-label={t("map.closeDetails")}
             onClick={() => setSelected(null)}
           >
             <X size={15} />
@@ -562,7 +565,7 @@ export function IncidentMap({
             {selected.status.replaceAll("_", " ")}
           </span>
           <strong>{selected.incident_type}</strong>
-          <p>{selected.summary_redacted || "No incident summary available."}</p>
+          <p>{selected.summary_redacted || t("map.noSummary")}</p>
           <small>
             {selected.people_count} people · {selected.report_count} report
             {selected.report_count === 1 ? "" : "s"}
@@ -574,26 +577,26 @@ export function IncidentMap({
       )}
       <div className="map-legend">
         <span>
-          <i className="legend-incident" /> Incidents
+          <i className="legend-incident" /> {t("map.incidents")}
         </span>
         {role !== "service" && (
           <span>
-            <i className="legend-ambulance" /> Ambulance
+            <i className="legend-ambulance" /> {t("timeline.service.ambulance")}
           </span>
         )}
         {role !== "service" && (
           <span>
-            <i className="legend-police" /> Police
+            <i className="legend-police" /> {t("timeline.service.police")}
           </span>
         )}
         {role !== "service" && (
           <span>
-            <i className="legend-fire" /> Fire
+            <i className="legend-fire" /> {t("map.fire")}
           </span>
         )}
         {role !== "service" && (
           <span>
-            <i className="legend-municipal" /> Municipal
+            <i className="legend-municipal" /> {t("timeline.service.municipal")}
           </span>
         )}
       </div>

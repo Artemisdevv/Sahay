@@ -20,6 +20,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { IncidentMap } from "./incident-map";
 import { LanguageSelector } from "./language-selector";
 import { useTranslation } from "react-i18next";
+import i18n from "@/lib/i18n";
 
 export function Brand() {
   const { t } = useTranslation("shell");
@@ -57,20 +58,20 @@ type Role = "citizen" | "hospital" | "fire" | "ambulance" | "police" | "admin";
 function roleLink(role: Role) {
   if (role === "hospital")
     return {
-      label: "Hospital",
+      labelKey: "role_hospital",
       icon: HeartPulse,
       to: "/service/$serviceId",
       params: { serviceId: "city-general-hospital" },
     };
   if (role === "fire")
     return {
-      label: "Fire and rescue",
+      labelKey: "role_fire",
       icon: Flame,
       to: "/service/$serviceId",
       params: { serviceId: "metro-fire-station-4" },
     };
   return {
-    label: "Operations",
+    labelKey: "role_operations",
     icon: Network,
     to: "/admin/dashboard",
     params: {},
@@ -78,8 +79,8 @@ function roleLink(role: Role) {
 }
 
 const SUPPORT_TOAST = () =>
-  toast("In a real emergency, call 112", {
-    description: "This workspace uses simulated dispatches.",
+  toast(i18n.t("support_title", { ns: "shell" }), {
+    description: i18n.t("support_description", { ns: "shell" }),
   });
 
 /**
@@ -121,24 +122,24 @@ export function Shell({
           ? [
               {
                 value: "role",
-                label: link.label,
+                label: t(link.labelKey),
                 icon: <link.icon size={16} aria-hidden="true" />,
               },
             ]
           : []),
         {
           value: "status",
-          label: "Status",
+          label: t("status"),
           icon: <Activity size={16} aria-hidden="true" />,
         },
         {
           value: "help",
-          label: "Help",
+          label: t("help"),
           icon: <CircleHelp size={16} aria-hidden="true" />,
         },
         {
           value: "signout",
-          label: "Sign out",
+          label: t("sign_out"),
           icon: <LogOut size={16} aria-hidden="true" />,
         },
       ];
@@ -166,7 +167,7 @@ export function Shell({
     if (
       target instanceof Element &&
       target.closest(
-        "input, textarea, select, [contenteditable='true'], [data-no-section-swipe]",
+        "input, textarea, select, [contenteditable='true'], [data-no-section-swipe], [role='dialog'], [role='menu'], [role='listbox'], [data-radix-popper-content-wrapper]",
       )
     ) {
       touchStart.current = null;
@@ -200,7 +201,7 @@ export function Shell({
     if (next === "role" && link) {
       void navigate({ to: link.to, params: link.params });
     } else if (next === "status") {
-      toast.success("All systems working");
+      toast.success(t("all_systems"));
     } else if (next === "help") {
       SUPPORT_TOAST();
     } else if (next === "signout") {
@@ -208,7 +209,15 @@ export function Shell({
     }
   };
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      // On the whole frame, not just <main>: short pages leave blank space below the content that must swipe too.
+      onTouchStart={onContentTouchStart}
+      onTouchEnd={onContentTouchEnd}
+      onTouchCancel={() => {
+        touchStart.current = null;
+      }}
+    >
       <aside className="sidebar">
         <Brand />
         <div className="workspace">
@@ -218,7 +227,7 @@ export function Shell({
             <small>{t("workspace")}</small>
           </div>
         </div>
-        <nav aria-label="Main navigation" className="side-nav">
+        <nav aria-label={t("main_navigation")} className="side-nav">
           {tabs?.map((t) => (
             <button
               key={t.id}
@@ -238,13 +247,13 @@ export function Shell({
               className="nav-item active"
             >
               <LayoutDashboard />
-              Home
+              {t("home")}
             </Link>
           )}
           {link && (
             <Link to={link.to} params={link.params} className="nav-item active">
               <link.icon />
-              {link.label}
+              {t(link.labelKey)}
             </Link>
           )}
         </nav>
@@ -273,9 +282,9 @@ export function Shell({
           <div className="topbar-right">
             <span className="flex items-center gap-2 text-muted-foreground">
               <MapPin size={14} />
-              Kochi, Kerala
+              {t("city")}
             </span>
-            <Badge tone="amber">Demo</Badge>
+            <Badge tone="amber">{t("demo")}</Badge>
             <LanguageSelector />
             <Button
               variant="ghost"
@@ -295,11 +304,6 @@ export function Shell({
         </header>
         <motion.main
           className="page"
-          onTouchStart={onContentTouchStart}
-          onTouchEnd={onContentTouchEnd}
-          onTouchCancel={() => {
-            touchStart.current = null;
-          }}
           initial={reduced ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.2 }}
@@ -328,7 +332,7 @@ export function Shell({
           </AnimatePresence>
         </motion.main>
       </div>
-      <nav className="bottom-nav" aria-label="Main navigation">
+      <nav className="bottom-nav" aria-label={t("main_navigation")}>
         <div
           className="bottom-nav-items"
           style={{

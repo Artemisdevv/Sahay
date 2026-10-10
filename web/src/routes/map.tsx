@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 import { IncidentMap } from "@/components/incident-map";
 import { pageHead } from "@/lib/dispatch";
 
@@ -12,17 +13,15 @@ export const Route = createFileRoute("/map")({
 });
 
 function PublicMapPage() {
+  const { t } = useTranslation();
   return (
     <main className="public-map-page">
       <header>
         <div>
-          <h1>Sahay public map</h1>
-          <p>
-            Confirmed incidents, by area. No names, messages or exact addresses
-            are shown. In an emergency call 112.
-          </p>
+          <h1>{t("publicMap.title")}</h1>
+          <p>{t("publicMap.lead")}</p>
         </div>
-        <Link to="/login">Sign in</Link>
+        <Link to="/login">{t("publicMap.signIn")}</Link>
       </header>
       <IncidentMap role="public" className="public-map-canvas" />
     </main>

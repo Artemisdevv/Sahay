@@ -6,6 +6,7 @@ import {
   type ComponentProps,
 } from "react";
 import { MapPin } from "lucide-react";
+import i18n from "@/lib/i18n";
 
 // Leaflet touches `window` when it is imported, which crashes server rendering. Load it in the browser only.
 const Inner = lazy(() =>
@@ -18,7 +19,7 @@ export function IncidentMap(props: ComponentProps<typeof Inner>) {
   const placeholder = (
     <div className={`incident-map ${props.className ?? ""}`}>
       <div className="map-state">
-        <MapPin size={15} /> Loading map…
+        <MapPin size={15} /> {i18n.t("map.loading")}
       </div>
     </div>
   );

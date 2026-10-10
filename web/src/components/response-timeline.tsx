@@ -1,19 +1,9 @@
+import { useTranslation } from "react-i18next";
+
 import type { ServiceCallList } from "@/lib/api";
+import i18n from "@/lib/i18n";
 
-const SERVICE_LABELS: Record<ServiceCallList["service_type"], string> = {
-  ambulance: "Ambulance",
-  police: "Police",
-  fire: "Fire and rescue",
-  municipal: "City services",
-};
-
-const STATE_LABELS = {
-  calling: "Being called",
-  accepted: "Accepted",
-  declined: "Could not respond",
-  no_answer: "No answer",
-  standby: "Not called yet",
-} as const;
+const SERVICE_TYPES = ["ambulance", "police", "fire", "municipal"] as const;
 
 export function ResponseTimeline({
   lists,
@@ -22,12 +12,16 @@ export function ResponseTimeline({
   lists: ServiceCallList[];
   civilian?: boolean;
 }) {
+  const { t } = useTranslation();
+  const SERVICE_LABELS = Object.fromEntries(
+    SERVICE_TYPES.map((k) => [k, t(`timeline.service.${k}`)]),
+  ) as Record<ServiceCallList["service_type"], string>;
   if (lists.length === 0) {
     return (
       <p className="response-timeline-empty">
         {civilian
-          ? "Help is being arranged. Service updates will appear here."
-          : "No nearby services have been called yet."}
+          ? t("timeline.civilianEmpty")
+          : t("timeline.staffEmpty")}
       </p>
     );
   }
@@ -53,11 +47,13 @@ export function ResponseTimeline({
                   <span
                     className={`response-timeline-state is-${candidate.state}`}
                   >
-                    {STATE_LABELS[candidate.state]}
+                    {t(`timeline.state.${candidate.state}`)}
                   </span>
                   <span className="response-timeline-distance">
-                    {candidate.distance_km.toFixed(1)} km · about{" "}
-                    {candidate.eta_minutes} min
+                    {t("timeline.distance", {
+                      km: candidate.distance_km.toFixed(1),
+                      min: candidate.eta_minutes,
+                    })}
                   </span>
                 </li>
               ))}
@@ -71,5 +67,5 @@ export function ResponseTimeline({
 export function serviceLabel(
   serviceType: ServiceCallList["service_type"],
 ): string {
-  return SERVICE_LABELS[serviceType];
+  return i18n.t(`timeline.service.${serviceType}`);
 }
