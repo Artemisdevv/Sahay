@@ -93,7 +93,7 @@ class SahayNearbyPlugin : Plugin(), RelayListener {
                     return@synchronized
                 }
                 transport?.stop()
-                val t = NearbyTransport(context.applicationContext, deviceId)
+                val t = NearbyTransport(context.applicationContext, deviceId, allowedPeers = chainTestAllowList(context.applicationContext))
                 val e = RelayEngine(
                     deviceId, t, FileStore(File(context.filesDir, "relay")), RelaySession.forwarder,
                     receiptVerifier = verifier::receipt, statusVerifier = verifier::status,
@@ -251,5 +251,28 @@ private object RelaySession {
     fun reset() {
         uploader?.stop(); uploader = null
         transport?.stop(); transport = null; engine = null; startedAs = null
+    }
+}
+
+/**
+ * TEST HOOK for the three-phone chain test. `files/relay_allow.txt` in the app's private folder (only this app, or
+ * `adb shell run-as in.sahay.app` on a debug build, can write it) lists device ids, one per line or comma separated.
+ * When present and non-empty, this phone only links with those phones. Absent or empty = normal behaviour.
+ */
+private fun chainTestAllowList(context: android.content.Context): () -> Set<String> {
+    val file = File(context.filesDir, "relay_allow.txt")
+    var cached: Set<String> = emptySet()
+    var readAt = 0L
+    return {
+        val now = System.currentTimeMillis()
+        if (now - readAt > 2_000) {
+            readAt = now
+            cached = try {
+                if (file.exists()) file.readText().split(Regex("[,\\s]+")).filter { it.isNotEmpty() }.toSet() else emptySet()
+            } catch (e: Exception) {
+                emptySet()
+            }
+        }
+        cached
     }
 }
