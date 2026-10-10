@@ -1,4 +1,5 @@
 import { Capacitor } from "@capacitor/core";
+import { API_BASE } from "@/lib/api";
 import { SahayNearby } from "@/native/sahay-nearby";
 import type { ReportQueue } from "./queue";
 
@@ -54,7 +55,12 @@ export async function startRelay(
 ): Promise<boolean> {
   if (!relaySupported()) return false;
   try {
-    await SahayNearby.start({ deviceId, mode: "both", serverVerifyKey });
+    await SahayNearby.start({
+      deviceId,
+      mode: "both",
+      serverVerifyKey,
+      apiBase: API_BASE,
+    });
     startedFor = deviceId;
     publish({ running: true });
     return true;

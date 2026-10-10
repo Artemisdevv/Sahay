@@ -103,6 +103,10 @@ class SahayNearbyPlugin : Plugin(), RelayListener {
                 RelaySession.transport = t; RelaySession.engine = e; RelaySession.startedAs = deviceId
             }
             startService()
+            // Upload what we carry for others from here too, so it works with the screen off (WebView asleep).
+            val uploader = RelaySession.uploader
+                ?: NativeUploader(context.applicationContext) { RelaySession.engine }.also { RelaySession.uploader = it }
+            uploader.configure(call.getString("apiBase"))
             call.resolve()
         } catch (e: Exception) {
             call.reject(e.message ?: "could not start relay")
@@ -228,6 +232,7 @@ private object RelaySession {
     @Volatile var engine: RelayEngine? = null
     @Volatile var transport: NearbyTransport? = null
     @Volatile var startedAs: String? = null
+    @Volatile var uploader: NativeUploader? = null
 
     /** Receives engine events; null while no UI is attached (reports stay in the store, see pendingForUpload). */
     @Volatile var sink: RelayListener? = null
@@ -235,12 +240,16 @@ private object RelaySession {
     val forwarder = object : RelayListener {
         override fun onPeerConnected(deviceId: String) { sink?.onPeerConnected(deviceId) }
         override fun onPeerLost(deviceId: String) { sink?.onPeerLost(deviceId) }
-        override fun onEnvelopeReceived(envelope: JsonObject, fromPeer: String) { sink?.onEnvelopeReceived(envelope, fromPeer) }
+        override fun onEnvelopeReceived(envelope: JsonObject, fromPeer: String) {
+            uploader?.kick()  // a sealed report just arrived: upload it now if we have internet
+            sink?.onEnvelopeReceived(envelope, fromPeer)
+        }
         override fun onReceipt(reportId: String, receipt: JsonObject) { sink?.onReceipt(reportId, receipt) }
         override fun onStatus(reportId: String, status: String, message: String) { sink?.onStatus(reportId, status, message) }
     }
 
     fun reset() {
+        uploader?.stop(); uploader = null
         transport?.stop(); transport = null; engine = null; startedAs = null
     }
 }
