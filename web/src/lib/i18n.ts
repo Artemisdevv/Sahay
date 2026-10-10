@@ -6,17 +6,42 @@ import en from "@/locales/en.json";
 import ml from "@/locales/ml.json";
 import hi from "@/locales/hi.json";
 
+function readableMissingKey(key: string) {
+  // Some older portal components still use their original camelCase label
+  // keys. Show a readable label if one is missing while those resources are
+  // being brought into sync, instead of exposing the translation key itself.
+  const keyWithoutNamespace = key.slice(key.lastIndexOf(":") + 1);
+  const label = keyWithoutNamespace
+    .split(".")
+    .filter(Boolean)
+    .at(-1)
+    ?.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!label) return key;
+  return label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
+}
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
     resources: {
-      en: { translation: en },
-      ml: { translation: ml },
-      hi: { translation: hi },
+      en: {
+        translation: en,
+        shell: en.shell,
+        admin: en.admin,
+        serviceConsole: en.serviceConsole,
+      },
+      ml: { translation: ml, shell: ml.shell, admin: ml.admin },
+      hi: { translation: hi, shell: hi.shell, admin: hi.admin },
     },
-    lng: "en",
+    ns: ["translation", "shell", "admin", "serviceConsole"],
+    defaultNS: "translation",
     fallbackLng: "en",
+    parseMissingKeyHandler: readableMissingKey,
     interpolation: {
       escapeValue: false,
     },
