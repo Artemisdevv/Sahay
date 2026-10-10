@@ -282,6 +282,15 @@ def install(
               {"type": "incident", "id": incident_id}, {"report_id": report_id})
         db.commit()
         mime, data = found
-        return Response(content=data, media_type=mime, headers={"Cache-Control": "no-store"})
+        return Response(
+            content=data,
+            media_type=mime,
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Disposition": "attachment",
+                "Content-Security-Policy": "sandbox; default-src 'none'",
+            },
+        )
 
     app.include_router(router)

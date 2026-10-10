@@ -43,7 +43,7 @@ def test_admin_replays_the_original_audio_only_after_a_reveal_and_it_is_audited(
     url = f"/api/v1/incidents/{incident_id}/audio/{report_id}"
     assert client.get(url, headers=h).status_code == 403  # no reveal yet
     body = reveal(h, incident_id)
-    assert body["audio_url"] == url and body["audio"] == [{"report_id": report_id, "mime": "audio/webm;codecs=opus", "url": url}]
+    assert body["audio_url"] == url and body["audio"] == [{"report_id": report_id, "mime": "audio/webm", "url": url}]
     played = client.get(url, headers=h)
     assert played.status_code == 200 and played.content == AUDIO
     assert played.headers["cache-control"] == "no-store" and played.headers["content-type"].startswith("audio/webm")
@@ -88,3 +88,20 @@ def test_missing_audio_for_a_known_report_is_404_after_reveal(autorun):  # noqa:
     report_id, incident_id = voice_report(Dev())
     reveal(h, incident_id)
     assert client.get(f"/api/v1/incidents/{incident_id}/audio/not-a-report", headers=h).status_code == 404
+
+
+def test_hostile_mime_type_is_never_stored_or_served(autorun):  # noqa: F811
+    h = admin_headers()
+    payload = {**PAYLOAD, "text": None, "audio": {"mime": "text/html", "data": AUDIO_B64, "duration_s": 5}}
+    d = Dev()
+    env = d.envelope(payload)
+    assert post(env, d).status_code == 202
+    with SessionLocal() as db:
+        incident_id = db.get(Report, env["report_id"]).incident_id
+        assert db.scalars(select(IncidentAudio).where(IncidentAudio.report_id == env["report_id"])).one().mime == "audio/webm"
+    reveal(h, incident_id)
+    played = client.get(f"/api/v1/incidents/{incident_id}/audio/{env['report_id']}", headers=h)
+    assert played.status_code == 200 and played.headers["content-type"].startswith("audio/webm")
+    assert played.headers["x-content-type-options"] == "nosniff"
+    assert played.headers["content-disposition"] == "attachment"
+    assert "sandbox" in played.headers["content-security-policy"]
