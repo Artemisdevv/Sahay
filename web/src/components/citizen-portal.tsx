@@ -144,7 +144,9 @@ function getTabs(t: ReturnType<typeof useTranslation>["t"]): ShellTab[] {
   ];
 }
 
-function getChoices(t: ReturnType<typeof useTranslation>["t"]): { id: IncidentType; label: string; icon: typeof HeartPulse }[] {
+function getChoices(
+  t: ReturnType<typeof useTranslation>["t"],
+): { id: IncidentType; label: string; icon: typeof HeartPulse }[] {
   return [
     { id: "medical", label: t("incidentTypes.medical"), icon: HeartPulse },
     { id: "fire", label: t("incidentTypes.fire"), icon: Flame },
@@ -153,7 +155,9 @@ function getChoices(t: ReturnType<typeof useTranslation>["t"]): { id: IncidentTy
   ];
 }
 
-function getProfileFields(t: ReturnType<typeof useTranslation>["t"]): [keyof EmergencyProfile, string][] {
+function getProfileFields(
+  t: ReturnType<typeof useTranslation>["t"],
+): [keyof EmergencyProfile, string][] {
   return [
     ["fullName", t("profileFields.fullName")],
     ["age", t("profileFields.age")],
@@ -194,7 +198,8 @@ const whenText = (iso: string) =>
 type ScenePhoto = { file: File; url: string };
 
 // An SOS may carry no message at all. The server needs audio or text, so it gets this line.
-const SOS_TEXT = "SOS: the sender needs urgent help and could not describe it.";
+const SOS_TEXT =
+  "SOS: the sender needs urgent help and could not describe it. Their GPS location is attached to this report.";
 const SOS_HOLD_MS = 2000;
 
 const fmt = (s: number) =>
@@ -553,7 +558,10 @@ export function CitizenPortal() {
               onChange={(event) => attachPhotos(event.target.files)}
             />
             {photos.length > 0 && (
-              <div className="cz-photo-preview" aria-label={t("help.photoAttachments")}>
+              <div
+                className="cz-photo-preview"
+                aria-label={t("help.photoAttachments")}
+              >
                 {photos.map((photo) => (
                   <div className="cz-photo-item" key={photo.url}>
                     <img src={photo.url} alt={t("help.attachedScene")} />
@@ -573,7 +581,9 @@ export function CitizenPortal() {
 
           {voice.state === "ready" && voice.clip && (
             <div className="cz-clip">
-              <p>{t("help.yourMessage", { seconds: fmt(voice.clip.seconds) })}</p>
+              <p>
+                {t("help.yourMessage", { seconds: fmt(voice.clip.seconds) })}
+              </p>
               <ClipPlayer url={voice.clip.url} />
               <Button
                 variant="outline"
@@ -585,13 +595,19 @@ export function CitizenPortal() {
             </div>
           )}
           {voice.state === "denied" && (
-            <p className="cz-warn" role="alert">{t("help.micBlocked")}</p>
+            <p className="cz-warn" role="alert">
+              {t("help.micBlocked")}
+            </p>
           )}
           {voice.state === "unsupported" && (
-            <p className="cz-warn" role="alert">{t("help.micUnsupported")}</p>
+            <p className="cz-warn" role="alert">
+              {t("help.micUnsupported")}
+            </p>
           )}
           {voice.state === "unavailable" && (
-            <p className="cz-warn" role="alert">{t("help.micUnavailable")}</p>
+            <p className="cz-warn" role="alert">
+              {t("help.micUnavailable")}
+            </p>
           )}
 
           <h2 className="cz-sub">{t("help.whatHappening")}</h2>
@@ -639,9 +655,7 @@ export function CitizenPortal() {
           >
             {sending ? t("help.saving") : t("help.sendRequest")}
           </Button>
-          {!hasReport && (
-            <p className="cz-hint">{t("help.recordOrType")}</p>
-          )}
+          {!hasReport && <p className="cz-hint">{t("help.recordOrType")}</p>}
 
           <SosButton disabled={sending} onTrigger={() => void send("sos")} />
           <p className="cz-hint">{t("help.sosHint")}</p>
@@ -730,7 +744,9 @@ export function CitizenPortal() {
             </div>
             <div>
               <dt>{t("profileFields.contactName")}</dt>
-              <dd>{profile.contactName} {profile.phone}</dd>
+              <dd>
+                {profile.contactName} {profile.phone}
+              </dd>
             </div>
           </dl>
           <Button
@@ -749,9 +765,7 @@ export function CitizenPortal() {
             <span>
               {t("details.shareHealth")}
               <small>
-                {consent
-                  ? t("details.shareOn")
-                  : t("details.shareOff")}
+                {consent ? t("details.shareOn") : t("details.shareOff")}
               </small>
             </span>
             <Switch
@@ -765,9 +779,7 @@ export function CitizenPortal() {
               <span>
                 {t("details.helpRelay")}
                 <small>
-                  {relayOn
-                    ? t("details.relayOn")
-                    : t("details.relayOff")}
+                  {relayOn ? t("details.relayOn") : t("details.relayOff")}
                 </small>
               </span>
               <Switch
@@ -839,9 +851,7 @@ export function CitizenPortal() {
               <Camera /> {t("help.takePhoto")}
             </Button>
             {!canUseCamera && (
-              <p className="cz-hint">
-                {t("help.cameraUnavailable")}
-              </p>
+              <p className="cz-hint">{t("help.cameraUnavailable")}</p>
             )}
             <Button
               onClick={() => {
@@ -862,8 +872,8 @@ export function CitizenPortal() {
       >
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-          <DialogTitle>{t("help.takePhoto")}</DialogTitle>
-          <DialogDescription>{t("help.cameraDescription")}</DialogDescription>
+            <DialogTitle>{t("help.takePhoto")}</DialogTitle>
+            <DialogDescription>{t("help.cameraDescription")}</DialogDescription>
           </DialogHeader>
           <video
             ref={cameraVideo}
@@ -874,10 +884,10 @@ export function CitizenPortal() {
           />
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={closeCamera}>
-            {t("help.cancel")}
+              {t("help.cancel")}
             </Button>
             <Button onClick={capturePhoto}>
-            <Camera /> {t("help.capturePhoto")}
+              <Camera /> {t("help.capturePhoto")}
             </Button>
           </div>
         </DialogContent>
