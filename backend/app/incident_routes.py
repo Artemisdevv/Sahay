@@ -4,24 +4,25 @@ from __future__ import annotations
 import base64
 import binascii
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.agents.store import load_pii
+from app.agents.store import list_audio, load_audio, load_pii
 from app.dispatch.engine import audit
 from app.events import SERVICE_INCIDENT_FIELDS
-from app.models import AgentTrace, Dispatch, Incident, IncidentPII
+from app.models import AgentTrace, AuditEntry, Dispatch, Incident, IncidentPII
 
 
 # A service unit only sees an incident once an admin has approved its dispatch and only while that
 # dispatch is live or finished. Proposed, declined and cancelled dispatches stay invisible to it.
+REVEAL_WINDOW_MIN = 30
 SERVICE_VISIBLE_DISPATCH_STATUSES = ("approved", "accepted", "en_route", "on_scene", "completed")
 
 
@@ -246,12 +247,41 @@ def install(
             if reporter["name"] is not None or reporter["phone"] is not None
             or pii["emergency_contact"] is not None
         ]
+        audio = [
+            {"report_id": rid, "mime": mime, "url": f"/api/v1/incidents/{incident_id}/audio/{rid}"}
+            for rid, mime in list_audio(db, incident_id)
+        ]
         return {
             "incident_id": incident_id,
             "transcript": pii["transcript"],
             "reporters": reporters,
             "pii_spans": pii["pii_spans"],
-            "audio_url": pii["audio_url"],
+            "audio_url": audio[0]["url"] if audio else pii["audio_url"],
+            "audio": audio,
         }
+
+    @router.get("/incidents/{incident_id}/audio/{report_id}")
+    def play_audio(incident_id: str, report_id: str, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+        """The original voice message. Needs a logged reveal of this incident by the same admin in the last 30 minutes,
+        and every play is audited. Never cached."""
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=REVEAL_WINDOW_MIN)
+        reveals = db.scalars(
+            select(AuditEntry).where(AuditEntry.action == "pii.reveal").order_by(AuditEntry.seq.desc()).limit(200)
+        ).all()
+        revealed = any(
+            (r.target or {}).get("id") == incident_id and (r.actor or {}).get("id") == user["sub"]
+            and (r.ts if r.ts.tzinfo else r.ts.replace(tzinfo=timezone.utc)) >= cutoff
+            for r in reveals
+        )
+        if not revealed:
+            raise HTTPException(status_code=403, detail="Reveal this incident with a reason before playing its audio")
+        found = load_audio(db, incident_id, report_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail="No audio for this report")
+        audit(db, {"type": "admin", "id": user["sub"]}, "pii.audio.play",
+              {"type": "incident", "id": incident_id}, {"report_id": report_id})
+        db.commit()
+        mime, data = found
+        return Response(content=data, media_type=mime, headers={"Cache-Control": "no-store"})
 
     app.include_router(router)

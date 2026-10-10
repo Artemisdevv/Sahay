@@ -52,6 +52,7 @@ import {
   reassignIncident,
   getAuditEntries,
   revealIncidentPii,
+  fetchIncidentAudio,
   verifyAuditChain,
   getPublicUnits,
   type AuditEntry,
@@ -293,10 +294,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
   const serviceLabel = fire
     ? "Fire & rescue"
     : ambulance
-    ? "Ambulance"
-    : police
-    ? "Police"
-    : "Hospital";
+      ? "Ambulance"
+      : police
+        ? "Police"
+        : "Hospital";
   const serviceIcon = fire
     ? Flame
     : ambulance
@@ -314,17 +315,17 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
   const stationName = fire
     ? "Metro Fire Station 4"
     : ambulance
-    ? "Ambulance Unit 1"
-    : police
-    ? "Police Unit 1"
-    : "City General Hospital";
+      ? "Ambulance Unit 1"
+      : police
+        ? "Police Unit 1"
+        : "City General Hospital";
   const stationDetail = fire
     ? "Station 04"
     : ambulance
-    ? "EMS Station"
-    : police
-    ? "Precinct 1"
-    : "Hospital 01";
+      ? "EMS Station"
+      : police
+        ? "Precinct 1"
+        : "Hospital 01";
 
   return (
     <Shell
@@ -343,10 +344,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
             {fire
               ? "Dispatch intelligence and field resource coordination."
               : ambulance
-              ? "Emergency medical dispatch and patient transport coordination."
-              : police
-              ? "Law enforcement dispatch and field unit coordination."
-              : "Emergency intake, patient context, and critical care coordination."}
+                ? "Emergency medical dispatch and patient transport coordination."
+                : police
+                  ? "Law enforcement dispatch and field unit coordination."
+                  : "Emergency intake, patient context, and critical care coordination."}
           </p>
         </div>
         <Badge
@@ -390,10 +391,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
             note: fire
               ? "Across Central District"
               : ambulance
-              ? "Across EMS network"
-              : police
-              ? "Across precinct"
-              : "24 total critical care beds",
+                ? "Across EMS network"
+                : police
+                  ? "Across precinct"
+                  : "24 total critical care beds",
             icon: fire
               ? Flame
               : ambulance
@@ -472,10 +473,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                   {fire
                     ? "Pending dispatches"
                     : ambulance
-                    ? "Incoming patient dispatches"
-                    : police
-                    ? "Incoming police dispatches"
-                    : "Incoming patient dispatches"}
+                      ? "Incoming patient dispatches"
+                      : police
+                        ? "Incoming police dispatches"
+                        : "Incoming patient dispatches"}
                 </h2>
                 <p>
                   Real-time from backend · {proposedDispatches.length} awaiting
@@ -505,10 +506,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                       {fire
                         ? `Fire: ${d.incident_id.slice(0, 8)}`
                         : ambulance
-                        ? `EMS: ${d.incident_id.slice(0, 8)}`
-                        : police
-                        ? `Police: ${d.incident_id.slice(0, 8)}`
-                        : `EMS: ${d.incident_id.slice(0, 8)}`}
+                          ? `EMS: ${d.incident_id.slice(0, 8)}`
+                          : police
+                            ? `Police: ${d.incident_id.slice(0, 8)}`
+                            : `EMS: ${d.incident_id.slice(0, 8)}`}
                     </h3>
                     <Badge tone={getStatusBadgeTone(d.status)}>
                       {getStatusLabel(d.status)}
@@ -562,10 +563,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                           {fire
                             ? `Fire: ${d.incident_id.slice(0, 8)}`
                             : ambulance
-                            ? `EMS: ${d.incident_id.slice(0, 8)}`
-                            : police
-                            ? `Police: ${d.incident_id.slice(0, 8)}`
-                            : `EMS: ${d.incident_id.slice(0, 8)}`}
+                              ? `EMS: ${d.incident_id.slice(0, 8)}`
+                              : police
+                                ? `Police: ${d.incident_id.slice(0, 8)}`
+                                : `EMS: ${d.incident_id.slice(0, 8)}`}
                         </h3>
                         <Badge tone={getStatusBadgeTone(d.status)}>
                           {getStatusLabel(d.status)}
@@ -593,10 +594,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                                   c.state === "calling"
                                     ? "amber"
                                     : c.state === "accepted"
-                                    ? "green"
-                                    : c.state === "declined"
-                                    ? "rose"
-                                    : "gray"
+                                      ? "green"
+                                      : c.state === "declined"
+                                        ? "rose"
+                                        : "gray"
                                 }
                               >
                                 {c.state}
@@ -676,10 +677,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                 {fire
                   ? "Field agent incident briefing"
                   : ambulance
-                  ? "EMS dispatch briefing"
-                  : police
-                  ? "Police dispatch briefing"
-                  : "RAG-assisted trauma briefing"}
+                    ? "EMS dispatch briefing"
+                    : police
+                      ? "Police dispatch briefing"
+                      : "RAG-assisted trauma briefing"}
               </h2>
               <Badge tone="sky">Context retrieved</Badge>
             </div>
@@ -688,10 +689,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
               {fire
                 ? "Market Street incident: residential structure, 4 floors. Entry from north gate; flammable materials reported. Rescue priority on floor 3. Joint EMS staging recommended on adjacent street."
                 : ambulance
-                ? "Patient context matches prior asthma history. Known allergy: Penicillin. Current medication: Albuterol inhaler. No implanted devices. Field triage suggests respiratory distress; respiratory team and critical care bed should be prepared."
-                : police
-                ? "Suspect vehicle last seen heading north on Main St. Registered to known associate. Caution advised. Backup units positioned at intersection of 5th and Oak."
-                : "Patient context matches prior asthma history. Known allergy: Penicillin. Current medication: Albuterol inhaler. No implanted devices. Field triage suggests respiratory distress; respiratory team and critical care bed should be prepared."}
+                  ? "Patient context matches prior asthma history. Known allergy: Penicillin. Current medication: Albuterol inhaler. No implanted devices. Field triage suggests respiratory distress; respiratory team and critical care bed should be prepared."
+                  : police
+                    ? "Suspect vehicle last seen heading north on Main St. Registered to known associate. Caution advised. Backup units positioned at intersection of 5th and Oak."
+                    : "Patient context matches prior asthma history. Known allergy: Penicillin. Current medication: Albuterol inhaler. No implanted devices. Field triage suggests respiratory distress; respiratory team and critical care bed should be prepared."}
               <p className="text-muted-foreground mt-3 text-[10px]">
                 Demonstration briefing · Human clinical / field review required
               </p>
@@ -714,10 +715,10 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                 {fire
                   ? "Unit availability"
                   : ambulance
-                  ? "Ambulance availability"
-                  : police
-                  ? "Unit availability"
-                  : "Critical care capacity"}
+                    ? "Ambulance availability"
+                    : police
+                      ? "Unit availability"
+                      : "Critical care capacity"}
               </h2>
               <Badge tone="green">{capacity} available</Badge>
             </div>
@@ -728,7 +729,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                     fire
                       ? u.service_type === "fire"
                       : ambulance
-                      ? u.service_type === "ambulance"
+                        ? u.service_type === "ambulance"
                         : u.service_type === "police",
                   );
                   const serviceLabel = fire
@@ -752,12 +753,12 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                               u.status === "available"
                                 ? "green"
                                 : u.status === "assigned"
-                                ? "amber"
-                                : u.status === "en_route"
-                                ? "sky"
-                                : u.status === "on_scene"
-                                ? "violet"
-                                : "gray"
+                                  ? "amber"
+                                  : u.status === "en_route"
+                                    ? "sky"
+                                    : u.status === "on_scene"
+                                      ? "violet"
+                                      : "gray"
                             }
                           >
                             {u.status.replace("_", " ")}
@@ -983,25 +984,25 @@ export function AdminDashboard() {
       getUnits(session.token),
     ]).then(
       ([incidentResult, auditResult, verificationResult, unitsResult]) => {
-      if (cancelled) return;
-      if (incidentResult.status === "fulfilled") {
-        setIncidents(incidentResult.value.incidents);
-      } else {
-        setIncidentLoadError("Incident data could not be loaded.");
-        toast.error("Failed to load incidents");
-      }
-      if (auditResult.status === "fulfilled") {
-        setAudit(auditResult.value.entries);
-      } else {
-        toast.error("Failed to load audit entries");
-      }
-      if (verificationResult.status === "fulfilled") {
-        setAuditVerified(verificationResult.value.valid);
-      }
+        if (cancelled) return;
+        if (incidentResult.status === "fulfilled") {
+          setIncidents(incidentResult.value.incidents);
+        } else {
+          setIncidentLoadError("Incident data could not be loaded.");
+          toast.error("Failed to load incidents");
+        }
+        if (auditResult.status === "fulfilled") {
+          setAudit(auditResult.value.entries);
+        } else {
+          toast.error("Failed to load audit entries");
+        }
+        if (verificationResult.status === "fulfilled") {
+          setAuditVerified(verificationResult.value.valid);
+        }
         if (unitsResult.status === "fulfilled") {
           setAdminUnits(unitsResult.value.units);
         }
-      setAdminDataLoading(false);
+        setAdminDataLoading(false);
       },
     );
 
@@ -1485,24 +1486,24 @@ export function AdminDashboard() {
                   );
                   const isExpanded = expandedIncidentId === inc.incident_id;
                   return (
-                  <div key={inc.incident_id} className="patient">
-                    <div className="patient-top">
-                      <h3>{inc.summary_redacted || inc.incident_type}</h3>
-                      <Badge
-                        tone={
-                          inc.status === "resolved" ||
-                          inc.status === "completed"
-                            ? "green"
-                            : inc.status === "dispatched"
-                              ? "blue"
-                              : "rose"
-                        }
-                      >
-                        {inc.status}
-                      </Badge>
-                    </div>
-                    <p className="mono text-xs">{inc.incident_id}</p>
-                    <div className="patient-meta">
+                    <div key={inc.incident_id} className="patient">
+                      <div className="patient-top">
+                        <h3>{inc.summary_redacted || inc.incident_type}</h3>
+                        <Badge
+                          tone={
+                            inc.status === "resolved" ||
+                            inc.status === "completed"
+                              ? "green"
+                              : inc.status === "dispatched"
+                                ? "blue"
+                                : "rose"
+                          }
+                        >
+                          {inc.status}
+                        </Badge>
+                      </div>
+                      <p className="mono text-xs">{inc.incident_id}</p>
+                      <div className="patient-meta">
                         <Button
                           size="sm"
                           variant="secondary"
@@ -1512,20 +1513,20 @@ export function AdminDashboard() {
                         >
                           {isExpanded ? "Hide response" : "Review response"}
                         </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => handleRevealPii(inc.incident_id)}
-                        disabled={piiLoading}
-                      >
+                        <Button
+                          size="sm"
+                          onClick={() => handleRevealPii(inc.incident_id)}
+                          disabled={piiLoading}
+                        >
                           {piiLoading &&
                           selectedIncident === inc.incident_id ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <ShieldCheck className="h-3 w-3" />
-                        )}
-                        Reveal PII
-                      </Button>
-                    </div>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <ShieldCheck className="h-3 w-3" />
+                          )}
+                          Reveal PII
+                        </Button>
+                      </div>
                       {isExpanded && (
                         <div className="incident-workflow">
                           {incidentPanelLoading === inc.incident_id ? (
@@ -1570,10 +1571,14 @@ export function AdminDashboard() {
                                         </div>
                                       );
                                     })}
-                  </div>
+                                  </div>
                                 )}
-                                <h4 className="mt-4">Calling nearby services</h4>
-                                <ResponseTimeline lists={panel?.callLists ?? []} />
+                                <h4 className="mt-4">
+                                  Calling nearby services
+                                </h4>
+                                <ResponseTimeline
+                                  lists={panel?.callLists ?? []}
+                                />
                                 <div className="incident-response-controls">
                                   <Button
                                     size="sm"
@@ -1964,9 +1969,19 @@ export function AdminDashboard() {
                   </div>
                   <div>
                     <strong>Audio:</strong>
-                    <p className="mt-1 font-mono text-xs">
-                      {piiData.audio_url || "Not provided"}
-                    </p>
+                    {piiData.audio && piiData.audio.length > 0 ? (
+                      <div className="mt-1 space-y-2">
+                        {piiData.audio.map((a, i) => (
+                          <OriginalAudio
+                            key={a.report_id}
+                            url={a.url}
+                            label={`Original voice message ${piiData.audio!.length > 1 ? i + 1 : ""}`.trim()}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1 font-mono text-xs">Not provided</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2008,5 +2023,56 @@ export function AdminDashboard() {
         </DialogContent>
       </Dialog>
     </Shell>
+  );
+}
+
+/** Loads one original voice message on demand (the server checks the reveal and audits the play) and plays it. */
+function OriginalAudio({ url, label }: { url: string; label: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const [message, setMessage] = useState("");
+  useEffect(() => () => void (src && URL.revokeObjectURL(src)), [src]);
+  async function load() {
+    const session = getSession();
+    if (!session?.token) return;
+    setState("loading");
+    try {
+      const blob = await fetchIncidentAudio(url, session.token);
+      setSrc(URL.createObjectURL(blob));
+      setState("idle");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not load the audio");
+      setState("error");
+    }
+  }
+  return (
+    <div>
+      {src ? (
+        <audio
+          controls
+          autoPlay
+          src={src}
+          className="w-full"
+          aria-label={label}
+        />
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void load()}
+          disabled={state === "loading"}
+        >
+          {state === "loading" ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : null}
+          Play {label.toLowerCase()}
+        </Button>
+      )}
+      {state === "error" && (
+        <p className="mt-1 text-xs text-destructive" role="alert">
+          {message}
+        </p>
+      )}
+    </div>
   );
 }
