@@ -22,12 +22,14 @@ Relays do not see the report: the Moto's native store holds only the sealed enve
 
 ## Findings (all fixed unless noted)
 1. **The Wi-Fi radio must stay on.** Nearby Connections lost the link when the sender's Wi-Fi radio was switched off and did not recover until the app was restarted. The demo instruction is: turn off mobile data and leave Wi-Fi on but not connected to an internet network, or just have no internet.
-2. **A carrying phone did not retry.** The Moto received the iQOO's report while the tunnel was down (ngrok answers 404 when no tunnel runs), and nothing retried the upload because carried reports are not in the local queue. Fixed in #87: the 30 s timer also checks the relay's pending reports, and the relay link is re-applied on network changes.
+2. **Screen-off uploader (fixed in #94).** With the Moto's display off (`dumpsys display` `mState=OFF`) a carried report was not uploaded for over 3 minutes, because the WebView's relay event and 30 s timer do not reliably run while the screen is off. The foreground service now uploads carried reports natively (`CarriedUploader`/`NativeUploader`, `native/README.md`). Re-test: iQOO sender (app internet blocked), Moto display off: `SahayNativeUpload: carried reports: Summary(delivered=1)` one second after arrival, server had the incident 5 s after the tap.
+
+2b. **A carrying phone did not retry.** The Moto received the iQOO's report while the tunnel was down (ngrok answers 404 when no tunnel runs), and nothing retried the upload because carried reports are not in the local queue. Fixed in #87: the 30 s timer also checks the relay's pending reports, and the relay link is re-applied on network changes.
 3. **ngrok interstitial.** Browser-like requests got ngrok's HTML warning page instead of the API; the app now sends `ngrok-skip-browser-warning` for tunnel URLs.
 4. The first run of a day can stall at "Looking for nearby phones" on the Moto after many radio toggles (a Bluetooth advertising error seen earlier, `STATUS_RADIO_ERROR`); restarting the app or the phone's Bluetooth clears it.
 
 ## Not verified
 - The signed dispatch **status** (dispatched, en route) travelling back to the offline sender over the relay: only the delivery receipt was observed. The listener exists and is unit tested.
 - Three phones in a chain (A -> B -> C where A cannot reach C). The engine floods with a hop limit and is tested in chains in the JVM tests, but not on three real devices.
-- Relay delivery with both screens off (see `native/README.md`, N-04 battery notes).
+- Relay delivery with **both** screens off (the uploader's screen off is now verified, see below; the sender needs its screen on to type a report, so a sender with its screen off is not a case). Battery drain per hour is still unmeasured (N-04).
 - A real voice recording from a phone through live speech-to-text (Android records WebM/Opus; Gemini's documented formats do not list it, Whisper is the fallback).

@@ -42,6 +42,14 @@ export function Badge({
   return <span className={`badge ${tone}`}>{children}</span>;
 }
 
+// Section change: slide in from the side we are navigating towards. Functions of `custom` must live in variants
+// (passing them to initial/exit directly does not type-check).
+const sectionVariants = {
+  enter: (direction: number) => ({ opacity: 0, x: direction * 24 }),
+  center: { opacity: 1, x: 0 },
+  exit: (direction: number) => ({ opacity: 0, x: direction * -24 }),
+};
+
 export type ShellTab = { id: string; label: string; icon: LucideIcon };
 
 type Role = "citizen" | "hospital" | "fire" | "ambulance" | "police" | "admin";
@@ -273,7 +281,13 @@ export function Shell({
               variant="ghost"
               size="icon"
               aria-label={t("notifications", { defaultValue: "Notifications" })}
-              onClick={() => toast(t("no_new_notifications", { defaultValue: "No new notifications" }))}
+              onClick={() =>
+                toast(
+                  t("no_new_notifications", {
+                    defaultValue: "No new notifications",
+                  }),
+                )
+              }
             >
               <Bell size={18} />
             </Button>
@@ -299,20 +313,14 @@ export function Shell({
               key={activeTab ?? "page"}
               className="section-transition"
               custom={navigationDirection}
-              initial={
-                reduced
-                  ? false
-                  : (direction: number) => ({ opacity: 0, x: direction * 24 })
-              }
-              animate={{ opacity: 1, x: 0 }}
-              exit={
-                reduced
-                  ? undefined
-                  : (direction: number) => ({
-                      opacity: 0,
-                      x: direction * -24,
-                    })
-              }
+              {...(reduced
+                ? { initial: false as const }
+                : {
+                    variants: sectionVariants,
+                    initial: "enter",
+                    animate: "center",
+                    exit: "exit",
+                  })}
               transition={{ duration: reduced ? 0 : 0.2, ease: "easeOut" }}
             >
               {children}
