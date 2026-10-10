@@ -180,6 +180,19 @@ export function ensureRelay(): Promise<boolean> {
   return relayStarting;
 }
 
+/** Re-apply advertising and discovery (plugin stops and restarts the transport). No-op when the relay is off. */
+export async function restartRelay(): Promise<void> {
+  if (!Capacitor.isNativePlatform() || !isRelayEnabled()) return;
+  try {
+    const key = await ensureServerKey();
+    if (!key) return;
+    const { deviceId } = await getOrCreateIdentity(secureStorage);
+    await startRelay(deviceId, key.ed25519_public_key);
+  } catch {
+    /* best effort */
+  }
+}
+
 /** Settings switch: turn the relay on or off now and remember the choice. */
 export async function setRelayEnabled(on: boolean): Promise<boolean> {
   setRelayEnabledFlag(on);
@@ -242,18 +255,34 @@ export function startReportSync(onChange?: () => void): () => void {
     syncNow,
     onChange,
   }).then((remove) => (removeListeners = remove));
+  // A network change (Wi-Fi toggled, data lost or back) can leave the Nearby link stuck on some phones, so re-apply it.
+  let restartTimer: number | undefined;
+  const onNetworkChange = () => {
+    window.clearTimeout(restartTimer);
+    restartTimer = window.setTimeout(() => void restartRelay(), 2_000);
+  };
   window.addEventListener("online", run);
+  window.addEventListener("online", onNetworkChange);
+  window.addEventListener("offline", onNetworkChange);
   document.addEventListener("visibilitychange", onVisible);
   const timer = window.setInterval(() => {
-    void getQueue()
-      .due(Date.now())
-      .then((due) => {
-        if (due.length) run();
-      })
-      .catch(() => {});
+    // Retry our own queued reports AND reports we carry for others (they are not in the queue, only in the relay).
+    void (async () => {
+      const due = await getQueue().due(Date.now());
+      let carried = 0;
+      if (Capacitor.isNativePlatform()) {
+        carried = (
+          await SahayNearby.pendingForUpload().catch(() => ({ envelopes: [] }))
+        ).envelopes.length;
+      }
+      if (due.length || carried) run();
+    })().catch(() => {});
   }, 30_000);
   return () => {
+    window.clearTimeout(restartTimer);
     window.removeEventListener("online", run);
+    window.removeEventListener("online", onNetworkChange);
+    window.removeEventListener("offline", onNetworkChange);
     document.removeEventListener("visibilitychange", onVisible);
     window.clearInterval(timer);
     removeListeners();
