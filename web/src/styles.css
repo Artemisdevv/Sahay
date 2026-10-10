@@ -2547,3 +2547,145 @@ h1 {
   outline: 3px solid var(--foreground);
   outline-offset: 3px;
 }
+
+/* ---- desktop text size (generated; mobile is unchanged) ---- */
+@media (min-width: 769px) {
+  body { font-size: 15px; }
+  .brand-title { font-size: 24px; }
+  .brand-subtitle { font-size: 12px; }
+  .workspace strong { font-size: 13px; }
+  .workspace small { font-size: 12px; }
+  .nav-label { font-size: 12px; }
+  .nav-item { font-size: 14px; }
+  .nav-item .count { font-size: 12px; }
+  .network-health small { font-size: 12px; }
+  .avatar { font-size: 13px; }
+  .account small { font-size: 12px; }
+  .breadcrumb { font-size: 13px; }
+  .topbar-right { font-size: 13px; }
+  .mono { font-size: 13px; }
+  .badge { font-size: 12px; }
+  .eyebrow { font-size: 14px; }
+  h1 { font-size: 31px; }
+  .subtitle { font-size: 14px; }
+  .status-label { font-size: 12px; }
+  .status-value { font-size: 15px; }
+  .status-value small { font-size: 12px; }
+  .panel-head h2 { font-size: 16px; }
+  .panel-head p { font-size: 13px; }
+  .section-label { font-size: 13px; }
+  .section-label small { font-size: 12px; }
+  .incident-choice { font-size: 12px; }
+  .field { font-size: 13px; }
+  .field input,
+.field select,
+.field textarea { font-size: 13px; }
+  .location-input .badge { font-size: 12px; }
+  .quick-chips button { font-size: 12px; }
+  .attachment-zone p { font-size: 12px; }
+  .attachment-actions button { font-size: 12px; }
+  .payload summary { font-size: 12px; }
+  .payload pre { font-size: 12px; }
+  .form-bottom small { font-size: 12px; }
+  .form-bottom button { font-size: 13px; }
+  .disclaimer { font-size: 12px; }
+  .compact-head h2 { font-size: 14px; }
+  .profile-top .avatar { font-size: 16px; }
+  .profile-top strong { font-size: 14px; }
+  .profile-top small { font-size: 12px; }
+  .profile-summary small { font-size: 12px; }
+  .profile-summary strong { font-size: 13px; }
+  .medical-note { font-size: 12px; }
+  .consent-row { font-size: 12px; }
+  .profile-ready { font-size: 12px; }
+  .agent-info strong { font-size: 12px; }
+  .agent-info small { font-size: 12px; }
+  .agent-footer { font-size: 12px; }
+  .unit-marker span { font-size: 13px; }
+  .unit-eta-chip { font-size: 12px; }
+  .map-state { font-size: 13px; }
+  .incident-map-detail { font-size: 14px; }
+  .incident-map-detail strong { font-size: 16px; }
+  .map-detail-kicker { font-size: 12px; }
+  .map-legend { font-size: 12px; }
+  .zone-meta { font-size: 12px; }
+  .zone-meta small { font-size: 12px; }
+  .history-table { font-size: 12px; }
+  .history-table th { font-size: 12px; }
+  .history-table td strong { font-size: 12px; }
+  .history-table td small { font-size: 12px; }
+  .page-footer { font-size: 12px; }
+  .telemetry-intro h3 { font-size: 16px; }
+  .telemetry-intro p { font-size: 13px; }
+  .step-index { font-size: 13px; }
+  .telemetry-step strong { font-size: 14px; }
+  .telemetry-step p { font-size: 13px; }
+  .eta-banner strong { font-size: 29px; }
+  .eta-banner small { font-size: 12px; }
+  .error-text { font-size: 13px; }
+  .login-network h1 { font-size: 44px; }
+  .login-node strong { font-size: 13px; }
+  .login-node small { font-size: 12px; }
+  .login-live { font-size: 13px; }
+  .login-form h1 { font-size: 30px; }
+  .role-selector button { font-size: 12px; }
+  .demo-bar > span { font-size: 12px; }
+  .demo-buttons button { font-size: 12px; }
+  .login-footer { font-size: 12px; }
+  .metric strong { font-size: 30px; }
+  .metric small { font-size: 12px; }
+  .mesh-node { font-size: 12px; }
+  .mesh-node small { font-size: 12px; }
+  .audit-row { font-size: 12px; }
+  .audit-row .mono { font-size: 12px; }
+  .audit-filters button { font-size: 12px; }
+  .patient h3 { font-size: 15px; }
+  .patient p { font-size: 13px; }
+  .patient-meta { font-size: 12px; }
+  .incident-workflow h4 { font-size: 14px; }
+  .incident-dispatch,
+.incident-response-controls { font-size: 14px; }
+  .incident-trace-item p { font-size: 14px; }
+  .response-timeline h5 { font-size: 14px; }
+  .response-timeline li { font-size: 13px; }
+  .response-timeline-empty { font-size: 14px; }
+  .cz-help .response-timeline h5 { font-size: 16px; }
+  .cz-help .response-timeline li { font-size: 14px; }
+  .briefing { font-size: 13px; }
+  .briefing strong { font-size: 12px; }
+  .logs { font-size: 12px; }
+  .unit-row strong { font-size: 13px; }
+  .unit-row small { font-size: 12px; }
+  .dialog-section { font-size: 12px; }
+  .topbar-title { font-size: 18px; }
+  .cz-help,
+.cz-page { font-size: 20px; }
+  .cz-help h1,
+.cz-page h1 { font-size: 35px; }
+  .cz-lead { font-size: 21px; }
+  .cz-sub { font-size: 22px; }
+  .cz-mic-label { font-size: 23px; }
+  .cz-choice { font-size: 21px; }
+  .cz-type textarea { font-size: 20px; }
+  .cz-where button { font-size: 19px; }
+  .cz-help .cz-send,
+.cz-form + .cz-send { font-size: 23px; }
+  .cz-call { font-size: 24px; }
+  .cz-secondary { font-size: 20px; }
+  .cz-hint { font-size: 18px; }
+  .cz-steps li { font-size: 22px; }
+  .cz-list small { font-size: 18px; }
+  .cz-status { font-size: 19px; }
+  .cz-facts dt { font-size: 18px; }
+  .cz-consent small { font-size: 18px; }
+  .cz-form { font-size: 19px; }
+  .cz-form input { font-size: 20px; }
+  .public-map-page h1 { font-size: 24px; }
+  .public-map-page p { font-size: 16px; }
+  .cz-sos { font-size: 29px; }
+  .text-xs { font-size: 14px; line-height: 1.45; }
+  .text-sm { font-size: 16px; line-height: 1.5; }
+  .text-base { font-size: 18px; }
+  .text-\[10px\] { font-size: 12px; }
+  .text-\[11px\] { font-size: 13px; }
+}

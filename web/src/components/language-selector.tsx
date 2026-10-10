@@ -16,7 +16,7 @@ export function LanguageSelector() {
       value={i18n.language}
       onValueChange={(lng) => i18n.changeLanguage(lng)}
     >
-      <SelectTrigger className="w-40 h-8 items-center gap-2">
+      <SelectTrigger className="w-48 h-9 items-center gap-2">
         <Globe className="h-4 w-4" />
         <SelectValue placeholder={t("common.language")} />
       </SelectTrigger>
