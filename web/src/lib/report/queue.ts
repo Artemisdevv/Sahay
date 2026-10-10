@@ -21,6 +21,8 @@ export interface QueueItem {
   receipt_verified?: boolean;
   /** how the receipt reached us: straight from the server, or back through nearby phones */
   via?: "internet" | "relay";
+  /** epoch ms: a compact SMS announcing this report was sent to the gateway (no text, only position and type) */
+  sms_sent_at?: number | undefined;
   /** latest signed status that came back over the relay while we were offline */
   relay_status?: { status: string; message: string } | undefined;
 }

@@ -29,6 +29,7 @@ from app.pii_crypto import ensure_pii_encryption_key
 from app.rate_limit import rate_limiter
 from app.schemas import DeviceChallengeRequest, DeviceRegistrationRequest, LoginRequest, MockReportRequest
 from app.deploy import install as install_deploy
+from app.sms_gateway import install as install_sms_gateway
 from app.seed import seed_demo
 from app.security import verify_password
 from app.settings import settings
@@ -175,6 +176,7 @@ def trace_json(trace: AgentTrace) -> dict:
 install_incident_routes(app, current_user, require_admin, incident_json, trace_json, utc_iso)
 install_audit_routes(app, require_admin, utc_iso)
 install_public_routes(app, JWT_SECRET, request_ip)
+install_sms_gateway(app)
 
 
 def distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:

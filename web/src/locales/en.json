@@ -670,7 +670,9 @@
     "approximate": "We could not find your exact position. Tell the team where you are if they call.",
     "updatesAria": "Response team updates",
     "calling": "Calling nearby services",
-    "retry": "Try sending again"
+    "retry": "Try sending again",
+    "smsTitle": "Sent by text message",
+    "smsLead": "There is no signal, so a short text message with your location and the type of emergency was sent to the response centre. Your full message will follow when there is a connection."
   },
   "timeline": {
     "service": {

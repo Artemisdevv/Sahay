@@ -983,7 +983,9 @@ function Progress({
         ? t("status.onTheWay")
         : item.state === "sent"
           ? t("status.sentTitle")
-          : t("status.savedTitle");
+          : item.sms_sent_at
+            ? t("status.smsTitle")
+            : t("status.savedTitle");
   const viaRelay = item.via === "relay";
   const acceptedService = responseCalls.find((service) =>
     service.candidates.some((candidate) => candidate.state === "accepted"),
@@ -993,6 +995,8 @@ function Progress({
     ? t("status.declinedLead")
     : failed
     ? t("status.failedLead")
+    : item.state === "queued" && item.sms_sent_at
+      ? t("status.smsLead")
     : arrived
       ? t("status.arrived")
       : acceptedService && status?.eta_minutes != null
@@ -1057,7 +1061,7 @@ function Progress({
       )}
       <a href="tel:112" className="cz-call">
         <Phone />
-        Call 112 now
+        {t("help.call112")}
       </a>
       <Button variant="outline" className="cz-secondary" onClick={onDone}>
         {t("common.done")}

@@ -229,7 +229,8 @@ def run_pipeline(db: Session, report_id: str, agents: Agents | None = None) -> R
         incident_type=intake.incident_type, severity=intake.severity, urgency_score=triage.urgency_score,
         lat=loc["lat"], lng=loc["lng"], summary_redacted=summary_redacted[:500],
         people_count=intake.people_count, hazards=intake.hazards, needed_services=triage.needed_services,
-        report_count=1, report_ids=[report.report_id], reason=triage.reason[:250],
+        report_count=1, report_ids=[report.report_id],
+        reason=(("Via SMS, location and category only. " if payload.get("source") == "sms" else "") + triage.reason)[:250],
     )
     db.add(incident)
     db.flush()

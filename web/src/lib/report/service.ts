@@ -1,3 +1,5 @@
+import { SahaySms } from "@/native/sahay-sms";
+import { buildSmsLine, runSmsFallback } from "./sms-fallback";
 import { API_BASE } from "@/lib/api";
 import i18n from "@/lib/i18n";
 import type { ServiceCallList } from "@/lib/api";
@@ -6,6 +8,7 @@ import { secureStorage } from "@/native/secure-storage";
 import { SahayNearby } from "@/native/sahay-nearby";
 import {
   attachRelayListeners,
+  getRelayState,
   isRelayEnabled,
   relayStartedFor,
   setRelayEnabledFlag,
@@ -23,7 +26,11 @@ import {
 } from "./envelope";
 import { captureLocation, type CapturedLocation } from "./location";
 import { ReportQueue, type QueueItem } from "./queue";
-import { ensureServerKey, refreshServerKey } from "./server-key";
+import {
+  ensureServerKey,
+  getCachedServerKey,
+  refreshServerKey,
+} from "./server-key";
 import { flushReports, type FlushResult } from "./uploader";
 
 /**
@@ -35,6 +42,7 @@ export class NotReadyError extends Error {}
 
 let queue: ReportQueue | null = null;
 const getQueue = () => (queue ??= new ReportQueue());
+const smsLines = new Map<string, { line: string; sos: boolean }>();
 
 export interface SubmitInput {
   kind?: "report" | "sos";
@@ -99,6 +107,19 @@ export async function submitReport(input: SubmitInput): Promise<SubmitResult> {
     next_attempt_at: 0,
   };
   await getQueue().put(item);
+  // In memory only: the queue itself never holds a readable position (see sms-fallback.ts).
+  smsLines.set(envelope.report_id, {
+    line: buildSmsLine({
+      reportId: envelope.report_id,
+      deviceId: identity.deviceId,
+      lat: location.lat,
+      lng: location.lng,
+      category: input.category,
+      sos: (input.kind ?? "report") === "sos",
+      ts: now.getTime() / 1000,
+    }),
+    sos: (input.kind ?? "report") === "sos",
+  });
   void handOffToRelay(envelope);
   void syncNow();
   return { item, approximateLocation: location.approximate };
@@ -279,7 +300,25 @@ export function startReportSync(onChange?: () => void): () => void {
       if (due.length || carried) run();
     })().catch(() => {});
   }, 30_000);
+  // Last rung of the ladder: text the gateway for a report that cannot get out (Android only).
+  const smsTimer = Capacitor.isNativePlatform()
+    ? window.setInterval(() => {
+        void runSmsFallback({
+          queue: getQueue(),
+          lines: smsLines,
+          gatewayNumber: () => getCachedServerKey()?.gateway_number ?? null,
+          nearbyPeers: () => getRelayState().nearby,
+          online: () => navigator.onLine,
+          sms: SahaySms,
+        })
+          .then((texted) => {
+            if (texted.length) onChange?.();
+          })
+          .catch(() => {});
+      }, 10_000)
+    : undefined;
   return () => {
+    window.clearInterval(smsTimer);
     window.clearTimeout(restartTimer);
     window.removeEventListener("online", run);
     window.removeEventListener("online", onNetworkChange);

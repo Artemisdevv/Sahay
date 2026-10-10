@@ -405,6 +405,13 @@ Gateway number is configured via `SAHAY_GATEWAY_NUMBER` (demo: a test phone or T
 ```
 The server builds a minimal incident from the SMS (location plus category, flagged `source: "sms"`, no PII beyond the sending number which is stored encrypted).
 
+Implemented in `backend/app/sms_gateway.py`:
+- Disabled (404) unless `SAHAY_GATEWAY_SECRET` is set; a wrong or missing `X-Gateway-Secret` is 401; a body that is not a valid `SAHAY1` line, or a timestamp more than a day ahead, is 422.
+- Answers `202 {"report_id": "sms-<report id 8>-<device id 8>", "status": "received", "duplicate": false}`. The same SMS again answers `200` with `"duplicate": true` and creates nothing.
+- The incident is created by the normal agent pipeline from a synthetic text ("Fire reported by SMS ... No further details"), so severity, triage and dispatch rules are the same. Its `reason` starts with `Via SMS, location and category only.`. SOS (`SO`) makes a `kind: "sos"` report, which always needs admin approval.
+- `GET /config/server-key` also returns `gateway_number` (from `SAHAY_GATEWAY_NUMBER`) when set, so the app learns the number while it is online and can text it later with no signal.
+- App side: a report that is still queued after 45 s (SOS 20 s, 3 min when a nearby phone is carrying it) with no internet is announced by one SMS. The sealed report stays queued and still goes out over the internet or a relay, so the full message follows. The SMS line is kept in memory only, never in the queue.
+
 **Emergency number:** India `112`. `openDialer` is used with the number prefilled. **Never use `ACTION_CALL`. Never place a real call in a demo.**
 
 ---

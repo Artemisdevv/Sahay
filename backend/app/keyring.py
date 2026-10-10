@@ -80,9 +80,13 @@ def server_signing_key() -> SigningKey:
 
 
 def server_public_key_response() -> dict[str, str]:
+    from app.settings import settings
+
     private_key = _load_or_create_private_key()
     signing_key = server_signing_key()
+    extra = {"gateway_number": settings.sahay_gateway_number} if settings.sahay_gateway_number else {}
     return {
+        **extra,
         "key_id": "k1",
         "x25519_public_key": base64.b64encode(bytes(private_key.public_key)).decode("ascii"),
         "ed25519_public_key": base64.b64encode(bytes(signing_key.verify_key)).decode("ascii"),

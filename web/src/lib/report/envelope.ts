@@ -26,6 +26,8 @@ export interface ServerKey {
   key_id: string;
   x25519_public_key: string;
   ed25519_public_key: string;
+  /** number to text the SAHAY1 line to when there is no internet and no nearby phone */
+  gateway_number?: string;
 }
 
 export interface ReportPayload {

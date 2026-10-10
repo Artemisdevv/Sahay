@@ -14,3 +14,8 @@ ngrok http 8080                     # public https URL (WebSocket works over wss
 - Keep ONE instance: the WebSocket manager and the device-challenge cache are in memory.
 - The Android app can point at the tunnel URL by building with `VITE_API_BASE=https://<tunnel>/api/v1 VITE_WS_URL=wss://<tunnel>/ws/v1`; add `https://localhost` to `SAHAY_CORS_ORIGINS` (already in the generated file).
 - `.env.demo` holds secrets: never commit it or paste it in chat. If you regenerate it, old reports can no longer be decrypted.
+
+## SMS fallback (optional)
+
+Set `SAHAY_GATEWAY_SECRET` (any long random string) and `SAHAY_GATEWAY_NUMBER` (the number phones text, with country code) in `deploy/.env.demo`, then rebuild. The app picks the number up from `/config/server-key` while it is online.
+Messages reach the server through `POST /api/v1/sms-gateway/inbound` with the header `X-Gateway-Secret`. For the demo, `backend/scripts/sms_gateway_adb.py` turns a USB-connected phone with a SIM into the gateway (it reads that phone's SMS inbox over adb and forwards `SAHAY1|...` lines). For a real deployment point Twilio or a forwarder app at the same URL.
