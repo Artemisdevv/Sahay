@@ -49,7 +49,13 @@ import {
 } from "@/lib/report/service";
 import type { ServiceCallList } from "@/lib/api";
 import type { Category } from "@/lib/report/envelope";
-import { warmLocation } from "@/lib/report/location";
+import {
+  getLatestFix,
+  refreshLocation,
+  subscribeLocation,
+  warmLocation,
+  type CapturedLocation,
+} from "@/lib/report/location";
 import {
   getRelayState,
   isRelayEnabled,
@@ -188,6 +194,13 @@ export function CitizenPortal() {
     return watchRelay(setRelay);
   }, []);
   const voice = useVoiceCapture();
+  // The viewer's latest position, shared with the map tab so it can show "You are here" and follow Update.
+  const [myPos, setMyPos] = useState<CapturedLocation | null>(null);
+  const [recenter, setRecenter] = useState(0);
+  useEffect(() => {
+    setMyPos(getLatestFix());
+    return subscribeLocation(setMyPos);
+  }, []);
   useEffect(() => {
     let active = true;
     void readStoredProfile()
@@ -270,23 +283,21 @@ export function CitizenPortal() {
     [],
   );
 
-  function updateLocation() {
+  async function updateLocation() {
     if (!navigator.geolocation) {
       toast.error(
         "This phone cannot share its location. Type your address in My details.",
       );
       return;
     }
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        setLocation(
-          `${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`,
-        );
-        toast.success("Location updated");
-      },
-      () => toast.error("Location is off. Turn it on in phone settings."),
-      { timeout: 8000 },
-    );
+    const fix = await refreshLocation();
+    if (!fix) {
+      toast.error("Location is off. Turn it on in phone settings.");
+      return;
+    }
+    setLocation(`${fix.lat.toFixed(4)}, ${fix.lng.toFixed(4)}`);
+    setRecenter((n) => n + 1); // the map jumps to the new position
+    toast.success("Location updated");
   }
 
   function attachPhotos(files: Iterable<File> | null) {
@@ -585,7 +596,7 @@ export function CitizenPortal() {
             <span>
               Your location: <strong>{location}</strong>
             </span>
-            <button type="button" onClick={updateLocation}>
+            <button type="button" onClick={() => void updateLocation()}>
               <LocateFixed />
               Update
             </button>
@@ -668,7 +679,12 @@ export function CitizenPortal() {
             Confirmed incidents near you, by area. No names or messages are
             shown.
           </p>
-          <IncidentMap role="civilian" className="admin-map" />
+          <IncidentMap
+            role="civilian"
+            className="admin-map"
+            userLocation={myPos}
+            recenterKey={recenter}
+          />
         </section>
       )}
 
