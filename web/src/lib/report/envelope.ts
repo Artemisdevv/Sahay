@@ -1,4 +1,5 @@
 import sodium from "libsodium-wrappers";
+import i18n from "@/lib/i18n";
 import type { ReportEnvelope } from "@/native/sahay-nearby";
 import type { DeviceIdentity } from "@/lib/device-identity";
 
@@ -58,7 +59,7 @@ export function audioBytesToBase64(bytes: Uint8Array): string {
 /** Throws PayloadError with a message fit for the user when the report could not be accepted by the server. */
 export function validatePayload(p: ReportPayload): ReportPayload {
   if (!CATEGORIES.includes(p.category))
-    throw new PayloadError("Choose what is happening.");
+    throw new PayloadError(i18n.t("err.payChoose"));
   const { lat, lng } = p.location;
   if (
     !Number.isFinite(lat) ||
@@ -66,14 +67,14 @@ export function validatePayload(p: ReportPayload): ReportPayload {
     Math.abs(lat) > 90 ||
     Math.abs(lng) > 180
   )
-    throw new PayloadError("The location is not valid.");
+    throw new PayloadError(i18n.t("err.payLocation"));
   const hasText = !!p.text && p.text.trim().length > 0;
-  if (!p.audio && !hasText) throw new PayloadError("Add a message to send.");
+  if (!p.audio && !hasText) throw new PayloadError(i18n.t("err.payMessage"));
   if (p.audio) {
     const size = unb64(p.audio.data).length;
     if (size > MAX_AUDIO_BYTES)
       throw new PayloadError(
-        "The recording is too long. Record a shorter one.",
+        i18n.t("err.payAudioLong"),
       );
   }
   return p;

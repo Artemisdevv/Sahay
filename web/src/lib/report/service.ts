@@ -1,4 +1,5 @@
 import { API_BASE } from "@/lib/api";
+import i18n from "@/lib/i18n";
 import type { ServiceCallList } from "@/lib/api";
 import { ensureDeviceToken, getOrCreateIdentity } from "@/lib/device-identity";
 import { secureStorage } from "@/native/secure-storage";
@@ -56,7 +57,7 @@ export async function submitReport(input: SubmitInput): Promise<SubmitResult> {
   const serverKey = await ensureServerKey();
   if (!serverKey) {
     throw new NotReadyError(
-      "This phone needs the internet once to get ready. Connect and try again, or call 112.",
+      i18n.t("err.notReady"),
     );
   }
   const identity = await getOrCreateIdentity(secureStorage);

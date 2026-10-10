@@ -16,6 +16,7 @@ afterwards. Provider error bodies are never logged or put into exceptions (they 
 from __future__ import annotations
 
 import base64
+import os
 import mimetypes
 
 import httpx
@@ -24,7 +25,8 @@ GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 GEMINI_PROMPT = (
     "Transcribe this emergency call exactly as spoken, in the original language and script "
-    "(Malayalam script for Malayalam, Devanagari for Hindi). Do not translate, summarise or add anything. "
+    "(Malayalam script for Malayalam, Devanagari for Hindi, Tamil script for Tamil). The speaker may use Malayalam, "
+    "Hindi, Tamil, English or a mix: detect the language from the audio. Do not translate, summarise or add anything. "
     "Output only the transcript, or an empty reply if there is no speech."
 )
 CF_URL = "https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/openai/{model}"
@@ -37,6 +39,13 @@ class STTError(RuntimeError):
 
 
 def _lang(language: str) -> str | None:
+    """The reporter's app language as a model hint, or None to let the model detect it from the audio.
+
+    Off by default (SAHAY_STT_LANGUAGE_HINT=1 turns it on): the app language is not the spoken language. A Malayalam
+    speaker with the app in English made the model loop on English filler instead of reading the Malayalam.
+    """
+    if os.environ.get("SAHAY_STT_LANGUAGE_HINT", "0") != "1":
+        return None
     code = (language or "").lower().split("-")[0]
     return code if code in LANGS else None
 
@@ -79,7 +88,10 @@ class GeminiAudio:
 
     def transcribe(self, audio: bytes, mime: str, language: str) -> str | None:
         mime_base = (mime or "audio/ogg").split(";")[0].strip() or "audio/ogg"
-        hint = f" The speaker is most likely speaking language code '{lang}'." if (lang := _lang(language)) else ""
+        hint = (
+            f" The reporter's app is set to language code '{lang}', but the speaker may use English, Malayalam, Hindi "
+            "or Tamil: decide the language from the audio itself, not from this hint."
+        ) if (lang := _lang(language)) else ""
         body = {
             "contents": [{"parts": [
                 {"text": GEMINI_PROMPT + hint},

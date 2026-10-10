@@ -784,6 +784,35 @@
     "metricResolution": "Mean resolution time",
     "metricMemory": "Vector memory hit rate",
     "errAudio": "Could not load the audio",
-    "pageTitle": "Agent orchestration"
+    "pageTitle": "Agent orchestration",
+    "noUnits": "No units available",
+    "allPipelines": "All pipelines operational",
+    "reviewResponse": "Review response",
+    "hideResponse": "Hide response",
+    "noDispatches": "No dispatches proposed.",
+    "callingServices": "Calling nearby services",
+    "rejectReasonPlaceholder": "Reason for rejection",
+    "chooseAvailableUnit": "Choose available unit",
+    "noTrace": "No trace steps available."
+  },
+  "err": {
+    "noGeolocation": "This phone cannot share its location. Type your address in My details.",
+    "locationOff": "Location is off. Turn it on in phone settings.",
+    "photoTooBig": "Choose an image smaller than 10 MB.",
+    "photoMax": "You can attach up to 3 photos.",
+    "cameraUnavailable": "Camera capture isn’t available here. You can still upload an image.",
+    "cameraDenied": "Camera access was denied. You can still upload an image.",
+    "cameraNone": "No camera is available on this device. You can still upload an image.",
+    "cameraOpen": "Couldn’t open the camera. You can still upload an image.",
+    "cameraStarting": "Camera is still starting. Try again in a moment.",
+    "captureFailed": "Couldn’t capture the photo. You can upload an image instead.",
+    "captureRetry": "Couldn’t capture the photo. Try again or upload an image.",
+    "saveFailed": "Could not save the report. Try again, or call 112.",
+    "nameAge": "Enter your name and your age (1 to 120).",
+    "payChoose": "Choose what is happening.",
+    "payLocation": "The location is not valid.",
+    "payMessage": "Add a message to send.",
+    "payAudioLong": "The recording is too long. Record a shorter one.",
+    "notReady": "This phone needs the internet once to get ready. Connect and try again, or call 112."
   }
 }

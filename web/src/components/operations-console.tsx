@@ -753,7 +753,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                       ))}
                       {filteredPublicUnits.length === 0 && (
                         <p className="text-muted-foreground text-center py-4">
-                          No units available
+                          {i18n.t("ops.noUnits")}
                         </p>
                       )}
                     </>
@@ -1239,7 +1239,7 @@ export function AdminDashboard() {
         </div>
         <Badge tone="green">
           <span className="dot pulse" />
-          All pipelines operational
+          {i18n.t("ops.allPipelines")}
         </Badge>
       </div>
       <div className="metrics">
@@ -1494,7 +1494,7 @@ export function AdminDashboard() {
                             void toggleIncidentDetails(inc.incident_id)
                           }
                         >
-                          {isExpanded ? "Hide response" : "Review response"}
+                          {isExpanded ? i18n.t("ops.hideResponse") : i18n.t("ops.reviewResponse")}
                         </Button>
                         <Button
                           size="sm"
@@ -1522,7 +1522,7 @@ export function AdminDashboard() {
                                 <h4>{i18n.t("ops.proposedEtas")}</h4>
                                 {dispatches.length === 0 ? (
                                   <p className="text-muted-foreground">
-                                    No dispatches proposed.
+                                    {i18n.t("ops.noDispatches")}
                                   </p>
                                 ) : (
                                   <div className="incident-dispatch-list">
@@ -1557,7 +1557,7 @@ export function AdminDashboard() {
                                   </div>
                                 )}
                                 <h4 className="mt-4">
-                                  Calling nearby services
+                                  {i18n.t("ops.callingServices")}
                                 </h4>
                                 <ResponseTimeline
                                   lists={panel?.callLists ?? []}
@@ -1582,7 +1582,7 @@ export function AdminDashboard() {
                                   </Button>
                                   <Input
                                     aria-label={`Rejection reason for ${inc.incident_id}`}
-                                    placeholder="Reason for rejection"
+                                    placeholder={i18n.t("ops.rejectReasonPlaceholder")}
                                     value={rejectReasons[inc.incident_id] ?? ""}
                                     onChange={(event) =>
                                       setRejectReasons((current) => ({
@@ -1642,7 +1642,7 @@ export function AdminDashboard() {
                                             }
                                           >
                                             <option value="">
-                                              Choose available unit
+                                              {i18n.t("ops.chooseAvailableUnit")}
                                             </option>
                                             {candidates.map((unit) => (
                                               <option
@@ -1681,7 +1681,7 @@ export function AdminDashboard() {
                                 <h4>{i18n.t("ops.agentTrace")}</h4>
                                 {!panel?.trace.length ? (
                                   <p className="text-muted-foreground">
-                                    No trace steps available.
+                                    {i18n.t("ops.noTrace")}
                                   </p>
                                 ) : (
                                   <ol className="incident-trace">

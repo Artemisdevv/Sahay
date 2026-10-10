@@ -13,7 +13,8 @@ def client(handler) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
-def test_groq_sends_file_model_language_and_returns_text():
+def test_groq_sends_file_model_language_and_returns_text(monkeypatch):
+    monkeypatch.setenv("SAHAY_STT_LANGUAGE_HINT", "1")
     seen = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -30,7 +31,8 @@ def test_groq_sends_file_model_language_and_returns_text():
     assert b'filename="audio.ogg"' in body and b"OPUSDATA" in body
 
 
-def test_unknown_language_lets_the_model_detect():
+def test_unknown_language_lets_the_model_detect(monkeypatch):
+    monkeypatch.setenv("SAHAY_STT_LANGUAGE_HINT", "1")
     captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -99,7 +101,8 @@ def test_build_transcriber_modes(monkeypatch):
     assert stt_live.FailoverTranscriber  # module import sanity
 
 
-def test_gemini_sends_inline_audio_and_joins_text_parts():
+def test_gemini_sends_inline_audio_and_joins_text_parts(monkeypatch):
+    monkeypatch.setenv("SAHAY_STT_LANGUAGE_HINT", "1")
     seen = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -132,3 +135,22 @@ def test_gemini_first_then_whisper_fallback_when_gemini_rejects_the_format():
     assert chain.last_provider == "groq:whisper-large-v3"
     built = build_live("gemini:gemini-2.5-flash,groq:whisper-large-v3", "gk", "", "", 5, gemini_key="gem")
     assert [p.name for p in built.providers] == ["gemini:gemini-2.5-flash", "groq:whisper-large-v3"]
+
+
+def test_language_is_detected_by_the_model_by_default(monkeypatch):
+    """The app language is not the spoken language, so no hint is sent unless SAHAY_STT_LANGUAGE_HINT=1."""
+    monkeypatch.delenv("SAHAY_STT_LANGUAGE_HINT", raising=False)
+    seen = {}
+
+    def groq(request: httpx.Request) -> httpx.Response:
+        seen["groq"] = request.read()
+        return httpx.Response(200, json={"text": "x"})
+
+    def gem(request: httpx.Request) -> httpx.Response:
+        seen["gem"] = request.read()
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "x"}]}}]})
+
+    GroqWhisper("m", "k", client=client(groq)).transcribe(b"a", "audio/webm", "en")
+    GeminiAudio("m", "k", client=client(gem)).transcribe(b"a", "audio/webm", "en")
+    assert b'name="language"' not in seen["groq"]
+    assert b"language code" not in seen["gem"] and b"detect the language" in seen["gem"]

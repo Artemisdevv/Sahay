@@ -302,13 +302,13 @@ export function CitizenPortal() {
   async function updateLocation() {
     if (!navigator.geolocation) {
       toast.error(
-        "This phone cannot share its location. Type your address in My details.",
+        i18n.t("err.noGeolocation"),
       );
       return;
     }
     const fix = await refreshLocation();
     if (!fix) {
-      toast.error("Location is off. Turn it on in phone settings.");
+      toast.error(i18n.t("err.locationOff"));
       return;
     }
     setLocation(`${fix.lat.toFixed(4)}, ${fix.lng.toFixed(4)}`);
@@ -321,11 +321,11 @@ export function CitizenPortal() {
     const next: ScenePhoto[] = [];
     for (const file of files) {
       if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
-        toast.error("Choose an image smaller than 10 MB.");
+        toast.error(i18n.t("err.photoTooBig"));
         continue;
       }
       if (photos.length + next.length >= 3) {
-        toast.error("You can attach up to 3 photos.");
+        toast.error(i18n.t("err.photoMax"));
         break;
       }
       const url = URL.createObjectURL(file);
@@ -339,7 +339,7 @@ export function CitizenPortal() {
   async function openCamera() {
     if (!canUseCamera) {
       toast.error(
-        "Camera capture isn’t available here. You can still upload an image.",
+        i18n.t("err.cameraUnavailable"),
       );
       return;
     }
@@ -353,13 +353,13 @@ export function CitizenPortal() {
     } catch (error) {
       const name = error instanceof DOMException ? error.name : "";
       if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-        toast.error("Camera access was denied. You can still upload an image.");
+        toast.error(i18n.t("err.cameraDenied"));
       } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
         toast.error(
-          "No camera is available on this device. You can still upload an image.",
+          i18n.t("err.cameraNone"),
         );
       } else {
-        toast.error("Couldn’t open the camera. You can still upload an image.");
+        toast.error(i18n.t("err.cameraOpen"));
       }
       cameraStream.current?.getTracks().forEach((track) => track.stop());
       cameraStream.current = null;
@@ -375,7 +375,7 @@ export function CitizenPortal() {
   function capturePhoto() {
     const video = cameraVideo.current;
     if (!video?.videoWidth || !video.videoHeight) {
-      toast.error("Camera is still starting. Try again in a moment.");
+      toast.error(i18n.t("err.cameraStarting"));
       return;
     }
     const canvas = document.createElement("canvas");
@@ -384,7 +384,7 @@ export function CitizenPortal() {
     const context = canvas.getContext("2d");
     if (!context) {
       toast.error(
-        "Couldn’t capture the photo. You can upload an image instead.",
+        i18n.t("err.captureFailed"),
       );
       return;
     }
@@ -393,7 +393,7 @@ export function CitizenPortal() {
       (blob) => {
         if (!blob) {
           toast.error(
-            "Couldn’t capture the photo. Try again or upload an image.",
+            i18n.t("err.captureRetry"),
           );
           return;
         }
@@ -420,10 +420,11 @@ export function CitizenPortal() {
     if (sending || (kind === "report" && !hasReport)) return;
     setSending(true);
     try {
-      const language =
-        LANGUAGE_CODES[profile.language.trim().toLowerCase()] ??
-        // No language in "My details": use the language the app is shown in.
-        (["ml", "hi", "en"].includes(i18n.language) ? i18n.language : "en");
+      // The language the app is shown in wins when it is not English: that is the language the person chose.
+      // Otherwise the profile "language you speak" (free text), then English.
+      const language = ["ml", "hi"].includes(i18n.language)
+        ? i18n.language
+        : (LANGUAGE_CODES[profile.language.trim().toLowerCase()] ?? "en");
       const { item, approximateLocation } = await submitReport({
         kind,
         category: CATEGORY_FOR[picked ?? "other"],
@@ -454,7 +455,7 @@ export function CitizenPortal() {
       if (e instanceof NotReadyError || e instanceof PayloadError) {
         toast.error(e.message);
       } else {
-        toast.error("Could not save the report. Try again, or call 112.");
+        toast.error(i18n.t("err.saveFailed"));
       }
     } finally {
       setSending(false);
@@ -479,7 +480,7 @@ export function CitizenPortal() {
       Number(draft.age) < 1 ||
       Number(draft.age) > 120
     ) {
-      toast.error("Enter your name and your age (1 to 120).");
+      toast.error(i18n.t("err.nameAge"));
       return;
     }
     try {
