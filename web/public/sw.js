@@ -1,5 +1,5 @@
 // Cache the app shell for offline launches. Authenticated API responses stay network-only.
-const CACHE_NAME = "sahay-shell-v2";
+const CACHE_NAME = "sahay-shell-v3";
 const SHELL_ASSETS = [
   "/",
   "/manifest.webmanifest",
