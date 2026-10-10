@@ -24,3 +24,8 @@ def test_demo_is_isolated_from_the_app_code():
     roots = {n.names[0].name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import)}
     roots |= {n.module.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
     assert not roots & {"app", "backend", "web"}, roots
+
+
+def test_every_incident_type_has_a_story():
+    for story in d.SCENARIO_FOR_TYPE.values():
+        assert story in d.SCENARIOS

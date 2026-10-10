@@ -1,5 +1,25 @@
 # Sahay demo simulator
 
+## Always on, on the server (for the judges)
+
+`docker compose up --build -d` also starts a second container, `responder`, next to the server. It is the demo
+dispatcher and the ambulance, police and fire crews. Any distress report, whether from a phone, an SMS, the admin console
+or `inject`, now gets a response with no one touching a terminal: the incident is approved, a crew accepts, drives there
+(its marker moves on the civilian and admin maps, the civilian screen shows the ETA and "accepted"), works the scene and
+finishes. A live **dispatch radio** page with the crews' chatter is on **http://localhost:8090** (put it on the projector).
+
+It is isolated: its own container, only the public API, no shared code. `docker compose stop responder` switches it off and
+the app does not notice. In `deploy/.env.demo` set `SAHAY_DEMO_MOVER=0` and `SAHAY_DEMO_AUTO_ACCEPT_SECONDS=0`,
+`SAHAY_DEMO_AUTO_COMPLETE_SECONDS=0` (the server's own demo mover would race with it) and a higher
+`SAHAY_RATE_LIMIT_PER_MINUTE` such as 600 (the responder polls from one IP). Knobs on the `responder` service in
+`docker-compose.yml`: `SAHAY_DEMO_APPROVE` (`0` = leave approval to a human on stage), `SAHAY_DEMO_TRAVEL_SECONDS`,
+`SAHAY_DEMO_WORK_SECONDS`, `SAHAY_DEMO_DECLINE_CHANCE`.
+
+To trigger a call on cue from the laptop: `backend\.venv\Scripts\python.exe demo\sahay_demo.py inject heart-attack --lang ml`
+(or use the phone app).
+
+## Command line use
+
 A pretend city for demonstrations. When a distress report arrives it plays the dispatcher and the field crews: an
 ambulance accepts, drives there (its marker moves on the map), treats the patient, pre-alerts a hospital and finishes,
 with radio-style chatter in the terminal. Nothing real is called or dispatched.
@@ -37,5 +57,6 @@ call moves on). Staff passwords are read from `deploy/.env.demo` (`SAHAY_SEED_*`
 ## Notes
 - The server's own demo mover (`SAHAY_DEMO_MOVER`, `SAHAY_DEMO_AUTO_*` in `deploy/.env.demo`) also accepts and moves units.
   Turn those off when you want this simulator to be the only actor, or the two will race (harmless, but 409s in the log).
-- Only the three units with a login can be played. Dispatches to other units are rerouted as above.
+- Only the three units with a login can be played. Dispatches to other units are rerouted as above (when the simulated crew of that type is free).
+- Crews drive back to their station after every job. The service ignores incidents that existed before it started.
 - Needs the server in the demo seed (`SAHAY_SEED_*` passwords or `/dev/seed`).

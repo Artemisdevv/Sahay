@@ -9,5 +9,30 @@ services:
     volumes:
       - sahay-data:/data
     restart: unless-stopped
+
+  # Demo responder (optional, for showing the app to judges). A SEPARATE container that talks to the server only through its
+  # public API, exactly like a phone or browser: it plays the dispatcher and the ambulance / police / fire crews, and serves a
+  # live "dispatch radio" page on http://localhost:8090. It shares no code with the app. Stop it with
+  # `docker compose stop responder`; the app does not notice. Turn off the server's own demo mover
+  # (SAHAY_DEMO_MOVER, SAHAY_DEMO_AUTO_*) in deploy/.env.demo so the two do not race.
+  responder:
+    build: .
+    command: ["python", "/demo/sahay_demo.py", "serve"]
+    working_dir: /demo
+    depends_on:
+      - sahay
+    env_file:
+      - deploy/.env.demo
+    environment:
+      SAHAY_DEMO_API: http://sahay:8000/api/v1
+      SAHAY_DEMO_FEED_PORT: "8090"
+      SAHAY_DEMO_APPROVE: "1"
+      SAHAY_DEMO_TRAVEL_SECONDS: "40"
+      SAHAY_DEMO_WORK_SECONDS: "25"
+    volumes:
+      - ./demo:/demo:ro
+    ports:
+      - "8090:8090"
+    restart: unless-stopped
 volumes:
   sahay-data:

@@ -13,17 +13,25 @@ What it plays (all fake, nobody is called, nothing real is dispatched):
 Run with the backend venv (needs httpx and pynacl):
     backend\\.venv\\Scripts\\python.exe demo\\sahay_demo.py scenario heart-attack
 See demo/README.md.
+
+Always-on mode for the demo: `serve` runs the city for ANY incident (phone, SMS, admin console, the `inject` command) and
+hosts a big "dispatch radio" page (default port 8090) that shows the crews' chatter live on a projector. docker-compose
+starts it as its own container next to the server.
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
 import base64
+import collections
+import http.server
 import json
 import math
 import os
+import queue
 import random
 import sys
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -38,9 +46,95 @@ C = {"dim": "\033[2m", "red": "\033[91m", "grn": "\033[92m", "yel": "\033[93m", 
 T0 = time.monotonic()
 
 
+FEED: collections.deque = collections.deque(maxlen=300)  # lines for the live radio page
+SUBSCRIBERS: list[queue.Queue] = []
+FEED_LOCK = threading.Lock()
+
+
 def say(who: str, text: str, colour: str = "cyn") -> None:
     t = int(time.monotonic() - T0)
     print(f"{C['dim']}T+{t // 60:02d}:{t % 60:02d}{C['off']}  {C[colour]}{who:<18}{C['off']} {text}", flush=True)
+    if who == "simulator" and colour == "dim":
+        return  # housekeeping stays in the terminal; the radio page shows only what a viewer cares about
+    line = {"t": time.strftime("%H:%M:%S"), "who": who, "text": text, "colour": colour}
+    with FEED_LOCK:
+        FEED.append(line)
+        for q in SUBSCRIBERS:
+            q.put(line)
+
+
+RADIO_PAGE = """<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Sahay dispatch radio (demo)</title>
+<style>
+:root{color-scheme:dark;--bg:#0f1512;--fg:#e8efe9;--dim:#7f8c83}
+body{margin:0;background:var(--bg);color:var(--fg);font:22px/1.45 ui-monospace,Consolas,monospace}
+header{padding:18px 28px;border-bottom:1px solid #26332b;display:flex;gap:16px;align-items:baseline}
+h1{margin:0;font-size:28px;font-family:system-ui,sans-serif}h1 b{color:#34c77b}
+small{color:var(--dim);font-family:system-ui,sans-serif}
+#feed{padding:18px 28px 80px}
+.l{display:flex;gap:18px;padding:5px 0;border-bottom:1px solid #1a241e;animation:in .35s ease}
+.t{color:var(--dim);min-width:92px}.w{min-width:200px;font-weight:700}
+.red{color:#ff6b6b}.grn{color:#5fe0a0}.yel{color:#ffd166}.blu{color:#7cb7ff}.mag{color:#d9a0ff}.cyn{color:#6fe0e0}.dim{color:var(--dim)}
+#idle{color:var(--dim);padding:40px 28px}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+</style>
+<header><h1>sahay<b>.</b> dispatch radio</h1><small>demo: simulated crews, nobody real is called</small></header>
+<div id=idle>Waiting for a distress call...</div><div id=feed></div>
+<script>
+const feed=document.getElementById('feed'),idle=document.getElementById('idle');
+function add(m){idle.style.display='none';const d=document.createElement('div');d.className='l';
+d.innerHTML='<span class=t></span><span class="w '+m.colour+'"></span><span class=x></span>';
+d.children[0].textContent=m.t;d.children[1].textContent=m.who;d.children[2].textContent=m.text;
+feed.appendChild(d);window.scrollTo(0,document.body.scrollHeight)}
+const es=new EventSource('/events');es.onmessage=e=>add(JSON.parse(e.data));
+</script>"""
+
+
+class RadioHandler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *_args) -> None:  # keep the terminal for the radio itself
+        pass
+
+    def do_GET(self) -> None:  # noqa: N802
+        if self.path.startswith("/events"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            q: queue.Queue = queue.Queue()
+            with FEED_LOCK:
+                backlog = list(FEED)
+                SUBSCRIBERS.append(q)
+            try:
+                for line in backlog:
+                    self.wfile.write(f"data: {json.dumps(line)}\n\n".encode())
+                self.wfile.flush()
+                while True:
+                    try:
+                        line = q.get(timeout=15)
+                        self.wfile.write(f"data: {json.dumps(line)}\n\n".encode())
+                    except queue.Empty:
+                        self.wfile.write(b": keep-alive\n\n")
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+            finally:
+                with FEED_LOCK:
+                    if q in SUBSCRIBERS:
+                        SUBSCRIBERS.remove(q)
+            return
+        body = RADIO_PAGE.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+def serve_radio(port: int) -> None:
+    server = http.server.ThreadingHTTPServer(("0.0.0.0", port), RadioHandler)
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    say("simulator", f"dispatch radio page on http://localhost:{port}/", "dim")
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -164,6 +258,11 @@ SCENARIOS: dict[str, Scenario] = {
             "done": ["House secured, owner informed. Report filed."]}},
         []),
 }
+# Where each crew starts the day (api-contract.md section 7 seed units). They drive back here after every job.
+HOME = {"amb-01": (9.9816, 76.2999), "police-01": (9.9674, 76.2822), "fire-01": (9.9591, 76.2711)}
+# Any real incident (phone, SMS, admin) gets the matching story, whichever way it arrived.
+SCENARIO_FOR_TYPE = {"medical": "heart-attack", "fire": "house-fire", "accident": "road-accident",
+                     "flood": "flood", "crime": "burglary"}
 # phase names used by the crews, in order
 PHASES = ["accept", "enroute", "onscene", "work", "done"]
 GENERIC = {
@@ -257,9 +356,24 @@ class City:
         self.tasks: set[asyncio.Task] = set()
         self.unmanned: dict[str, float] = {}  # dispatch_id -> when we first saw it going to a crew nobody plays
         self.rerouted: set[str] = set()
+        self.history: set[str] = set()  # incidents that existed before this service started: never touched
+        self.on_job: set[str] = set()  # usernames of crews currently working a dispatch
 
     async def call(self, method: str, path: str, token: str, **kw):
-        return await self.http.request(method, path, headers={"Authorization": f"Bearer {token}"}, **kw)
+        """One API call. A 429 (the server rate-limits per IP) is waited out once instead of being treated as an answer."""
+        for attempt in (1, 2):
+            r = await self.http.request(method, path, headers={"Authorization": f"Bearer {token}"}, **kw)
+            if r.status_code != 429 or attempt == 2:
+                return r
+            await asyncio.sleep(4)
+        return r
+
+    async def get_units(self) -> list[dict]:
+        r = await self.call("GET", "/units", self.admin)
+        if r.status_code != 200:
+            return []
+        body = r.json()
+        return body.get("units", []) if isinstance(body, dict) else body
 
     async def login(self, username: str, password: str) -> dict:
         r = await self.http.post("/auth/login", json={"username": username, "password": password})
@@ -268,9 +382,7 @@ class City:
 
     async def open(self) -> None:
         self.admin = (await self.login("admin", self.o.admin_password))["token"]
-        units = (await self.call("GET", "/units", self.admin)).json()
-        units = units.get("units", units) if isinstance(units, dict) else units
-        by_id = {u["unit_id"]: u for u in units}
+        by_id = {u["unit_id"]: u for u in await self.get_units()}
         for name in ("amb-01", "police-01", "fire-01"):
             try:
                 s = await self.login(name, self.o.service_password)
@@ -315,7 +427,7 @@ class City:
         on the radio and send another crew, so after a pause we reassign it to the simulated crew of the same type."""
         mine = {u["unit_id"]: n for n, u in self.units.items()}
         busy = {d for d in self.seen_dispatches}
-        for iid in list(self.seen_incidents - self.done_incidents):
+        for iid in list(self.seen_incidents - self.done_incidents - self.history):
             r = await self.call("GET", f"/incidents/{iid}", self.admin)
             if r.status_code != 200:
                 continue
@@ -326,9 +438,10 @@ class City:
                 first = self.unmanned.setdefault(did, time.monotonic())
                 if time.monotonic() - first < 8:
                     continue
-                crew = next((u for u in self.units.values() if u["type"] == d["service_type"]), None)
+                crew = next((u for n, u in self.units.items()
+                             if u["type"] == d["service_type"] and n not in self.on_job), None)
                 if crew is None:
-                    continue
+                    continue  # our crew of that type is busy: try again on a later round
                 self.rerouted.add(did)
                 say("dispatcher", f"no answer on the radio from the {d['service_type']} unit, "
                                   f"reassigning to {crew['name']}", "mag")
@@ -355,12 +468,20 @@ class City:
         return r.status_code < 300
 
     async def run_dispatch(self, username: str, d: dict) -> None:
+        self.on_job.add(username)
+        try:
+            await self.work_dispatch(username, d)
+        finally:
+            self.on_job.discard(username)
+
+    async def work_dispatch(self, username: str, d: dict) -> None:
         u = self.units[username]
         name, stype = u["name"], u["type"]
         inc = (await self.call("GET", f"/incidents/{d['incident_id']}", self.admin)).json()
         inc = inc.get("incident", inc)
         where = (inc["location"]["lat"], inc["location"]["lng"])
-        chat = (self.o.scenario.chatter.get(stype, {}) if self.o.scenario else {})
+        story = self.o.scenario or SCENARIOS.get(SCENARIO_FOR_TYPE.get(inc["incident_type"], ""))
+        chat = story.chatter.get(stype, {}) if story else {}
         say(name, f"dispatch received: {inc['incident_type']}, {d['distance_km']} km, ETA {d['eta_minutes']} min", "blu")
         await asyncio.sleep(random.uniform(*self.o.think))
 
@@ -379,9 +500,7 @@ class City:
         for line in chat.get("enroute", [GENERIC["enroute"]]):
             say(name, line, "grn")
 
-        units = (await self.call("GET", "/units", self.admin)).json()
-        units = units.get("units", units) if isinstance(units, dict) else units
-        me = next((x for x in units if x["unit_id"] == u["unit_id"]), None)
+        me = next((x for x in await self.get_units() if x["unit_id"] == u["unit_id"]), None)
         start = (me["location"]["lat"], me["location"]["lng"]) if me else where
         steps = max(4, int(self.o.travel_seconds / 2))
         marks = {int(steps * f) for f in (0.25, 0.5, 0.75)}
@@ -398,18 +517,24 @@ class City:
         for line in lines:
             await asyncio.sleep(self.o.work_seconds / (len(lines) + 1))
             say(name, line, "grn")
-        if stype == "ambulance" and self.o.scenario and self.o.scenario.hospital:
-            say("hospital", self.o.scenario.hospital[0], "mag")
+        if stype == "ambulance" and story and story.hospital:
+            say("hospital", story.hospital[0], "mag")
         await asyncio.sleep(self.o.work_seconds / (len(lines) + 1))
         done_lines = chat.get("done", [GENERIC["done"]])
         for line in done_lines[:-1]:
             say(name, line, "grn")
             await asyncio.sleep(2)
-        if stype == "ambulance" and self.o.scenario and len(self.o.scenario.hospital) > 1:
-            say("hospital", self.o.scenario.hospital[1], "mag")
+        if stype == "ambulance" and story and len(story.hospital) > 1:
+            say("hospital", story.hospital[1], "mag")
         await self.status(u, d, "completed")
         say(name, done_lines[-1], "grn")
         self.done_incidents.add(d["incident_id"])
+        home = HOME.get(username)
+        if home:  # drive back to the station so the next call starts from a believable place
+            for i in range(1, 6):
+                pos = lerp(where, home, i / 5)
+                await self.call("PATCH", f"/units/{u['unit_id']}/location", u["token"], json={"lat": pos[0], "lng": pos[1]})
+                await asyncio.sleep(max(1.0, self.o.travel_seconds / 12))
 
     async def guarded(self, coro) -> None:
         try:
@@ -422,15 +547,57 @@ class City:
         self.tasks.add(t)
         t.add_done_callback(self.tasks.discard)
 
-    async def loop(self, stop_when_idle: bool = False) -> None:
-        await self.open()
+    async def open_with_retry(self) -> None:
+        """On a fresh server the staff accounts do not exist yet (seeding happens at startup): keep trying."""
+        while True:
+            try:
+                await self.open()
+                if self.units:
+                    return
+                say("simulator", "no crew logins yet, retrying", "dim")
+            except (httpx.HTTPError, KeyError, ValueError) as exc:
+                say("simulator", f"server not ready ({type(exc).__name__}), retrying", "dim")
+            await asyncio.sleep(5)
+
+    async def skip_backlog(self) -> None:
+        """Incidents and dispatches that already exist are history: do not replay them when the service starts."""
+        r = await self.call("GET", "/incidents", self.admin)
+        if r.status_code == 200:
+            self.history = {i["incident_id"] for i in r.json().get("incidents", [])}
+            self.seen_incidents |= self.history
+        for username, u in self.units.items():
+            d = await self.call("GET", "/dispatches/mine", u["token"])
+            if d.status_code == 200:
+                rows = d.json().get("dispatches", [])
+                self.seen_dispatches |= {x["dispatch_id"] for x in rows}
+                for x in rows:  # a job left half done by an earlier run would keep the unit busy forever: close it
+                    if x["status"] in ("accepted", "en_route", "on_scene"):
+                        for st in ("en_route", "on_scene", "completed"):
+                            rr = await self.call("POST", f"/dispatches/{x['dispatch_id']}/status", u["token"], json={"status": st})
+                            if st == "completed" and rr.status_code < 300:
+                                break
+                        say("simulator", f"{u['name']}: closed an unfinished job from earlier", "dim")
+            await self.call("PATCH", f"/units/{u['unit_id']}/location", u["token"],
+                            json={"lat": HOME[username][0], "lng": HOME[username][1]})  # crews start at their station
+
+    async def loop(self, stop_when_idle: bool = False, ignore_backlog: bool = False) -> None:
+        await self.open_with_retry()
+        if ignore_backlog:
+            await self.skip_backlog()
         say("simulator", "city is awake. Waiting for a distress call (Ctrl+C to stop)", "dim")
         quiet_since = None
+        tick = 0
+        opened_at = time.monotonic()
         while True:
+            if time.monotonic() - opened_at > 4 * 3600:  # staff tokens last 12 h: renew well before
+                await self.open_with_retry()
+                opened_at = time.monotonic()
             try:
                 await self.watch_incidents()
                 await self.watch_dispatches()
-                await self.watch_unmanned()
+                tick += 1
+                if tick % 4 == 0:  # reassigning is not urgent: look every few rounds to stay under the server's rate limit
+                    await self.watch_unmanned()
             except httpx.HTTPError as exc:
                 say("simulator", f"server not reachable ({type(exc).__name__}), retrying", "yel")
             if stop_when_idle and self.seen_incidents:
@@ -442,24 +609,31 @@ class City:
                         return
                 else:
                     quiet_since = None
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(2.5)
 
 
 # ---------------------------------------------------------------------------------------------------------------
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     ap = argparse.ArgumentParser(description="Sahay demo simulator (fake dispatch city, API client only)")
-    ap.add_argument("command", choices=["list", "inject", "respond", "scenario"])
+    env_default = lambda k, d: os.environ.get(k, d)  # noqa: E731 - the container passes its settings as env vars
+    ap.add_argument("command", choices=["list", "inject", "respond", "scenario", "serve"])
     ap.add_argument("name", nargs="?", help="scenario: " + ", ".join(SCENARIOS))
-    ap.add_argument("--api", default="http://localhost:8080/api/v1")
+    ap.add_argument("--api", default=env_default("SAHAY_DEMO_API", "http://localhost:8080/api/v1"))
+    ap.add_argument("--feed-port", type=int, default=int(env_default("SAHAY_DEMO_FEED_PORT", "8090")),
+                    help="serve: port of the live dispatch radio page")
     ap.add_argument("--env-file", default=str(ROOT / "deploy" / ".env.demo"), help="read the seeded staff passwords from here")
     ap.add_argument("--admin-password", default=os.environ.get("SAHAY_ADMIN_PASSWORD", ""))
     ap.add_argument("--service-password", default=os.environ.get("SAHAY_SERVICE_PASSWORD", ""))
     ap.add_argument("--lang", choices=["en", "ml"], default="en", help="language the caller speaks")
-    ap.add_argument("--no-approve", action="store_true", help="leave approval of high-severity incidents to a human")
-    ap.add_argument("--travel-seconds", type=float, default=30.0, help="how long a unit takes to drive to the scene")
-    ap.add_argument("--work-seconds", type=float, default=20.0, help="how long the crew works the scene")
-    ap.add_argument("--decline-chance", type=float, default=0.0, help="0..1, chance a crew is busy and passes the call on")
+    ap.add_argument("--no-approve", action="store_true", default=env_default("SAHAY_DEMO_APPROVE", "1") == "0",
+                    help="leave approval of high-severity incidents to a human")
+    ap.add_argument("--travel-seconds", type=float, default=float(env_default("SAHAY_DEMO_TRAVEL_SECONDS", "30")),
+                    help="how long a unit takes to drive to the scene")
+    ap.add_argument("--work-seconds", type=float, default=float(env_default("SAHAY_DEMO_WORK_SECONDS", "20")),
+                    help="how long the crew works the scene")
+    ap.add_argument("--decline-chance", type=float, default=float(env_default("SAHAY_DEMO_DECLINE_CHANCE", "0")),
+                    help="0..1, chance a crew is busy and passes the call on")
     args = ap.parse_args()
 
     if args.command == "list":
@@ -470,8 +644,10 @@ def main() -> None:
     if args.command in ("inject", "scenario") and scenario is None:
         raise SystemExit("name a scenario: " + ", ".join(SCENARIOS))
     env = read_env_file(Path(args.env_file))
-    admin_pw = args.admin_password or env.get("SAHAY_SEED_ADMIN_PASSWORD", "") or "admin123"
-    service_pw = args.service_password or env.get("SAHAY_SEED_SERVICE_PASSWORD", "") or "demo123"
+    admin_pw = (args.admin_password or os.environ.get("SAHAY_SEED_ADMIN_PASSWORD", "")
+                or env.get("SAHAY_SEED_ADMIN_PASSWORD", "") or "admin123")
+    service_pw = (args.service_password or os.environ.get("SAHAY_SEED_SERVICE_PASSWORD", "")
+                  or env.get("SAHAY_SEED_SERVICE_PASSWORD", "") or "demo123")
     api = args.api.rstrip("/")
 
     if args.command in ("inject", "scenario"):
@@ -482,8 +658,10 @@ def main() -> None:
             return
     opt = Options(api, admin_pw, service_pw, not args.no_approve, (4.0, 7.0), (3.0, 7.0), args.travel_seconds,
                   args.work_seconds, args.decline_chance, scenario)
+    if args.command == "serve":
+        serve_radio(args.feed_port)
     try:
-        asyncio.run(City(opt).loop(stop_when_idle=args.command == "scenario"))
+        asyncio.run(City(opt).loop(stop_when_idle=args.command == "scenario", ignore_backlog=args.command == "serve"))
     except KeyboardInterrupt:
         say("simulator", "stopped", "dim")
 
