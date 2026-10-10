@@ -2008,6 +2008,9 @@ h1 {
 .bottom-nav {
   display: none;
 }
+.section-transition {
+  width: 100%;
+}
 @media (max-width: 768px) {
   .app-shell {
     display: block;
@@ -2039,31 +2042,48 @@ h1 {
     border-top: 1px solid var(--border);
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
   }
-  .bottom-nav-segment {
+  .bottom-nav-items {
     display: grid;
-    grid-auto-columns: minmax(0, 1fr);
     width: 100%;
     max-width: 560px;
-    --rs-min: 0px;
-    --rs-pad: 3px;
-    --rs-radius: 18px;
+    gap: 4px;
   }
-  .bottom-nav-segment .rubber-segment__item {
+  .bottom-nav-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 3px;
     height: 44px;
     min-width: 0;
-    gap: 4px;
-    padding: 0 3px;
+    padding: 3px 2px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--muted-foreground);
+    font: inherit;
     font-size: clamp(9px, 2.6vw, 11px);
-    flex-direction: column;
+    font-weight: 600;
     white-space: nowrap;
+    transition: color 160ms ease, background-color 160ms ease;
   }
-  .bottom-nav-segment .rubber-segment__item svg {
+  .bottom-nav-item.active {
+    color: var(--primary);
+    background: var(--accent);
+  }
+  .bottom-nav-icon {
+    display: grid;
+    place-items: center;
+    height: 18px;
+  }
+  .bottom-nav-icon svg {
     width: 16px;
     height: 16px;
-    flex: 0 0 16px;
+    stroke-width: 2.2;
   }
-  .bottom-nav-segment .rubber-segment__copy {
-    pointer-events: none;
+  .page {
+    touch-action: pan-y;
+    overflow-x: clip;
   }
 }
 
