@@ -131,6 +131,47 @@ describe("flushReports", () => {
     expect(await queue.due(1_000_000 + 4_000)).toEqual([]);
   });
 
+  it("registers the phone again once when the server forgot it, then delivers", async () => {
+    await queue.put(item("r1"));
+    await queue.put(item("r2"));
+    let known = false;
+    const reauthenticate = vi.fn(async () => {
+      known = true;
+      return "tok-new";
+    });
+    const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => {
+      const auth = (init?.headers as Record<string, string>)["Authorization"];
+      if (!known || auth !== "Bearer tok-new")
+        return reply(422, { error: { message: "unknown or disabled device" } });
+      return reply(202, { receipt: { server_time: "t", signature: "s" } });
+    }) as unknown as typeof fetch;
+    const res = await flushReports(deps(fetchFn, { reauthenticate }));
+    expect(res).toMatchObject({ sent: 2, failed: 0 });
+    expect(reauthenticate).toHaveBeenCalledTimes(1); // once per flush, not per report
+    expect(await queue.get("r1")).toMatchObject({ state: "sent" });
+  });
+
+  it("still fails the report when registering again does not help", async () => {
+    await queue.put(item("r1"));
+    const reauthenticate = vi.fn(async () => "tok-new");
+    const fetchFn = vi.fn(async () =>
+      reply(422, { error: { message: "unknown or disabled device" } }),
+    ) as unknown as typeof fetch;
+    const res = await flushReports(deps(fetchFn, { reauthenticate }));
+    expect(res).toMatchObject({ sent: 0, failed: 1 });
+    expect(reauthenticate).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not try to register again for other rejections", async () => {
+    await queue.put(item("r1"));
+    const reauthenticate = vi.fn(async () => "tok-new");
+    const fetchFn = vi.fn(async () =>
+      reply(422, { error: { message: "invalid_signature" } }),
+    ) as unknown as typeof fetch;
+    await flushReports(deps(fetchFn, { reauthenticate }));
+    expect(reauthenticate).not.toHaveBeenCalled();
+  });
+
   it("retries 429 and 5xx, never marks them failed", async () => {
     await queue.put(item("r1"));
     const fetchFn = vi.fn(async () => reply(503)) as unknown as typeof fetch;

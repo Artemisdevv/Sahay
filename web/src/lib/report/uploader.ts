@@ -30,6 +30,8 @@ export interface FlushDeps {
   now?: () => number;
   relay?: RelayHooks | undefined;
   random?: () => number;
+  /** Register this phone with the server again and return a fresh token. Used once per flush on "unknown device". */
+  reauthenticate?: () => Promise<string>;
 }
 
 export interface FlushResult {
@@ -43,8 +45,13 @@ export interface FlushResult {
 
 const PERMANENT = new Set([400, 409, 413, 422]);
 
+/** The server answers 422 with this message when it has no row for the sending device (e.g. its database was reset). */
+const UNKNOWN_DEVICE = /unknown or disabled device/i;
+
 interface UploadOutcome {
   kind: "sent" | "permanent" | "retry";
+  /** the server does not know this phone: registering it again can fix it */
+  unknownDevice?: boolean;
   receipt?: { server_time: string; signature: string } | undefined;
   error?: string | undefined;
 }
@@ -87,7 +94,11 @@ async function upload(
     /* keep status message */
   }
   return PERMANENT.has(response.status)
-    ? { kind: "permanent", error: message }
+    ? {
+        kind: "permanent",
+        error: message,
+        ...(response.status === 422 && UNKNOWN_DEVICE.test(message) ? { unknownDevice: true } : {}),
+      }
     : { kind: "retry", error: message };
 }
 
@@ -122,8 +133,19 @@ export async function flushReports(deps: FlushDeps): Promise<FlushResult> {
   const key = await deps.serverKey();
   const own = new Set((await deps.queue.all()).map((i) => i.report_id));
 
+  let reauthed = false;
   for (const item of due) {
-    const outcome = await upload(item.envelope, token, deps.apiBase, fetchFn);
+    let outcome = await upload(item.envelope, token, deps.apiBase, fetchFn);
+    if (outcome.unknownDevice && deps.reauthenticate && !reauthed) {
+      // The server forgot this phone (its database was reset): same device id and key, register again, retry once.
+      reauthed = true;
+      try {
+        token = await deps.reauthenticate();
+        outcome = await upload(item.envelope, token, deps.apiBase, fetchFn);
+      } catch {
+        outcome = { kind: "retry", error: "Could not register this phone again" };
+      }
+    }
     if (outcome.kind === "sent") {
       const verified =
         outcome.receipt && key

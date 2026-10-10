@@ -3,7 +3,11 @@ import { buildSmsLine, runSmsFallback } from "./sms-fallback";
 import { API_BASE } from "@/lib/api";
 import i18n from "@/lib/i18n";
 import type { ServiceCallList } from "@/lib/api";
-import { ensureDeviceToken, getOrCreateIdentity } from "@/lib/device-identity";
+import {
+  ensureDeviceToken,
+  getOrCreateIdentity,
+  registerDevice,
+} from "@/lib/device-identity";
 import { secureStorage } from "@/native/secure-storage";
 import { SahayNearby } from "@/native/sahay-nearby";
 import {
@@ -242,6 +246,7 @@ export function syncNow(): Promise<FlushResult> {
       return await flushReports({
         queue: getQueue(),
         getToken: () => ensureDeviceToken(secureStorage),
+        reauthenticate: () => registerDevice(secureStorage),
         apiBase: API_BASE,
         serverKey: () => ensureServerKey(),
         relay: Capacitor.isNativePlatform() ? SahayNearby : undefined,
