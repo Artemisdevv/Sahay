@@ -28,6 +28,7 @@ PUBLIC_STATUS = {
 }
 # Public wording for a unit assigned to a confirmed incident (contract 9.4). Anything else is not published.
 UNIT_STATUS = {"accepted": "help assigned", "en_route": "help on the way", "on_scene": "help on scene"}
+RESOLVED_VISIBLE_S = 10 * 60  # how long a resolved incident stays on the public map
 SEVERITY_LABEL = {1: "low", 2: "low", 3: "medium", 4: "high", 5: "critical"}
 
 
@@ -35,6 +36,9 @@ def public_incident(incident: Incident, salt: str) -> dict | None:
     status = PUBLIC_STATUS.get(incident.status)
     if status is None:
         return None
+    updated = incident.updated_at if incident.updated_at.tzinfo else incident.updated_at.replace(tzinfo=timezone.utc)
+    if incident.status == "resolved" and (datetime.now(timezone.utc) - updated).total_seconds() > RESOLVED_VISIBLE_S:
+        return None  # a finished incident leaves the public map a few minutes after the last crew completes
     opaque = hashlib.sha256(f"{salt}|{incident.incident_id}".encode("utf-8")).hexdigest()[:12]
     created = incident.created_at if incident.created_at.tzinfo else incident.created_at.replace(tzinfo=timezone.utc)
     return {

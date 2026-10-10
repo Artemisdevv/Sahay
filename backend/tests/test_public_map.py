@@ -107,3 +107,17 @@ def setup_login():
     from tests.test_incidents_api import login
 
     return login("admin", "admin123")
+
+
+def test_resolved_incident_leaves_the_public_map_after_a_few_minutes():
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import Incident
+    from app.public_routes import RESOLVED_VISIBLE_S, public_incident
+
+    now = datetime.now(timezone.utc)
+    inc = Incident(incident_id="i1", status="resolved", incident_type="fire", severity=3, urgency_score=0.5,
+                   lat=9.93, lng=76.26, summary_redacted="x", created_at=now, updated_at=now)
+    assert public_incident(inc, "salt")["status"] == "resolved"  # just finished: still shown
+    inc.updated_at = now - timedelta(seconds=RESOLVED_VISIBLE_S + 5)
+    assert public_incident(inc, "salt") is None

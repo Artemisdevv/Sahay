@@ -185,14 +185,19 @@ def _rollup(db: Session, inc: Incident, out: Outcome) -> None:
     if inc.status not in ("dispatched", "en_route", "on_scene"):
         return
     statuses = {d.status for d in _dispatches(db, inc.incident_id, OCCUPYING)}
+    if not statuses:
+        # Nobody is still working it. If at least one crew finished, the incident is over.
+        if _dispatches(db, inc.incident_id, ("completed",)):
+            inc.status = "resolved"
+            inc.updated_at = _now()
+            out.incident = inc
+        return
     if "on_scene" in statuses:
         new = "on_scene"
     elif "en_route" in statuses:
         new = "en_route"
-    elif statuses:
-        new = "dispatched"
     else:
-        return
+        new = "dispatched"
     if new != inc.status:
         inc.status = new
         inc.updated_at = _now()

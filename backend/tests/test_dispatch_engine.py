@@ -270,6 +270,18 @@ def test_full_lifecycle_updates_unit_and_incident_status(db):
     assert u.status == "available" and d.status == "completed"
 
 
+def test_incident_is_resolved_when_the_last_crew_completes(db):
+    inc, d = approved_dispatch(db)
+    u = db.get(Unit, d.unit_id)
+    actor = {"type": "service", "id": u.unit_id}
+    e.accept(db, d.dispatch_id, u.unit_id, actor)
+    for st in ("en_route", "on_scene"):
+        e.set_progress(db, d.dispatch_id, u.unit_id, actor, st)
+    assert inc.status == "on_scene"  # still being worked
+    out = e.set_progress(db, d.dispatch_id, u.unit_id, actor, "completed")
+    assert inc.status == "resolved" and out.incident is inc
+
+
 def test_progress_cannot_skip_steps_or_use_bad_value(db):
     inc, d = approved_dispatch(db)
     uid = d.unit_id
