@@ -6,9 +6,9 @@ export function LanguageSelector() {
   const { i18n, t } = useTranslation();
 
   const languages = [
-    { code: "en", label: "English", flag: "🇺🇸" },
-    { code: "hi", label: "हिंदी", flag: "🇮🇳" },
-    { code: "ml", label: "മലയാളം", flag: "🇮🇳" },
+    { code: "en", label: " English", flag: "🇺🇸" },
+    { code: "hi", label: " हिंदी", flag: "🇮🇳" },
+    { code: "ml", label: " മലയാളം", flag: "🇮🇳" },
   ] as const;
 
   return (

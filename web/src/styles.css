@@ -1308,6 +1308,38 @@ h1 {
   gap: 8px;
   margin-bottom: 25px;
 }
+.role-separator {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: color-mix(in srgb, var(--border) 55%, transparent);
+  margin: 1px 0;
+}
+.role-selector .role-civilian { grid-column: 1 / -1; }
+.login-credentials { animation: login-fields-in 260ms ease-out both; }
+.civilian-report-note {
+  margin: -5px 0 16px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  animation: login-fields-in 260ms ease-out both;
+}
+.login-lock {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+.login-lock.visible { opacity: 1; }
+@keyframes login-fields-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-credentials, .civilian-report-note { animation: none; }
+  .login-lock { transition-duration: 0.01ms; }
+}
 .role-selector button {
   height: 53px;
   justify-content: flex-start;
