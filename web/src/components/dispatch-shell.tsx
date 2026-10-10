@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { clearSession } from "@/lib/session";
 import { motion, useReducedMotion } from "framer-motion";
 import { IncidentMap } from "./incident-map";
+import RubberSegment, { type RubberSegmentItem } from "./ui/rubber-segment";
 
 export function Brand() {
   return (
@@ -98,6 +99,56 @@ export function Shell({
     void navigate({ to: "/login" });
   };
   const link = staff ? roleLink(role) : null;
+  const mobileItems: RubberSegmentItem[] = tabs
+    ? tabs.map((tab) => ({
+        value: tab.id,
+        label: tab.label,
+        icon: <tab.icon size={16} aria-hidden="true" />,
+      }))
+    : [
+        ...(link
+          ? [
+              {
+                value: "role",
+                label: link.label,
+                icon: <link.icon size={16} aria-hidden="true" />,
+              },
+            ]
+          : []),
+        {
+          value: "status",
+          label: "Status",
+          icon: <Activity size={16} aria-hidden="true" />,
+        },
+        {
+          value: "help",
+          label: "Help",
+          icon: <CircleHelp size={16} aria-hidden="true" />,
+        },
+        {
+          value: "signout",
+          label: "Sign out",
+          icon: <LogOut size={16} aria-hidden="true" />,
+        },
+      ];
+  const [mobileAction, setMobileAction] = useState(link ? "role" : "status");
+  const mobileValue = activeTab ?? mobileAction;
+  const handleMobileChange = (next: string) => {
+    if (tabs) {
+      onTab?.(next);
+      return;
+    }
+    setMobileAction(next);
+    if (next === "role" && link) {
+      void navigate({ to: link.to, params: link.params });
+    } else if (next === "status") {
+      toast.success("All systems working");
+    } else if (next === "help") {
+      SUPPORT_TOAST();
+    } else if (next === "signout") {
+      signOut();
+    }
+  };
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -187,55 +238,25 @@ export function Shell({
         </motion.main>
       </div>
       <nav className="bottom-nav" aria-label="Main navigation">
-        {tabs ? (
-          tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`bottom-nav-item ${activeTab === t.id ? "active" : ""}`}
-              aria-current={activeTab === t.id ? "page" : undefined}
-              onClick={() => onTab?.(t.id)}
-            >
-              <t.icon />
-              <span>{t.label}</span>
-            </button>
-          ))
-        ) : (
-          <>
-            {link && (
-              <Link
-                to={link.to}
-                params={link.params}
-                className="bottom-nav-item active"
-              >
-                <link.icon />
-                <span>{link.label}</span>
-              </Link>
-            )}
-            <button
-              type="button"
-              className="bottom-nav-item"
-              onClick={() => toast.success("All systems working")}
-            >
-              <Activity />
-              <span>Status</span>
-            </button>
-            <button
-              type="button"
-              className="bottom-nav-item"
-              onClick={SUPPORT_TOAST}
-            >
-              <CircleHelp />
-              <span>Help</span>
-            </button>
-          </>
-        )}
-        {(staff || !tabs) && (
-          <button type="button" className="bottom-nav-item" onClick={signOut}>
-            <LogOut />
-            <span>Sign out</span>
-          </button>
-        )}
+        <RubberSegment
+          items={mobileItems}
+          value={mobileValue}
+          onChange={handleMobileChange}
+          trackColor="var(--background)"
+          thumbColor="var(--accent)"
+          textColor="var(--muted-foreground)"
+          activeTextColor="var(--foreground)"
+          size="lg"
+          radius={18}
+          inset={3}
+          equalSlots
+          stretch={80}
+          squash={2}
+          glide={50}
+          draggable
+          className="bottom-nav-segment"
+          aria-label="Main navigation"
+        />
       </nav>
     </div>
   );

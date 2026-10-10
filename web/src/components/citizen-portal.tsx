@@ -16,7 +16,9 @@ import {
   MapPin,
   Camera,
   X,
+  LogOut,
 } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -57,6 +59,7 @@ import {
 } from "@/lib/report/relay";
 import type { QueueItem } from "@/lib/report/queue";
 import { secureStorage } from "@/native/secure-storage";
+import { clearSession } from "@/lib/session";
 import { ResponseTimeline, serviceLabel } from "./response-timeline";
 
 const tabs: ShellTab[] = [
@@ -155,6 +158,7 @@ const fmt = (s: number) =>
   `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 export function CitizenPortal() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState("help");
   const [current, setCurrent] = useState<QueueItem | null>(null);
   const [status, setStatus] = useState<ReportStatus | null>(null);
@@ -750,6 +754,17 @@ export function CitizenPortal() {
               />
             </label>
           )}
+          <Button
+            variant="outline"
+            className="cz-secondary cz-details-signout"
+            onClick={() => {
+              clearSession();
+              void navigate({ to: "/login" });
+            }}
+          >
+            <LogOut aria-hidden="true" />
+            Sign out
+          </Button>
         </section>
       )}
 
