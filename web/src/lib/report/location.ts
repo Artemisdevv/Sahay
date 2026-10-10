@@ -36,6 +36,36 @@ let latest: { fix: CapturedLocation; at: number } | null = null;
 let watchId: number | null = null;
 const FRESH_MS = 5 * 60_000;
 
+const watchers = new Set<(fix: CapturedLocation) => void>();
+
+/** Latest fix seen while the app was open (null before the first one). */
+export function getLatestFix(): CapturedLocation | null {
+  return latest?.fix ?? null;
+}
+
+/** Be told whenever a new fix arrives (the report screen, the map). Returns an unsubscribe function. */
+export function subscribeLocation(
+  cb: (fix: CapturedLocation) => void,
+): () => void {
+  watchers.add(cb);
+  return () => void watchers.delete(cb);
+}
+
+/** Force a fresh GPS reading (the Update button). Resolves null when location is off or times out. */
+export function refreshLocation(
+  timeoutMs = 8_000,
+): Promise<CapturedLocation | null> {
+  if (typeof navigator === "undefined" || !navigator.geolocation)
+    return Promise.resolve(null);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve(remember(p)),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 },
+    );
+  });
+}
+
 function remember(p: GeolocationPosition): CapturedLocation {
   const fix: CapturedLocation = {
     lat: p.coords.latitude,
@@ -44,6 +74,7 @@ function remember(p: GeolocationPosition): CapturedLocation {
     approximate: false,
   };
   latest = { fix, at: Date.now() };
+  watchers.forEach((cb) => cb(fix));
   try {
     window.localStorage.setItem(CACHE_KEY, JSON.stringify(fix));
   } catch {

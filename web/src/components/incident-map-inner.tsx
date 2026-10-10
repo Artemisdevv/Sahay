@@ -120,12 +120,18 @@ export function IncidentMap({
   incidentData,
   loading: loadingOverride,
   error: errorOverride,
+  userLocation,
+  recenterKey = 0,
 }: {
   role: MapRole;
   className?: string;
   incidentData?: IncidentSummary[];
   loading?: boolean;
   error?: string | null;
+  /** The viewer's own position (civilian app): drawn as "You are here" and the map centres on it. */
+  userLocation?: { lat: number; lng: number; accuracy_m?: number } | null;
+  /** Change this number to centre the map on `userLocation` again (the Update button). */
+  recenterKey?: number;
 }) {
   const mapElement = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
@@ -133,6 +139,8 @@ export function IncidentMap({
   const unitMarkers = useRef<L.LayerGroup | null>(null);
   const unitLayers = useRef(new Map<string, UnitLayers>());
   const fitted = useRef(false);
+  const youLayer = useRef<L.LayerGroup | null>(null);
+  const lastRecenter = useRef<number | null>(null);
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
   const [units, setUnits] = useState<MapUnit[]>([]);
   const [selected, setSelected] = useState<IncidentSummary | null>(null);
@@ -283,6 +291,7 @@ export function IncidentMap({
     }).addTo(instance);
     incidentMarkers.current = L.layerGroup().addTo(instance);
     unitMarkers.current = L.layerGroup().addTo(instance);
+    youLayer.current = L.layerGroup().addTo(instance);
     map.current = instance;
     return () => {
       unitLayers.current.forEach(({ frame }) => {
@@ -443,6 +452,46 @@ export function IncidentMap({
       unitLayers.current.delete(id);
     });
   }, [units, incidents]);
+
+  // "You are here": a dot with an accuracy circle, redrawn whenever the position changes.
+  useEffect(() => {
+    const group = youLayer.current;
+    if (!group) return;
+    group.clearLayers();
+    if (!userLocation) return;
+    const at = L.latLng(userLocation.lat, userLocation.lng);
+    if (userLocation.accuracy_m && userLocation.accuracy_m < 5_000) {
+      L.circle(at, {
+        radius: userLocation.accuracy_m,
+        color: "#2563eb",
+        weight: 1,
+        fillColor: "#2563eb",
+        fillOpacity: 0.12,
+        interactive: false,
+      }).addTo(group);
+    }
+    L.circleMarker(at, {
+      radius: 8,
+      color: "#ffffff",
+      weight: 3,
+      fillColor: "#2563eb",
+      fillOpacity: 1,
+    })
+      .bindTooltip("You are here", { direction: "top", offset: [0, -8] })
+      .addTo(group);
+  }, [userLocation]);
+
+  // Centre on the viewer when we first know where they are, and again each time Update is pressed.
+  useEffect(() => {
+    if (!userLocation || !map.current) return;
+    if (lastRecenter.current === recenterKey) return;
+    lastRecenter.current = recenterKey;
+    fitted.current = true; // the viewer's position wins over fitting to incidents
+    map.current.setView(
+      [userLocation.lat, userLocation.lng],
+      Math.max(map.current.getZoom(), 14),
+    );
+  }, [userLocation, recenterKey]);
 
   return (
     <div className={`incident-map ${className}`}>
