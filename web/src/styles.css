@@ -818,7 +818,7 @@ h1 {
   height: 390px;
 }
 .incident-map .leaflet-container {
-  height: 100%;
+  /* No height here: 100% of an auto-height parent is 0 and hid the service console map. The canvas rules set it. */
   width: 100%;
   background: #111820;
   font: inherit;
