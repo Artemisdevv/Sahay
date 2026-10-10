@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Brand, Badge } from "./dispatch-shell";
+import { LanguageSelector } from "./language-selector";
 import { login } from "@/lib/api";
 import { saveSession } from "@/lib/session";
 
@@ -75,6 +76,7 @@ export function LoginHub() {
       </section>
       <section className="login-form-side">
         <div className="login-form">
+          <div className="login-lang"><LanguageSelector /></div>
           <Badge tone="green"><ShieldCheck size={12} />{t("login.secure")}</Badge>
           <h1 className="mt-5">{t("login.welcome")}</h1>
           <p className="subtitle">{t("login.intro")}</p>
