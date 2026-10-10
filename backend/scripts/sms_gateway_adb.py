@@ -16,7 +16,8 @@ import time
 import httpx
 
 ADB = os.environ.get("ADB", "adb")
-ROW = re.compile(r"address=(?P<addr>[^,]*), body=(?P<body>SAHAY1\|[^,]*?)(?:, |$)")
+# The SAHAY1 body itself contains a comma (lat,lng), so take everything to the end of the row: the projection is address:body only.
+ROW = re.compile(r"address=(?P<addr>[^,]*), body=(?P<body>SAHAY1\|.*)$")
 
 
 def inbox(serial: str) -> list[tuple[str, str]]:

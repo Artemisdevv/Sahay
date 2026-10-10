@@ -33,12 +33,12 @@ SMS_RE = re.compile(
 CATEGORY = {"AC": "accident", "FI": "fire", "ME": "medical", "CR": "crime", "FL": "flood", "OT": "other", "SO": "other"}
 # Plain description handed to the intake agent. It must read as a civic report, not as noise.
 TEXT = {
-    "accident": "Accident reported by SMS. A person needs help at the location. No further details.",
-    "fire": "Fire reported by SMS. A person needs help at the location. No further details.",
-    "medical": "Medical emergency reported by SMS. A person needs help at the location. No further details.",
-    "crime": "Crime reported by SMS. A person needs help at the location. No further details.",
-    "flood": "Flooding reported by SMS. A person needs help at the location. No further details.",
-    "other": "Emergency reported by SMS. A person needs help at the location. No further details.",
+    "accident": "Accident reported by SMS",
+    "fire": "Fire reported by SMS",
+    "medical": "Medical emergency reported by SMS",
+    "crime": "Crime reported by SMS",
+    "flood": "Flooding reported by SMS",
+    "other": "Emergency reported by SMS",
 }
 PHONE_RE = re.compile(r"^\+?[0-9]{6,15}$")
 MAX_FUTURE_S = 24 * 3600
@@ -86,6 +86,7 @@ def install(app: FastAPI) -> None:
 
         report_id = f"sms-{msg['rid']}-{msg['did']}"
         category, sos = CATEGORY[msg["code"]], msg["code"] == "SO"
+        where = f"coordinates {msg['lat']:.5f}, {msg['lng']:.5f}"  # the position is known, so say so
         payload: dict = {
             "schema": 1,
             "kind": "sos" if sos else "report",
@@ -93,8 +94,8 @@ def install(app: FastAPI) -> None:
             "language": "en",
             "captured_at": _iso(msg["ts"]),
             "location": {"lat": msg["lat"], "lng": msg["lng"], "accuracy_m": 50},
-            "text": ("SOS received by SMS. The sender could not talk or type. A person needs help at the location."
-                     if sos else TEXT[category]),
+            "text": (f"SOS received by SMS. The sender could not talk or type. A person needs help at {where}."
+                     if sos else f"{TEXT[category]}. A person needs help at {where}. No further details."),
             "source": "sms",
         }
         sender = body.from_.strip().replace(" ", "")

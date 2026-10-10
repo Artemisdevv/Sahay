@@ -101,3 +101,27 @@ def test_server_key_hands_the_app_the_gateway_number(monkeypatch):
     assert client.get("/api/v1/config/server-key").json()["gateway_number"] == "+15550001111"
     monkeypatch.setattr(settings, "sahay_gateway_number", "")
     assert "gateway_number" not in client.get("/api/v1/config/server-key").json()
+
+
+def test_adb_gateway_row_pattern_keeps_the_comma_in_the_position():
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location("sms_gateway_adb", Path(__file__).resolve().parents[1] / "scripts" / "sms_gateway_adb.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    row = "Row: 0 address=+918848230516, body=SAHAY1|99cfb413|1b4c410e|11.32290,75.93433|OT|1791606952"
+    m = mod.ROW.search(row)
+    assert m["addr"] == "+918848230516" and m["body"] == "SAHAY1|99cfb413|1b4c410e|11.32290,75.93433|OT|1791606952"
+    assert mod.ROW.search("Row: 1 address=AX-VAAHAN-S, body=PM-RAHAT: Cashless, treatment") is None
+
+
+def test_sms_text_states_the_known_position(gateway, autorun):  # noqa: F811
+    admin_headers()
+    assert post(line(rid="55555555", did="66666666", loc="11.32290,75.93433")).status_code == 202
+    from app.ingest import crypto
+    from app.keyring import server_box_key
+
+    with SessionLocal() as db:
+        payload = crypto.decrypt_payload(db.get(Report, "sms-55555555-66666666").ciphertext, server_box_key())
+    assert "coordinates 11.32290, 75.93433" in payload["text"] and "at the location" not in payload["text"]
