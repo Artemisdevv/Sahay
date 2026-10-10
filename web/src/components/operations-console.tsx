@@ -1390,9 +1390,7 @@ export function AdminDashboard() {
               <div className="audit-row">
                 <span className="mono">Now</span>
                 <Badge tone="amber">{i18n.t("ops.override")}</Badge>
-                <span>
-                  {tAdmin("override_active")}
-                </span>
+                <span>{tAdmin("override_active")}</span>
               </div>
             )}
             {adminDataLoading ? (
@@ -1758,7 +1756,7 @@ export function AdminDashboard() {
               </div>
             </div>
           </section>
-          <section className="panel">
+          <section className="panel vector-store-panel">
             <div className="panel-head compact-head">
               <h2>
                 <Database />
@@ -1822,7 +1820,9 @@ export function AdminDashboard() {
                   : tAdmin("autonomous_monitored")}
               </p>
               <Badge tone={intervene ? "amber" : "green"}>
-                {intervene ? tAdmin("manual_review_active") : tAdmin("autonomous_mode")}
+                {intervene
+                  ? tAdmin("manual_review_active")
+                  : tAdmin("autonomous_mode")}
               </Badge>
             </div>
           </section>
@@ -1861,7 +1861,11 @@ export function AdminDashboard() {
                   </div>
                   <div>
                     <small>{tAdmin("oversight")}</small>
-                    <strong>{intervene ? tAdmin("human_review") : tAdmin("autonomous")}</strong>
+                    <strong>
+                      {intervene
+                        ? tAdmin("human_review")
+                        : tAdmin("autonomous")}
+                    </strong>
                   </div>
                 </div>
               </div>

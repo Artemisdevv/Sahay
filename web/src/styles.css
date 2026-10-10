@@ -413,6 +413,7 @@ h1 {
   gap: 12px;
 }
 .panel-head h2 {
+  min-width: 0;
   display: flex;
   gap: 9px;
   align-items: center;
@@ -1426,9 +1427,9 @@ h1 {
 }
 .mesh-nodes {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
-  gap: 20px;
+  gap: 12px;
 }
 .mesh-node {
   position: relative;
@@ -1438,6 +1439,8 @@ h1 {
   gap: 11px;
   padding: 20px 9px;
   height: 135px;
+  min-width: 0;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--card);
@@ -1461,6 +1464,22 @@ h1 {
 .mesh-node small {
   color: var(--muted-foreground);
   font-size: 9px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.mesh-node strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+  text-align: center;
+}
+.mesh-node > span {
+  max-width: 100%;
+  justify-content: center;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.1;
 }
 .progress-track {
   height: 5px;
@@ -1477,6 +1496,25 @@ h1 {
 .progress-fill.violet {
   background: var(--orchestrator);
   width: 42%;
+}
+.vector-store-panel,
+.vector-store-panel .compact-body,
+.vector-store-panel .profile-summary > div {
+  min-width: 0;
+}
+.vector-store-panel .panel-head h2,
+.vector-store-panel .profile-summary small,
+.vector-store-panel .profile-summary strong {
+  overflow-wrap: anywhere;
+}
+.vector-store-panel .badge {
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.25;
+}
+@media (max-width: 1100px) {
+  .mesh-nodes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mesh-node::after { content: none; }
 }
 .audit-row {
   display: grid;
@@ -1870,6 +1908,32 @@ h1 {
   }
 }
 @media (max-width: 600px) {
+  .login-form-side {
+    min-height: 100dvh;
+    padding: 112px 20px 96px;
+    justify-content: flex-start;
+  }
+  .login-access-row {
+    position: absolute;
+    inset: 0;
+    display: block;
+    pointer-events: none;
+  }
+  .login-access-row > button {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    width: min(192px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    pointer-events: auto;
+  }
+  .login-access-row > .badge {
+    position: fixed;
+    right: 16px;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    z-index: 10;
+    pointer-events: auto;
+  }
   .login-live > div {
     flex-wrap: wrap;
     line-height: 1.7;
