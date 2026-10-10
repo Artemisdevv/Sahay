@@ -18,6 +18,7 @@ import { Brand, Badge } from "./dispatch-shell";
 import { LanguageSelector } from "./language-selector";
 import { login } from "@/lib/api";
 import { saveSession } from "@/lib/session";
+import BorderGlow from "@/components/ui/border-glow";
 
 const roles = [
   { id: "service", nameKey: "login.roleService", icon: HeartPulse },
@@ -118,31 +119,39 @@ export function LoginHub() {
         </div>
       </section>
       <section className="login-form-side">
-        <div className="login-form">
-          <div className="login-lang">
-            <LanguageSelector />
-          </div>
+        <div className="login-access-row">
           <Badge tone="green">
             <ShieldCheck size={12} />
             {t("login.secure")}
           </Badge>
+          <LanguageSelector />
+        </div>
+        <div className="login-form">
           <h1 className="mt-5">{t("login.welcome")}</h1>
           <p className="subtitle">{t("login.intro")}</p>
           <form onSubmit={signIn}>
             <div className="section-label">{t("login.selectWorkspace")}</div>
             <div className="role-selector">
-              <Button
-                type="button"
-                variant="outline"
+              <BorderGlow
                 className={`role-civilian ${role === "civilian" ? "selected" : ""}`}
-                onClick={() => {
-                  setRole("civilian");
-                  setError("");
-                }}
+                colors={["#99f6e4", "#34d399", "#3ccdc0"]}
+                edgeSensitivity={42}
+                glowRadius={36}
+                glowIntensity={1}
               >
-                <UserRound />
-                {t("login.civilianReport")}
-              </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={role === "civilian" ? "selected" : ""}
+                  onClick={() => {
+                    setRole("civilian");
+                    setError("");
+                  }}
+                >
+                  <UserRound />
+                  {t("login.civilianReport")}
+                </Button>
+              </BorderGlow>
               <div className="role-separator" aria-hidden="true" />
               {roles.slice(0, 2).map((r) => (
                 <Button

@@ -1281,15 +1281,20 @@ h1 {
   font-size: 11px;
 }
 .login-form-side {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
   padding: 45px 65px;
 }
-.login-lang {
+.login-access-row {
+  position: absolute;
+  top: 24px;
+  right: 40px;
   display: flex;
+  align-items: center;
+  gap: 12px;
   justify-content: flex-end;
-  margin-bottom: 16px;
 }
 .login-form {
   max-width: 380px;
@@ -1315,6 +1320,11 @@ h1 {
   margin: 1px 0;
 }
 .role-selector .role-civilian { grid-column: 1 / -1; }
+.role-selector .border-glow-card.role-civilian.selected {
+  background: var(--card);
+  border-color: transparent;
+  color: inherit;
+}
 .login-credentials { animation: login-fields-in 260ms ease-out both; }
 .civilian-report-note {
   margin: -5px 0 16px;

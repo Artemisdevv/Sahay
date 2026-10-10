@@ -284,7 +284,6 @@ export function Shell({
               <MapPin size={14} />
               {t("city")}
             </span>
-            <Badge tone="amber">{t("demo")}</Badge>
             <LanguageSelector />
             <Button
               variant="ghost"
