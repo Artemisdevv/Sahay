@@ -1,5 +1,8 @@
 ﻿<div align="center">
 
+<img src="./web/public/favicon.ico" alt="Sahay" height="64" />
+
+
 # Sahay | സഹായ് | सहाय | சஹாய் 
 
 
@@ -28,7 +31,7 @@ Sahay combines an encrypted report ingest API, an agent pipeline for transcripti
 | **Service workspace** | Assigned calls, accept/decline/status actions, location updates and live map |
 | **Admin workspace** | Incident review, dispatch approval/reassignment, audit and reason-required PII reveal |
 | **Public map** | Confirmed incidents and response units with coarse, non-identifying locations |
-| **Relay modules** | Kotlin relay core, Android Nearby transport, foreground service and separate two-phone demo |
+| **Relay modules** | Kotlin relay core, Android Nearby transport, foreground and background service |
 | **Docker demo** | Single-origin web and API container with generated local deployment secrets |
 
 ---
@@ -346,3 +349,27 @@ For WebSocket authentication, connect to `/ws/v1`, then send `{"type":"auth","to
 - [Docker demo](deploy/README.md): one-origin Docker setup and tunnel configuration
 - [Third-party notices](docs/third-party.md): dependency disclosures
 - [Contributing](CONTRIBUTING.md): repository workflow
+
+---
+
+## Team
+
+| Member | GitHub | Focus |
+|---|---|---|
+| Muhammed Adnan Sameer | [@adn26](https://github.com/adn26) |  Android and native work, crypto, dispatch, agents and speech recognition, deployment, SMS gateway, integration, and API contract |
+| Aswin A Arun | [@Artemisdevv](https://github.com/Artemisdevv) | Backend foundation, authentication, WebSockets, incidents, audit logging,  and frontend follow-ups. |
+| Shreyas Syam | [@shreyas-syam](https://github.com/shreyas-syam) | Frontend, visual design, dashboards, client-side encryption, and offline queue. |
+| Adarsh Krishna| [@adarshkrishna14](https://github.com/adarshkrishna14) | UX flow, testing, pitch deck and presentation and demo script. |
+
+---
+
+## AI and Tool Usage Disclosure
+
+
+| Tool | How it was used |
+|---|---|
+| **Claude Code** | Coding assistant: implementation, tests, debugging and documentation |
+| **Codex** | Coding assistant: implementation, tests and debugging |
+| **Google / web search** | Looking up documentation and learning unfamiliar concepts and terms |
+
+---
