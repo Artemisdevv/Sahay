@@ -68,6 +68,7 @@ import {
 } from "@/lib/api";
 import { useDispatchWS, type WSEvent } from "@/hooks/use-dispatch-ws";
 import { useTranslation } from "react-i18next";
+import i18n from "@/lib/i18n";
 
 function getStatusBadgeTone(status: Dispatch["status"]) {
   switch (status) {
@@ -115,7 +116,7 @@ const SERVICE_TYPES: ServiceType[] = [
 ];
 
 function formatTraceTime(value: string | null) {
-  if (!value) return "In progress";
+  if (!value) return i18n.t("ops.inProgress");
   return new Date(value).toLocaleTimeString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
@@ -167,7 +168,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
       setDispatches(data.dispatches);
     } catch (e) {
       console.error("Failed to load dispatches:", e);
-      toast.error("Failed to load dispatches");
+      toast.error(i18n.t("ops.errLoadDispatches"));
     } finally {
       setLoading(false);
     }
@@ -238,9 +239,9 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
       setDispatches((prev) =>
         prev.map((d) => (d.dispatch_id === dispatchId ? updated : d)),
       );
-      toast.success("Dispatch accepted");
+      toast.success(i18n.t("ops.dispatchAccepted"));
     } catch (e) {
-      toast.error("Failed to accept dispatch");
+      toast.error(i18n.t("ops.errAccept"));
     }
   };
 
@@ -250,9 +251,9 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
     try {
       await declineDispatch(dispatchId, session.token);
       await loadDispatches();
-      toast.success("Dispatch declined");
+      toast.success(i18n.t("ops.dispatchDeclined"));
     } catch (e) {
-      toast.error("Failed to decline dispatch");
+      toast.error(i18n.t("ops.errDecline"));
     }
   };
 
@@ -275,7 +276,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
       );
       toast.success(`Status updated to ${getStatusLabel(status)}`);
     } catch (e) {
-      toast.error("Failed to update status");
+      toast.error(i18n.t("ops.errStatus"));
     } finally {
       setUpdatingDispatchIds((prev) => {
         const next = new Set(prev);
@@ -349,7 +350,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
               : ambulance
                 ? tService("ambulance_subtitle")
                 : police
-                  ? "Law enforcement dispatch and field unit coordination."
+                  ? i18n.t("ops.policeSubtitle")
                   : tService("emergency_intake")}
           </p>
         </div>
@@ -420,7 +421,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
       <div className="flex gap-2 flex-wrap mb-6">
         <Button variant="outline" onClick={loadDispatches} disabled={loading}>
           <Loader2 className={`${loading ? "animate-spin" : ""}`} />
-          Refresh
+          {i18n.t("ops.refresh")}
         </Button>
         <Button
           variant="outline"
@@ -437,13 +438,13 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
         <div className="panel-head compact-head">
           <h2>
             <MapPin />
-            Response map · Assigned incidents
+            {i18n.t("ops.mapAssigned")}
           </h2>
         </div>
         <IncidentMap role="service" />
         <div className="zone-meta">
           <strong>Central District</strong>
-          <Badge tone="sky">Contract filtered</Badge>
+          <Badge tone="sky">{i18n.t("ops.contractFiltered")}</Badge>
         </div>
       </section>
       <div className="service-grid">
@@ -683,7 +684,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
                     ? "Suspect vehicle last seen heading north on Main St. Registered to known associate. Caution advised. Backup units positioned at intersection of 5th and Oak."
                     : "Patient context matches prior asthma history. Known allergy: Penicillin. Current medication: Albuterol inhaler. No implanted devices. Field triage suggests respiratory distress; respiratory team and critical care bed should be prepared."}
               <p className="text-muted-foreground mt-3 text-[10px]">
-                Demonstration briefing · Human clinical / field review required
+                {i18n.t("ops.demoBriefing")}
               </p>
             </div>
           </section>
@@ -793,7 +794,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Toggle autonomous agent logs"
+                aria-label={i18n.t("ops.toggleLogs")}
                 onClick={() => setLogs(!logs)}
               >
                 <ChevronDown />
@@ -836,7 +837,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
           <DialogHeader>
             <DialogTitle>{tService("update_unit_capacity")}</DialogTitle>
             <DialogDescription>
-              Update available resources in this simulation.
+              {i18n.t("ops.updateResources")}
             </DialogDescription>
           </DialogHeader>
           <label className="field">
@@ -861,7 +862,7 @@ export function OperationsConsole({ serviceId }: { serviceId: string }) {
             }}
           >
             <Check />
-            Save capacity
+            {i18n.t("ops.saveCapacity")}
           </Button>
         </DialogContent>
       </Dialog>
@@ -935,7 +936,7 @@ export function AdminDashboard() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Incident details could not be loaded.",
+          : i18n.t("ops.errIncidentDetails"),
       );
     } finally {
       setIncidentPanelLoading((current) =>
@@ -951,7 +952,7 @@ export function AdminDashboard() {
       const result = await getIncidents(session.token);
       setIncidents(result.incidents);
     } catch {
-      setIncidentLoadError("Incident data could not be refreshed.");
+      setIncidentLoadError(i18n.t("ops.errIncidentRefresh"));
     }
   }, []);
 
@@ -974,13 +975,13 @@ export function AdminDashboard() {
         if (incidentResult.status === "fulfilled") {
           setIncidents(incidentResult.value.incidents);
         } else {
-          setIncidentLoadError("Incident data could not be loaded.");
-          toast.error("Failed to load incidents");
+          setIncidentLoadError(i18n.t("ops.errIncidentLoad"));
+          toast.error(i18n.t("ops.errIncidents"));
         }
         if (auditResult.status === "fulfilled") {
           setAudit(auditResult.value.entries);
         } else {
-          toast.error("Failed to load audit entries");
+          toast.error(i18n.t("ops.errAudit"));
         }
         if (verificationResult.status === "fulfilled") {
           setAuditVerified(verificationResult.value.valid);
@@ -1044,7 +1045,7 @@ export function AdminDashboard() {
   const handleApproveIncident = async (incidentId: string) => {
     const token = getSession()?.token;
     if (!token) {
-      toast.error("Sign in again to approve dispatches.");
+      toast.error(i18n.t("ops.signInApprove"));
       return;
     }
     setIncidentActionLoading(incidentId);
@@ -1052,12 +1053,12 @@ export function AdminDashboard() {
       const result = await approveIncident(incidentId, token);
       applyIncidentAction(result);
       await refreshIncidentPanelData(incidentId);
-      toast.success("Proposed dispatches approved.");
+      toast.success(i18n.t("ops.approved"));
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Could not approve dispatches.",
+          : i18n.t("ops.errApprove"),
       );
     } finally {
       setIncidentActionLoading(null);
@@ -1068,11 +1069,11 @@ export function AdminDashboard() {
     const token = getSession()?.token;
     const reason = rejectReasons[incidentId]?.trim();
     if (!token) {
-      toast.error("Sign in again to reject this incident.");
+      toast.error(i18n.t("ops.signInReject"));
       return;
     }
     if (!reason) {
-      toast.error("Enter a reason before rejecting.");
+      toast.error(i18n.t("ops.rejectReason"));
       return;
     }
     setIncidentActionLoading(incidentId);
@@ -1081,12 +1082,12 @@ export function AdminDashboard() {
       applyIncidentAction(result);
       setRejectReasons((current) => ({ ...current, [incidentId]: "" }));
       await refreshIncidentPanelData(incidentId);
-      toast.success("Incident rejected.");
+      toast.success(i18n.t("ops.rejected"));
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Could not reject this incident.",
+          : i18n.t("ops.errReject"),
       );
     } finally {
       setIncidentActionLoading(null);
@@ -1101,11 +1102,11 @@ export function AdminDashboard() {
     const key = `${incidentId}:${serviceType}`;
     const unitId = reassignUnits[key];
     if (!token) {
-      toast.error("Sign in again to reassign this incident.");
+      toast.error(i18n.t("ops.signInReassign"));
       return;
     }
     if (!unitId) {
-      toast.error("Choose an available unit first.");
+      toast.error(i18n.t("ops.chooseUnit"));
       return;
     }
     setIncidentActionLoading(incidentId);
@@ -1124,7 +1125,7 @@ export function AdminDashboard() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Could not reassign this unit.",
+          : i18n.t("ops.errReassign"),
       );
     } finally {
       setIncidentActionLoading(null);
@@ -1134,21 +1135,21 @@ export function AdminDashboard() {
   const agents = [
     {
       name: "TriageAgent-01",
-      role: "Clinical prioritization",
+      role: i18n.t("ops.roleTriage"),
       icon: HeartPulse,
       latency: "42 ms",
       work: "1,842",
     },
     {
       name: "DispatchRouter-v2",
-      role: "Response orchestration",
+      role: i18n.t("ops.roleDispatch"),
       icon: Network,
       latency: "28 ms",
       work: "1,796",
     },
     {
       name: "ResourceMemory-RAG",
-      role: "Vector context retrieval",
+      role: i18n.t("ops.roleMemory"),
       icon: Database,
       latency: "18 ms",
       work: "3,104",
@@ -1174,7 +1175,7 @@ export function AdminDashboard() {
     const reason = revealReason.trim();
     if (!session?.token || !selectedIncident) return;
     if (!reason) {
-      setPiiError("Enter a reason before revealing PII.");
+      setPiiError(i18n.t("ops.piiReason"));
       return;
     }
     setPiiLoading(true);
@@ -1197,8 +1198,8 @@ export function AdminDashboard() {
         setAuditVerified(verificationResult.value.valid);
       }
     } catch (e) {
-      setPiiError(e instanceof Error ? e.message : "Failed to reveal PII");
-      toast.error("Failed to reveal PII");
+      setPiiError(e instanceof Error ? e.message : i18n.t("ops.errReveal"));
+      toast.error(i18n.t("ops.errReveal"));
     } finally {
       setPiiLoading(false);
     }
@@ -1215,7 +1216,7 @@ export function AdminDashboard() {
         result.valid ? "Audit chain verified ✓" : "Audit chain INVALID ✗",
       );
     } catch (e) {
-      toast.error("Failed to verify audit chain");
+      toast.error(i18n.t("ops.errChain"));
       setAuditVerified(false);
     } finally {
       setAuditVerifying(false);
@@ -1223,14 +1224,14 @@ export function AdminDashboard() {
   };
 
   const formatPhone = (phone: string | null) =>
-    phone?.replace(/(\+\d{2})(\d{5})(\d{5})/, "$1 $2 $3") ?? "Not provided";
+    phone?.replace(/(\+\d{2})(\d{5})(\d{5})/, "$1 $2 $3") ?? i18n.t("ops.notProvided");
 
   return (
-    <Shell role="admin" title="Agent orchestration">
+    <Shell role="admin" title={i18n.t("ops.agentOrch")}>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">System administration · Mission control</div>
-          <h1>Agent orchestration</h1>
+          <div className="eyebrow">{i18n.t("ops.sysAdmin")}</div>
+          <h1>{i18n.t("ops.agentOrch")}</h1>
           <p className="subtitle">
             A live view of your autonomous dispatch mesh, pipeline health, and
             decisions.
@@ -1244,28 +1245,28 @@ export function AdminDashboard() {
       <div className="metrics">
         {[
           {
-            label: "Autonomous workflows",
+            label: i18n.t("ops.metricWorkflows"),
             value: "12,486",
             trend: "+12.8%",
             note: "this week",
             icon: Activity,
           },
           {
-            label: "Active agent count",
+            label: i18n.t("ops.metricAgents"),
             value: "04 / 04",
             trend: "100%",
             note: "availability",
             icon: Network,
           },
           {
-            label: "Mean resolution time",
+            label: i18n.t("ops.metricResolution"),
             value: "2.4 min",
             trend: "−18.2%",
             note: "vs. last week",
             icon: Clock3,
           },
           {
-            label: "Vector memory hit rate",
+            label: i18n.t("ops.metricMemory"),
             value: "98.6%",
             trend: "+2.1%",
             note: "retrieval accuracy",
@@ -1290,15 +1291,14 @@ export function AdminDashboard() {
             <div className="panel-head">
               <div>
                 <h2>
-                  <MapPin className="text-primary" /> Live distress map
+                  <MapPin className="text-primary" /> {i18n.t("ops.liveMap")}
                 </h2>
                 <p>
-                  Incidents and response units across the permitted operations
-                  view
+{i18n.t("ops.liveMapLead")}
                 </p>
               </div>
               <Badge tone="green">
-                <span className="dot pulse" /> Live positions
+                <span className="dot pulse" /> {i18n.t("ops.livePositions")}
               </Badge>
             </div>
             <IncidentMap
@@ -1314,11 +1314,10 @@ export function AdminDashboard() {
               <div>
                 <h2>
                   <Network className="text-orchestrator" />
-                  Multi-agent orchestration mesh
+                  {i18n.t("ops.meshTitle")}
                 </h2>
                 <p>
-                  Connected intelligence · Sequential review and coordinated
-                  action
+{i18n.t("ops.meshLead")}
                 </p>
               </div>
               <Badge tone="violet">4 active nodes</Badge>
@@ -1344,7 +1343,7 @@ export function AdminDashboard() {
               </div>
             </div>
             <div className="agent-footer">
-              <span>Context ingestion → Triage → Dispatch → Notification</span>
+              <span>{i18n.t("ops.pipeline")}</span>
               <span className="mono">MESH v2.4</span>
             </div>
           </section>
@@ -1390,7 +1389,7 @@ export function AdminDashboard() {
             {intervene && (
               <div className="audit-row">
                 <span className="mono">Now</span>
-                <Badge tone="amber">Override</Badge>
+                <Badge tone="amber">{i18n.t("ops.override")}</Badge>
                 <span>
                   {tAdmin("override_active")}
                 </span>
@@ -1515,12 +1514,12 @@ export function AdminDashboard() {
                         <div className="incident-workflow">
                           {incidentPanelLoading === inc.incident_id ? (
                             <p className="text-muted-foreground">
-                              Loading trace, calls, and dispatches…
+                              {i18n.t("ops.loadingTrace")}
                             </p>
                           ) : (
                             <>
                               <div>
-                                <h4>Proposed dispatches and ETAs</h4>
+                                <h4>{i18n.t("ops.proposedEtas")}</h4>
                                 {dispatches.length === 0 ? (
                                   <p className="text-muted-foreground">
                                     No dispatches proposed.
@@ -1579,7 +1578,7 @@ export function AdminDashboard() {
                                       )
                                     }
                                   >
-                                    Approve proposed
+                                    {i18n.t("ops.approveProposed")}
                                   </Button>
                                   <Input
                                     aria-label={`Rejection reason for ${inc.incident_id}`}
@@ -1611,7 +1610,7 @@ export function AdminDashboard() {
                                       ].includes(inc.status)
                                     }
                                   >
-                                    Reject
+                                    {i18n.t("ops.reject")}
                                   </Button>
                                 </div>
                                 {activeServices.length > 0 && (
@@ -1628,7 +1627,7 @@ export function AdminDashboard() {
                                           className="incident-response-controls"
                                           key={service}
                                         >
-                                          <span>Reassign {service}</span>
+                                          <span>{i18n.t("ops.reassignService", { service })}</span>
                                           <select
                                             aria-label={`Available ${service} unit`}
                                             value={
@@ -1670,7 +1669,7 @@ export function AdminDashboard() {
                                               candidates.length === 0
                                             }
                                           >
-                                            Reassign
+                                            {i18n.t("ops.reassign")}
                                           </Button>
                                         </div>
                                       );
@@ -1679,7 +1678,7 @@ export function AdminDashboard() {
                                 )}
                               </div>
                               <div>
-                                <h4>Agent trace</h4>
+                                <h4>{i18n.t("ops.agentTrace")}</h4>
                                 {!panel?.trace.length ? (
                                   <p className="text-muted-foreground">
                                     No trace steps available.
@@ -1736,7 +1735,7 @@ export function AdminDashboard() {
                 <Activity className="text-orchestrator" />
                 {tAdmin("pipeline_health")}
               </h2>
-              <Badge tone="green">Healthy</Badge>
+              <Badge tone="green">{i18n.t("ops.healthy")}</Badge>
             </div>
             <div className="compact-body">
               <div className="section-label">
@@ -1846,7 +1845,7 @@ export function AdminDashboard() {
             .filter((a) => a.name === selected)
             .map((a) => (
               <div key={a.name}>
-                <Badge tone="green">Operational</Badge>
+                <Badge tone="green">{i18n.t("ops.operational")}</Badge>
                 <div className="profile-summary mt-6">
                   <div>
                     <small>{tAdmin("responsibility")}</small>
@@ -2024,7 +2023,7 @@ function OriginalAudio({ url, label }: { url: string; label: string }) {
       setSrc(URL.createObjectURL(blob));
       setState("idle");
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Could not load the audio");
+      setMessage(e instanceof Error ? e.message : i18n.t("ops.errAudio"));
       setState("error");
     }
   }
