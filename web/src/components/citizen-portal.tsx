@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   HeartPulse,
   Flame,
@@ -99,6 +100,42 @@ const LANGUAGE_CODES: Record<string, string> = {
   hindi: "hi",
   tamil: "ta",
 };
+
+function getTabs(t: ReturnType<typeof useTranslation>["t"]): ShellTab[] {
+  return [
+    { id: "help", label: t("tabs.help"), icon: Mic },
+    { id: "reports", label: t("tabs.reports"), icon: ClipboardList },
+    { id: "map", label: t("tabs.map"), icon: MapPin },
+    { id: "details", label: t("tabs.details"), icon: UserRound },
+  ];
+}
+
+function getChoices(t: ReturnType<typeof useTranslation>["t"]): { id: IncidentType; label: string; icon: typeof HeartPulse }[] {
+  return [
+    { id: "medical", label: t("incidentTypes.medical"), icon: HeartPulse },
+    { id: "fire", label: t("incidentTypes.fire"), icon: Flame },
+    { id: "rescue", label: t("incidentTypes.rescue"), icon: LifeBuoy },
+    { id: "other", label: t("incidentTypes.other"), icon: MessageSquare },
+  ];
+}
+
+function getProfileFields(t: ReturnType<typeof useTranslation>["t"]): [keyof EmergencyProfile, string][] {
+  return [
+    ["fullName", t("profileFields.fullName")],
+    ["age", t("profileFields.age")],
+    ["bloodGroup", t("profileFields.bloodGroup")],
+    ["language", t("profileFields.language")],
+    ["contactName", t("profileFields.contactName")],
+    ["phone", t("profileFields.phone")],
+    ["conditions", t("profileFields.conditions")],
+    ["allergies", t("profileFields.allergies")],
+    ["medications", t("profileFields.medications")],
+    ["address", t("profileFields.address")],
+    ["access", t("profileFields.access")],
+    ["mobility", t("profileFields.mobility")],
+  ];
+}
+
 const HELP_ARRANGED = new Set([
   "dispatched",
   "en_route",
@@ -130,6 +167,7 @@ const fmt = (s: number) =>
   `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 export function CitizenPortal() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState("help");
   const [current, setCurrent] = useState<QueueItem | null>(null);
   const [status, setStatus] = useState<ReportStatus | null>(null);
@@ -405,24 +443,24 @@ export function CitizenPortal() {
 
   return (
     <Shell
-      title={tabs.find((t) => t.id === tab)?.label ?? "Sahay"}
-      tabs={tabs}
+      title={getTabs(t).find((t_) => t_.id === tab)?.label ?? "Sahay"}
+      tabs={getTabs(t)}
       activeTab={tab}
       onTab={setTab}
     >
       {tab === "help" && !current && (
         <section className="cz-help" aria-labelledby="help-title">
-          <h1 id="help-title">Do you need help?</h1>
-          <p className="cz-lead">Hold the button and say what happened.</p>
+          <h1 id="help-title">{t("help.needHelp")}</h1>
+          <p className="cz-lead">{t("help.holdButton")}</p>
 
           <MicButton voice={voice} />
           {relaySupported() && relayOn && (
             <p className="cz-hint cz-nearby" role="status">
               {relay.nearby > 0
-                ? `${relay.nearby} nearby ${relay.nearby === 1 ? "phone" : "phones"} can pass your message on.`
+                ? `${relay.nearby} ${t(relay.nearby === 1 ? "help.nearbyPhone" : "help.nearbyPhones")} ${t("help.canRelay")}`
                 : relay.running
-                  ? "Looking for nearby phones."
-                  : "Nearby sharing is starting."}
+                  ? t("help.lookingForPhones")
+                  : t("help.nearbyStarting")}
             </p>
           )}
 
@@ -432,7 +470,7 @@ export function CitizenPortal() {
               className="cz-secondary"
               onClick={() => setPhotoChoiceOpen(true)}
             >
-              <Camera /> Add a photo (optional)
+              <Camera /> {t("help.addPhoto")}
             </Button>
             <input
               ref={photoInput}
@@ -443,14 +481,14 @@ export function CitizenPortal() {
               onChange={(event) => attachPhotos(event.target.files)}
             />
             {photos.length > 0 && (
-              <div className="cz-photo-preview" aria-label="Photo attachments">
+              <div className="cz-photo-preview" aria-label={t("help.photoAttachments")}>
                 {photos.map((photo) => (
                   <div className="cz-photo-item" key={photo.url}>
-                    <img src={photo.url} alt="Attached scene" />
+                    <img src={photo.url} alt={t("help.attachedScene")} />
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Remove ${photo.file.name}`}
+                      aria-label={`${t("help.remove")} ${photo.file.name}`}
                       onClick={() => removePhoto(photo)}
                     >
                       <X size={16} />
@@ -463,38 +501,30 @@ export function CitizenPortal() {
 
           {voice.state === "ready" && voice.clip && (
             <div className="cz-clip">
-              <p>Your message ({fmt(voice.clip.seconds)})</p>
+              <p>{t("help.yourMessage", { seconds: fmt(voice.clip.seconds) })}</p>
               <ClipPlayer url={voice.clip.url} />
               <Button
                 variant="outline"
                 className="cz-secondary"
                 onClick={voice.reset}
               >
-                Record again
+                {t("help.recordAgain")}
               </Button>
             </div>
           )}
           {voice.state === "denied" && (
-            <p className="cz-warn" role="alert">
-              The microphone is blocked. Allow it for Sahay in your phone or
-              browser settings, or choose what is happening below.
-            </p>
+            <p className="cz-warn" role="alert">{t("help.micBlocked")}</p>
           )}
           {voice.state === "unsupported" && (
-            <p className="cz-warn" role="alert">
-              This phone cannot record here. Choose what is happening below.
-            </p>
+            <p className="cz-warn" role="alert">{t("help.micUnsupported")}</p>
           )}
           {voice.state === "unavailable" && (
-            <p className="cz-warn" role="alert">
-              No microphone is available. Connect or enable a microphone, or
-              choose what is happening below.
-            </p>
+            <p className="cz-warn" role="alert">{t("help.micUnavailable")}</p>
           )}
 
-          <h2 className="cz-sub">What is happening? (optional)</h2>
+          <h2 className="cz-sub">{t("help.whatHappening")}</h2>
           <div className="cz-choices">
-            {choices.map((c) => (
+            {getChoices(t).map((c) => (
               <button
                 key={c.id}
                 type="button"
@@ -509,10 +539,10 @@ export function CitizenPortal() {
           </div>
 
           <details className="cz-type">
-            <summary>Type a message instead</summary>
+            <summary>{t("help.typeInstead")}</summary>
             <textarea
-              aria-label="Your message"
-              placeholder="Say what happened and where you are"
+              aria-label={t("help.yourMessage")}
+              placeholder={t("help.placeholder")}
               value={note}
               maxLength={1000}
               onChange={(e) => setNote(e.target.value)}
@@ -522,11 +552,11 @@ export function CitizenPortal() {
           <div className="cz-where">
             <MapPin />
             <span>
-              Your location: <strong>{location}</strong>
+              {t("help.yourLocation")}: <strong>{location}</strong>
             </span>
             <button type="button" onClick={updateLocation}>
               <LocateFixed />
-              Update
+              {t("help.update")}
             </button>
           </div>
 
@@ -535,25 +565,20 @@ export function CitizenPortal() {
             disabled={!hasReport || sending}
             onClick={() => void send()}
           >
-            {sending ? "Saving..." : "Send help request"}
+            {sending ? t("help.saving") : t("help.sendRequest")}
           </Button>
           {!hasReport && (
-            <p className="cz-hint">Record a message or type one to send.</p>
+            <p className="cz-hint">{t("help.recordOrType")}</p>
           )}
 
           <SosButton disabled={sending} onTrigger={() => void send("sos")} />
-          <p className="cz-hint">
-            Cannot talk or type? Hold SOS for 2 seconds. Your location goes to
-            the response centre.
-          </p>
+          <p className="cz-hint">{t("help.sosHint")}</p>
 
           <a href="tel:112" className="cz-call">
             <Phone />
-            Call 112 now
+            {t("help.call112")}
           </a>
-          <p className="cz-hint">
-            In danger? Call first. This demo does not contact real services.
-          </p>
+          <p className="cz-hint">{t("help.callFirst")}</p>
         </section>
       )}
 
@@ -570,27 +595,25 @@ export function CitizenPortal() {
 
       {tab === "reports" && (
         <section className="cz-page" aria-labelledby="reports-title">
-          <h1 id="reports-title">My reports</h1>
+          <h1 id="reports-title">{t("reports.title")}</h1>
           {reports.length === 0 ? (
-            <p className="cz-lead">
-              Nothing yet. When you ask for help, it will show here.
-            </p>
+            <p className="cz-lead">{t("reports.empty")}</p>
           ) : (
             <ul className="cz-list">
               {reports.map((r) => (
                 <li key={r.report_id}>
                   <div>
-                    <strong>{NICE_CATEGORY[r.category] ?? "Report"}</strong>
+                    <strong>{t("category." + r.category) ?? "Report"}</strong>
                     <small>{whenText(r.created_at)}</small>
                   </div>
                   <span
                     className={`cz-status ${r.state === "sent" ? "ok" : r.state === "failed" ? "bad" : "wait"}`}
                   >
                     {r.state === "sent"
-                      ? "Sent"
+                      ? t("reports.sent")
                       : r.state === "failed"
-                        ? "Not accepted"
-                        : "Waiting to send"}
+                        ? t("reports.notAccepted")
+                        : t("reports.waiting")}
                   </span>
                 </li>
               ))}
@@ -601,188 +624,173 @@ export function CitizenPortal() {
 
       {tab === "map" && (
         <section className="cz-page" aria-labelledby="map-title">
-          <h1 id="map-title">Response map</h1>
-          <p className="cz-lead">
-            Confirmed incidents near you, by area. No names or messages are
-            shown.
-          </p>
+          <h1 id="map-title">{t("map.title")}</h1>
+          <p className="cz-lead">{t("map.lead")}</p>
           <IncidentMap role="civilian" className="admin-map" />
         </section>
       )}
 
       {tab === "details" && (
         <section className="cz-page" aria-labelledby="details-title">
-          <h1 id="details-title">My details</h1>
-          <p className="cz-lead">
-            Kept on this phone. Shared with the response team only if you allow
-            it.
-          </p>
+          <h1 id="details-title">{t("details.title")}</h1>
+          <p className="cz-lead">{t("details.lead")}</p>
           <dl className="cz-facts">
             <div>
-              <dt>Name</dt>
+              <dt>{t("profileFields.fullName")}</dt>
               <dd>{profile.fullName}</dd>
             </div>
             <div>
-              <dt>Age</dt>
+              <dt>{t("profileFields.age")}</dt>
               <dd>{profile.age}</dd>
             </div>
             <div>
-              <dt>Blood group</dt>
+              <dt>{t("profileFields.bloodGroup")}</dt>
               <dd>{profile.bloodGroup}</dd>
             </div>
             <div>
-              <dt>Health conditions</dt>
+              <dt>{t("profileFields.conditions")}</dt>
               <dd>{profile.conditions}</dd>
             </div>
             <div>
-              <dt>Allergies</dt>
+              <dt>{t("profileFields.allergies")}</dt>
               <dd>{profile.allergies}</dd>
             </div>
             <div>
-              <dt>Emergency contact</dt>
-              <dd>
-                {profile.contactName} {profile.phone}
-              </dd>
+              <dt>{t("profileFields.contactName")}</dt>
+              <dd>{profile.contactName} {profile.phone}</dd>
             </div>
           </dl>
-          <Button
-            variant="outline"
-            className="cz-secondary"
-            onClick={() => {
-              setDraft(profile);
-              setProfileOpen(true);
-            }}
-          >
-            <Pencil />
-            Change my details
-          </Button>
-          <label className="cz-consent">
-            <span>
-              Share my health details with the response team
-              <small>
-                {consent
-                  ? "On. They can see them when you ask for help."
-                  : "Off. They will not see them."}
-              </small>
-            </span>
-            <Switch
-              checked={consent}
-              onCheckedChange={setConsent}
-              aria-label="Share my health details"
-            />
-          </label>
-          {relaySupported() && (
-            <label className="cz-consent">
-              <span>
-                Help nearby phones pass on messages
-                <small>
-                  {relayOn
-                    ? "On. Your phone can carry sealed messages for others when they have no signal. You cannot read them."
-                    : "Off. Your own message can only be sent when you have signal."}
-                </small>
-              </span>
-              <Switch
-                checked={relayOn}
-                onCheckedChange={(on) => {
-                  setRelayOn(on);
-                  void setRelayEnabled(on);
-                }}
-                aria-label="Help nearby phones pass on messages"
-              />
-            </label>
-          )}
-        </section>
-      )}
+                    <Button
+                      variant="outline"
+                      className="cz-secondary"
+                      onClick={() => {
+                        setDraft(profile);
+                        setProfileOpen(true);
+                      }}
+                    >
+                      <Pencil />
+                      {t("details.changeDetails")}
+                    </Button>
+                    <label className="cz-consent">
+                      <span>
+                        {t("details.shareHealth")}
+                        <small>
+                          {consent
+                            ? t("details.shareOn")
+                            : t("details.shareOff")}
+                        </small>
+                      </span>
+                      <Switch
+                        checked={consent}
+                        onCheckedChange={setConsent}
+                        aria-label={t("details.shareHealth")}
+                      />
+                    </label>
+                    {relaySupported() && (
+                      <label className="cz-consent">
+                        <span>
+                          {t("details.helpRelay")}
+                          <small>
+                            {relayOn
+                              ? t("details.relayOn")
+                              : t("details.relayOff")}
+                          </small>
+                        </span>
+                        <Switch
+                          checked={relayOn}
+                          onCheckedChange={(on) => {
+                            setRelayOn(on);
+                            void setRelayEnabled(on);
+                          }}
+                          aria-label={t("details.helpRelay")}
+                        />
+                      </label>
+                    )}
+                  </section>
+                )}
 
-      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>My details</DialogTitle>
-            <DialogDescription>Saved on this phone only.</DialogDescription>
-          </DialogHeader>
-          <div className="cz-form">
-            {profileFields.map(([key, label]) => (
-              <label key={key}>
-                {label}
-                <input
-                  value={draft[key]}
-                  maxLength={300}
-                  inputMode={key === "age" ? "numeric" : undefined}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, [key]: e.target.value }))
-                  }
-                />
-              </label>
-            ))}
-          </div>
-          <Button className="cz-send" onClick={saveProfile}>
-            Save
-          </Button>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={photoChoiceOpen} onOpenChange={setPhotoChoiceOpen}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Add a scene photo</DialogTitle>
-            <DialogDescription>
-              Take a photo now or upload an image from this device.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <Button
-              variant="outline"
-              onClick={() => void openCamera()}
-              disabled={!canUseCamera}
-            >
-              <Camera /> Take photo
-            </Button>
-            {!canUseCamera && (
-              <p className="cz-hint">
-                Camera capture isn’t available in this browser. Image upload is
-                still available.
-              </p>
-            )}
-            <Button
-              onClick={() => {
-                setPhotoChoiceOpen(false);
-                photoInput.current?.click();
-              }}
-            >
-              Upload image
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={cameraOpen}
-        onOpenChange={(open) => {
-          if (!open) closeCamera();
-        }}
-      >
-        <DialogContent className="sm:max-w-[560px]">
-          <DialogHeader>
-            <DialogTitle>Take a scene photo</DialogTitle>
-            <DialogDescription>
-              Position the camera, then capture to add the photo to your report.
-            </DialogDescription>
-          </DialogHeader>
-          <video
-            ref={cameraVideo}
-            autoPlay
-            playsInline
-            muted
-            className="w-full rounded-md bg-black"
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={closeCamera}>
-              Cancel
-            </Button>
-            <Button onClick={capturePhoto}>
-              <Camera /> Capture photo
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+                <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+                  <DialogContent className="sm:max-w-[600px]">
+                    <DialogHeader>
+                      <DialogTitle>{t("details.title")}</DialogTitle>
+                      <DialogDescription>{t("details.savedLocal")}</DialogDescription>
+                    </DialogHeader>
+                    <div className="cz-form">
+                      {getProfileFields(t).map(([key, label]) => (
+                        <label key={key}>
+                          {label}
+                          <input
+                            value={draft[key]}
+                            maxLength={300}
+                            inputMode={key === "age" ? "numeric" : undefined}
+                            onChange={(e) =>
+                              setDraft((d) => ({ ...d, [key]: e.target.value }))
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <Button className="cz-send" onClick={saveProfile}>
+                      {t("details.save")}
+                    </Button>
+                  </DialogContent>
+                </Dialog>
+                <Dialog open={photoChoiceOpen} onOpenChange={setPhotoChoiceOpen}>
+                  <DialogContent className="sm:max-w-[420px]">
+                    <DialogHeader>
+                      <DialogTitle>{t("help.addPhoto")}</DialogTitle>
+                      <DialogDescription>{t("help.photoDescription")}</DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => void openCamera()}
+                        disabled={!canUseCamera}
+                      >
+                        <Camera /> {t("help.takePhoto")}
+                      </Button>
+                      {!canUseCamera && (
+                        <p className="cz-hint">{t("help.cameraUnavailable")}</p>
+                      )}
+                      <Button
+                        onClick={() => {
+                          setPhotoChoiceOpen(false);
+                          photoInput.current?.click();
+                        }}
+                      >
+                        {t("help.uploadImage")}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Dialog
+                  open={cameraOpen}
+                  onOpenChange={(open) => {
+                    if (!open) closeCamera();
+                  }}
+                >
+                  <DialogContent className="sm:max-w-[560px]">
+                    <DialogHeader>
+                      <DialogTitle>{t("help.takePhoto")}</DialogTitle>
+                      <DialogDescription>{t("help.cameraDescription")}</DialogDescription>
+                    </DialogHeader>
+                    <video
+                      ref={cameraVideo}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full rounded-md bg-black"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" onClick={closeCamera}>
+                        {t("help.cancel")}
+                      </Button>
+                      <Button onClick={capturePhoto}>
+                        <Camera /> {t("help.capturePhoto")}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
     </Shell>
   );
 }
